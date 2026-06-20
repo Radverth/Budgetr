@@ -69,6 +69,14 @@ jobs:
           mkdir -p "$HOME/.android"
           echo "${{ secrets.DEBUG_KEYSTORE_BASE64 }}" | base64 -d > "$HOME/.android/debug.keystore"
 
+      - name: Print keystore SHA-1 (for Google Cloud Console verification)
+        run: |
+          keytool -list -v \
+            -keystore "$HOME/.android/debug.keystore" \
+            -alias androiddebugkey \
+            -storepass android -keypass android \
+            2>/dev/null | grep -E "SHA1:|SHA256:" || echo "WARNING: could not read keystore — secret may be missing or malformed"
+
       - name: Make gradlew executable
         run: chmod +x gradlew
 
