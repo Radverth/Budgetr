@@ -64,6 +64,11 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v3
 
+      - name: Restore signing keystore
+        run: |
+          mkdir -p "$HOME/.android"
+          echo "${{ secrets.DEBUG_KEYSTORE_BASE64 }}" | base64 -d > "$HOME/.android/debug.keystore"
+
       - name: Make gradlew executable
         run: chmod +x gradlew
 
