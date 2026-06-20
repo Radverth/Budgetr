@@ -1,6 +1,7 @@
 package com.budgetr.app.di
 
 import com.budgetr.app.data.api.AuthInterceptor
+import com.budgetr.app.data.api.GitHubApi
 import com.budgetr.app.data.api.GoogleDriveApi
 import com.budgetr.app.data.api.GoogleSheetsApi
 import com.squareup.moshi.Moshi
@@ -68,4 +69,19 @@ object NetworkModule {
     @Singleton
     fun provideGoogleDriveApi(@Named("drive") retrofit: Retrofit): GoogleDriveApi =
         retrofit.create(GoogleDriveApi::class.java)
+
+    @Provides
+    @Singleton
+    @Named("github")
+    fun provideGitHubRetrofit(moshi: Moshi): Retrofit =
+        Retrofit.Builder()
+            .baseUrl("https://api.github.com/")
+            .client(OkHttpClient.Builder().build())
+            .addConverterFactory(MoshiConverterFactory.create(moshi))
+            .build()
+
+    @Provides
+    @Singleton
+    fun provideGitHubApi(@Named("github") retrofit: Retrofit): GitHubApi =
+        retrofit.create(GitHubApi::class.java)
 }

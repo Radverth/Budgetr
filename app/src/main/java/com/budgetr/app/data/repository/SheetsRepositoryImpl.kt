@@ -464,17 +464,33 @@ class SheetsRepositoryImpl @Inject constructor(
         return fmt.format(cal.time)
     }
 
-    /** Calculates the effective start date of the current pay period (with weekend → Friday adjustment). */
+    /** Calculates the effective start date of the current pay period (with weekend → Friday adjustment).
+     *
+     *  We compare today against the EFFECTIVE (weekend-adjusted) payday for the current month,
+     *  not the raw configured day. Without this, a payDay of 26 (Sunday → effective Friday 24)
+     *  would not trigger the rollover on Friday 24 because 24 < 26, causing the rollover to fire
+     *  two days late on Monday 27 instead. */
     private fun resolveCurrentPayPeriodStart(payDay: Int): String {
         val fmt = SimpleDateFormat("dd/MM/yyyy", Locale.UK)
         val cal = Calendar.getInstance()
-        val today = cal.get(Calendar.DAY_OF_MONTH)
+        val todayDayOfMonth = cal.get(Calendar.DAY_OF_MONTH)
 
-        if (today < payDay) {
+        // Compute the effective (weekend-adjusted) pay day for the current calendar month
+        // so the comparison uses the real trigger date, not the raw configured day.
+        val thisMonthCal = Calendar.getInstance()
+        val maxDayThisMonth = thisMonthCal.getActualMaximum(Calendar.DAY_OF_MONTH)
+        thisMonthCal.set(Calendar.DAY_OF_MONTH, minOf(payDay, maxDayThisMonth))
+        when (thisMonthCal.get(Calendar.DAY_OF_WEEK)) {
+            Calendar.SATURDAY -> thisMonthCal.add(Calendar.DAY_OF_MONTH, -1)
+            Calendar.SUNDAY -> thisMonthCal.add(Calendar.DAY_OF_MONTH, -2)
+        }
+        val effectivePayDayThisMonth = thisMonthCal.get(Calendar.DAY_OF_MONTH)
+
+        if (todayDayOfMonth < effectivePayDayThisMonth) {
             cal.add(Calendar.MONTH, -1)
         }
-        cal.set(Calendar.DAY_OF_MONTH, payDay)
-
+        val maxDay = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
+        cal.set(Calendar.DAY_OF_MONTH, minOf(payDay, maxDay))
         when (cal.get(Calendar.DAY_OF_WEEK)) {
             Calendar.SATURDAY -> cal.add(Calendar.DAY_OF_MONTH, -1)
             Calendar.SUNDAY -> cal.add(Calendar.DAY_OF_MONTH, -2)
