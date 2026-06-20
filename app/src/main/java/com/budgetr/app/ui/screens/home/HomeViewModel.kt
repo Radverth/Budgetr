@@ -2,11 +2,13 @@ package com.budgetr.app.ui.screens.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.budgetr.app.BuildConfig
 import com.budgetr.app.data.model.AccountBalance
 import com.budgetr.app.data.model.SheetTab
 import com.budgetr.app.data.model.TransactionCategory
 import com.budgetr.app.data.repository.SheetsRepository
 import com.budgetr.app.util.AuthManager
+import com.budgetr.app.util.UpdateChecker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -29,7 +31,10 @@ data class HomeUiState(
     val totalOneOffCosts: Double = 0.0,
     val totalAvailable: Double = 0.0,
     val error: String? = null,
-    val userName: String? = null
+    val userName: String? = null,
+    val updateAvailable: Boolean = false,
+    val updateVersion: String = "",
+    val updateUrl: String = ""
 )
 
 private data class SummaryData(
@@ -44,7 +49,8 @@ private data class SummaryData(
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val repository: SheetsRepository,
-    private val authManager: AuthManager
+    private val authManager: AuthManager,
+    private val updateChecker: UpdateChecker
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState(userName = authManager.getUserName()))
@@ -53,17 +59,34 @@ class HomeViewModel @Inject constructor(
     init {
         observeData()
         refresh()
+        checkForUpdate()
     }
+
+    private fun checkForUpdate() {
+        viewModelScope.launch {
+            val result = updateChecker.checkForUpdate(BuildConfig.VERSION_NAME)
+            if (result.available) {
+                _uiState.update { it.copy(updateAvailable = true, updateVersion = result.version, updateUrl = result.url) }
+            }
+        }
+    }
+
+    fun dismissUpdate() = _uiState.update { it.copy(updateAvailable = false) }
 
     private fun observeData() {
         viewModelScope.launch {
-            combine(
+            val balancesAndRollovers = combine(
                 repository.getAccountBalances(),
+                repository.getBalanceRollovers()
+            ) { balances, rollovers -> Pair(balances, rollovers) }
+
+            val allTransactions = combine(
                 repository.getTransactions(SheetTab.MONZO),
                 repository.getTransactions(SheetTab.HALIFAX_DEBIT),
                 repository.getTransactions(SheetTab.HALIFAX_CREDIT)
-            ) { balances, monzoTx, halifaxDebitTx, halifaxCreditTx ->
-                val allTx = monzoTx + halifaxDebitTx + halifaxCreditTx
+            ) { monzoTx, halifaxDebitTx, halifaxCreditTx -> monzoTx + halifaxDebitTx + halifaxCreditTx }
+
+            combine(balancesAndRollovers, allTransactions) { (balances, rollovers), allTx ->
                 val today = Calendar.getInstance().apply {
                     set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
                     set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
@@ -83,8 +106,8 @@ class HomeViewModel @Inject constructor(
 
                 val adjustedBalances = balances.map { balance ->
                     val futureIncome = futureRecurringByAccount[balance.account] ?: 0.0
-                    if (futureIncome != 0.0) balance.copy(remainingBalance = balance.remainingBalance - futureIncome)
-                    else balance
+                    val rolloverAmount = rollovers.find { it.account == balance.account }?.rolloverAmount ?: 0.0
+                    balance.copy(remainingBalance = balance.remainingBalance - futureIncome + rolloverAmount)
                 }
 
                 val income = allTx

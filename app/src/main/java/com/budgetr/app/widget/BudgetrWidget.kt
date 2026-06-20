@@ -51,9 +51,8 @@ class BudgetrWidget : GlanceAppWidget() {
             emptyList()
         }
 
-        // Subtract future-dated recurring income from each account balance, mirroring the
-        // same correction applied in AccountBalancesViewModel. The Cover Sheet pre-calculates
-        // remainingBalance including all recurring income regardless of scheduled date.
+        // Subtract future-dated recurring income and add the previous-period rollover for each
+        // account, mirroring the same corrections applied in AccountBalancesViewModel.
         val adjustedBalances = try {
             val dateFmt = SimpleDateFormat("dd/MM/yyyy", Locale.UK)
             val today = Calendar.getInstance().apply {
@@ -75,10 +74,13 @@ class BudgetrWidget : GlanceAppWidget() {
                 }
                 .mapValues { (_, txs) -> txs.sumOf { it.amount } }
 
+            val rolloverByAccount = entryPoint.balanceRolloverDao().getAllSync()
+                .associateBy { it.account }
+
             balances.map { balance ->
                 val futureIncome = futureRecurringByAccount[balance.account] ?: 0.0
-                if (futureIncome != 0.0) balance.copy(remainingBalance = balance.remainingBalance - futureIncome)
-                else balance
+                val rolloverAmount = rolloverByAccount[balance.account]?.rolloverAmount ?: 0.0
+                balance.copy(remainingBalance = balance.remainingBalance - futureIncome + rolloverAmount)
             }
         } catch (e: Exception) {
             balances

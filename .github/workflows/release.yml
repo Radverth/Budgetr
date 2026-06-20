@@ -1,0 +1,94 @@
+name: Build & Release APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Version bump type'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Bump version in build.gradle.kts
+        id: version
+        run: |
+          CURRENT_NAME=$(grep 'versionName = ' app/build.gradle.kts | sed 's/.*versionName = "\(.*\)"/\1/')
+          CURRENT_CODE=$(grep 'versionCode = ' app/build.gradle.kts | sed 's/.*versionCode = \([0-9]*\)/\1/')
+
+          MAJOR=$(echo "$CURRENT_NAME" | cut -d. -f1)
+          MINOR=$(echo "$CURRENT_NAME" | cut -d. -f2)
+          PATCH=$(echo "$CURRENT_NAME" | cut -d. -f3)
+          PATCH=${PATCH:-0}
+
+          case "${{ github.event.inputs.bump }}" in
+            major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
+            minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
+            *)     PATCH=$((PATCH + 1)) ;;
+          esac
+
+          NEW_NAME="${MAJOR}.${MINOR}.${PATCH}"
+          NEW_CODE=$((CURRENT_CODE + 1))
+
+          sed -i "s/versionCode = ${CURRENT_CODE}/versionCode = ${NEW_CODE}/" app/build.gradle.kts
+          sed -i "s/versionName = \"${CURRENT_NAME}\"/versionName = \"${NEW_NAME}\"/" app/build.gradle.kts
+
+          echo "version_name=${NEW_NAME}" >> "$GITHUB_OUTPUT"
+          echo "version_code=${NEW_CODE}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Build release APK
+        run: ./gradlew assembleRelease
+
+      - name: Rename APK
+        run: |
+          mv app/build/outputs/apk/release/app-release.apk \
+             app/build/outputs/apk/release/budgetr-v${{ steps.version.outputs.version_name }}.apk
+
+      - name: Commit version bump
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add app/build.gradle.kts
+          git commit -m "chore: bump version to ${{ steps.version.outputs.version_name }}"
+          git push
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version_name }}
+          name: Budgetr v${{ steps.version.outputs.version_name }}
+          files: app/build/outputs/apk/release/budgetr-v${{ steps.version.outputs.version_name }}.apk
+          body: |
+            ## Budgetr v${{ steps.version.outputs.version_name }}
+
+            Build ${{ steps.version.outputs.version_code }}
+
+            Download the APK below and install it to update the app.
+            You may need to allow installation from unknown sources in your device settings.

@@ -100,8 +100,8 @@ class AccountBalancesViewModel @Inject constructor(
 
                 val adjustedBalances = balances.map { balance ->
                     val futureIncome = futureRecurringByAccount[balance.account] ?: 0.0
-                    if (futureIncome != 0.0) balance.copy(remainingBalance = balance.remainingBalance - futureIncome)
-                    else balance
+                    val rolloverAmount = rollovers.find { it.account == balance.account }?.rolloverAmount ?: 0.0
+                    balance.copy(remainingBalance = balance.remainingBalance - futureIncome + rolloverAmount)
                 }
 
                 val income = allTx
