@@ -66,21 +66,26 @@ jobs:
 
       - name: Restore signing keystore
         run: |
-          mkdir -p "$HOME/.android"
-          echo "${{ secrets.DEBUG_KEYSTORE_BASE64 }}" | base64 -d > "$HOME/.android/debug.keystore"
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > budgetr-release.keystore
 
       - name: Print keystore SHA-1 (for Google Cloud Console verification)
         run: |
           keytool -list -v \
-            -keystore "$HOME/.android/debug.keystore" \
-            -alias androiddebugkey \
-            -storepass android -keypass android \
-            2>/dev/null | grep -E "SHA1:|SHA256:" || echo "WARNING: could not read keystore — secret may be missing or malformed"
+            -keystore budgetr-release.keystore \
+            -alias "${{ secrets.KEY_ALIAS }}" \
+            -storepass "${{ secrets.KEYSTORE_PASSWORD }}" \
+            -keypass "${{ secrets.KEY_PASSWORD }}" \
+            2>/dev/null | grep -E "SHA1:|SHA256:" || echo "WARNING: could not read keystore — check secrets"
 
       - name: Make gradlew executable
         run: chmod +x gradlew
 
       - name: Build release APK
+        env:
+          KEYSTORE_PATH: budgetr-release.keystore
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: ./gradlew assembleRelease
 
       - name: Rename APK
