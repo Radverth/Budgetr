@@ -82,7 +82,7 @@ jobs:
 
       - name: Build release APK
         env:
-          KEYSTORE_PATH: budgetr-release.keystore
+          KEYSTORE_PATH: ${{ github.workspace }}/budgetr-release.keystore
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
