@@ -114,7 +114,7 @@ class HomeViewModel @Inject constructor(
                     .filter {
                         when (it.category) {
                             TransactionCategory.INCOME,
-                            TransactionCategory.SALARY -> true
+                            TransactionCategory.SALARY,
                             TransactionCategory.RECURRING_INCOME -> {
                                 val txDate = runCatching { dateFmt.parse(it.date) }.getOrNull()
                                 txDate != null && !txDate.after(today)

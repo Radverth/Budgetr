@@ -108,9 +108,8 @@ class AccountBalancesViewModel @Inject constructor(
                     .filter {
                         when (it.category) {
                             TransactionCategory.INCOME,
-                            TransactionCategory.SALARY -> true
+                            TransactionCategory.SALARY,
                             TransactionCategory.RECURRING_INCOME -> {
-                                // Only count recurring income on or after its scheduled date
                                 val txDate = runCatching { dateFmt.parse(it.date) }.getOrNull()
                                 txDate != null && !txDate.after(today)
                             }
