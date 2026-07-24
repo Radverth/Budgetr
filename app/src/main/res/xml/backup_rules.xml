@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Used by Android 11 (API 30) and below via android:fullBackupContent.
+  The encrypted prefs are wrapped by an AndroidKeyStore master key that is device-bound and never
+  leaves the device, so backing up the file only produces an undecryptable copy on restore, which
+  crashes EncryptedSharedPreferences.create() at launch. Exclude it from backup.
+-->
+<full-backup-content>
+    <exclude domain="sharedpref" path="budgetr_secure_prefs.xml" />
+</full-backup-content>
