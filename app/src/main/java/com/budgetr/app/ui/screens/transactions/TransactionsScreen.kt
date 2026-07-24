@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -288,11 +289,16 @@ private fun TransactionItem(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text(
                         text = transaction.date,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        maxLines = 1,
+                        softWrap = false
                     )
                     Text(
                         text = "•",
@@ -302,7 +308,9 @@ private fun TransactionItem(
                     Text(
                         text = transaction.category.displayName,
                         style = MaterialTheme.typography.bodySmall,
-                        color = amountColor.copy(alpha = 0.8f)
+                        color = amountColor.copy(alpha = 0.8f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
@@ -312,22 +320,32 @@ private fun TransactionItem(
                 style = MaterialTheme.typography.titleMedium,
                 color = amountColor,
                 fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                softWrap = false,
                 modifier = androidx.compose.ui.Modifier.padding(horizontal = 8.dp)
             )
 
             Row {
-                IconButton(onClick = onEdit) {
+                IconButton(
+                    onClick = onEdit,
+                    modifier = androidx.compose.ui.Modifier.size(40.dp)
+                ) {
                     Icon(
                         Icons.Default.Edit,
                         contentDescription = "Edit",
-                        tint = MaterialTheme.colorScheme.primary
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = androidx.compose.ui.Modifier.size(20.dp)
                     )
                 }
-                IconButton(onClick = onDelete) {
+                IconButton(
+                    onClick = onDelete,
+                    modifier = androidx.compose.ui.Modifier.size(40.dp)
+                ) {
                     Icon(
                         Icons.Default.Delete,
                         contentDescription = "Delete",
-                        tint = ExpenseRed
+                        tint = ExpenseRed,
+                        modifier = androidx.compose.ui.Modifier.size(20.dp)
                     )
                 }
             }
