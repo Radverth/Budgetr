@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Used by Android 12 (API 31) and above via android:dataExtractionRules.
+  Exclude the encrypted prefs from both cloud backup and device-to-device transfer: the file is
+  wrapped by a device-bound AndroidKeyStore key that is never restored, so a restored copy cannot
+  be decrypted and crashes EncryptedSharedPreferences.create() at launch.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="budgetr_secure_prefs.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="budgetr_secure_prefs.xml" />
+    </device-transfer>
+</data-extraction-rules>
