@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import com.budgetr.app.data.local.entity.TransactionEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -23,4 +24,17 @@ interface TransactionDao {
 
     @Query("DELETE FROM transactions")
     suspend fun deleteAll()
+
+    /**
+     * Atomically replaces all cached rows for a tab. Because the primary key is an
+     * auto-generated id (not rowIndex), a bare deleteByTab + insertAll pair run from two
+     * concurrent refreshes can interleave and leave duplicate rowIndex rows, which then
+     * crash the LazyColumn with a duplicate-key exception. Wrapping both in a single DB
+     * transaction serialises them and keeps the cache free of duplicates.
+     */
+    @Transaction
+    suspend fun replaceForTab(sheetTab: String, transactions: List<TransactionEntity>) {
+        deleteByTab(sheetTab)
+        insertAll(transactions)
+    }
 }

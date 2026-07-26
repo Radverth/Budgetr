@@ -73,7 +73,9 @@ class SheetsRepositoryImpl @Inject constructor(
 
     override fun getTransactions(sheetTab: SheetTab): Flow<List<Transaction>> =
         transactionDao.getTransactionsByTab(sheetTab.name).map { entities ->
-            entities.map { it.toTransaction() }
+            // Guard against any duplicate rowIndex rows left in the cache by an older build:
+            // distinct keeps the UI's per-row keys unique so the LazyColumn can't crash.
+            entities.map { it.toTransaction() }.distinctBy { it.rowIndex }
         }
 
     override fun getAccountBalances(): Flow<List<AccountBalance>> =
@@ -106,8 +108,9 @@ class SheetsRepositoryImpl @Inject constructor(
             )
         }
 
-        transactionDao.deleteByTab(sheetTab.name)
-        transactionDao.insertAll(entities)
+        // Atomic replace so concurrent refreshes of the same tab can't interleave into
+        // duplicate rowIndex rows (which crash the transactions list with a duplicate key).
+        transactionDao.replaceForTab(sheetTab.name, entities)
     }
 
     override suspend fun refreshAccountBalances() {
