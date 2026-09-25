@@ -11,21 +11,58 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
+    primary = TealPrimaryDark,
+    onPrimary = OnTealPrimaryDark,
+    primaryContainer = TealPrimaryContainerDark,
+    onPrimaryContainer = OnTealPrimaryContainerDark,
+    secondary = SageSecondaryDark,
+    onSecondary = OnSageSecondaryDark,
+    secondaryContainer = SageSecondaryContainerDark,
+    onSecondaryContainer = OnSageSecondaryContainerDark,
+    tertiary = AmberTertiaryDark,
+    onTertiary = OnAmberTertiaryDark,
+    tertiaryContainer = AmberTertiaryContainerDark,
+    onTertiaryContainer = OnAmberTertiaryContainerDark,
+    background = BackgroundDark,
+    onBackground = OnBackgroundDark,
+    surface = BackgroundDark,
+    onSurface = OnBackgroundDark,
+    surfaceVariant = SurfaceVariantDark,
+    onSurfaceVariant = OnSurfaceVariantDark,
+    error = ErrorDark,
+    onError = OnErrorDark
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
+    primary = TealPrimaryLight,
+    onPrimary = OnTealPrimaryLight,
+    primaryContainer = TealPrimaryContainerLight,
+    onPrimaryContainer = OnTealPrimaryContainerLight,
+    secondary = SageSecondaryLight,
+    onSecondary = OnSageSecondaryLight,
+    secondaryContainer = SageSecondaryContainerLight,
+    onSecondaryContainer = OnSageSecondaryContainerLight,
+    tertiary = AmberTertiaryLight,
+    onTertiary = OnAmberTertiaryLight,
+    tertiaryContainer = AmberTertiaryContainerLight,
+    onTertiaryContainer = OnAmberTertiaryContainerLight,
+    background = BackgroundLight,
+    onBackground = OnBackgroundLight,
+    surface = BackgroundLight,
+    onSurface = OnBackgroundLight,
+    surfaceVariant = SurfaceVariantLight,
+    onSurfaceVariant = OnSurfaceVariantLight,
+    error = ErrorLight,
+    onError = OnErrorLight
 )
 
 @Composable
 fun BudgetrTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = true,
+    // Defaults to the app's own teal/amber brand palette rather than Material You so the app
+    // has a consistent, deliberately-designed look across devices. Dynamic color still works
+    // for anyone who wants it (this remains an opt-in parameter).
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
@@ -40,6 +77,7 @@ fun BudgetrTheme(
     MaterialTheme(
         colorScheme = colorScheme,
         typography = Typography,
+        shapes = BudgetrShapes,
         content = content
     )
 }

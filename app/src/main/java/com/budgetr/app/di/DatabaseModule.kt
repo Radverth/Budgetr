@@ -5,6 +5,8 @@ import androidx.room.Room
 import com.budgetr.app.data.local.BudgetrDatabase
 import com.budgetr.app.data.local.dao.AccountBalanceDao
 import com.budgetr.app.data.local.dao.BalanceRolloverDao
+import com.budgetr.app.data.local.dao.DebtDao
+import com.budgetr.app.data.local.dao.SavingsGoalDao
 import com.budgetr.app.data.local.dao.TransactionDao
 import dagger.Module
 import dagger.Provides
@@ -32,4 +34,10 @@ object DatabaseModule {
 
     @Provides
     fun provideBalanceRolloverDao(db: BudgetrDatabase): BalanceRolloverDao = db.balanceRolloverDao()
+
+    @Provides
+    fun provideSavingsGoalDao(db: BudgetrDatabase): SavingsGoalDao = db.savingsGoalDao()
+
+    @Provides
+    fun provideDebtDao(db: BudgetrDatabase): DebtDao = db.debtDao()
 }

@@ -1,5 +1,10 @@
 package com.budgetr.app.ui.screens.settings
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,6 +25,7 @@ import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -34,9 +40,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -45,12 +54,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.budgetr.app.ui.theme.ExpenseRed
 import com.budgetr.app.ui.theme.IncomeGreen
+import java.util.Calendar
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -61,6 +73,23 @@ fun SettingsScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     var showSignOutConfirm by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) viewModel.setReminderEnabled(true)
+    }
+
+    fun requestEnableReminders() {
+        val needsPermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        if (needsPermission) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            viewModel.setReminderEnabled(true)
+        }
+    }
 
     // Pay day picker dialog
     if (uiState.showPayDayPicker) {
@@ -93,6 +122,28 @@ fun SettingsScreen(
             confirmButton = {},
             dismissButton = {
                 TextButton(onClick = viewModel::dismissPayDayPicker) { Text("Cancel") }
+            }
+        )
+    }
+
+    // Reminder time picker dialog
+    if (uiState.showTimePicker) {
+        val timePickerState = rememberTimePickerState(
+            initialHour = uiState.reminderHour,
+            initialMinute = uiState.reminderMinute,
+            is24Hour = false
+        )
+        AlertDialog(
+            onDismissRequest = viewModel::dismissTimePicker,
+            title = { Text("Reminder Time") },
+            text = { TimePicker(state = timePickerState) },
+            confirmButton = {
+                TextButton(onClick = { viewModel.setReminderTime(timePickerState.hour, timePickerState.minute) }) {
+                    Text("Set")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::dismissTimePicker) { Text("Cancel") }
             }
         )
     }
@@ -307,6 +358,62 @@ fun SettingsScreen(
                 }
             }
 
+            // Reminders
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Transaction Reminders", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Switch(
+                            checked = uiState.reminderEnabled,
+                            onCheckedChange = { checked ->
+                                if (checked) requestEnableReminders() else viewModel.setReminderEnabled(false)
+                            }
+                        )
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Notifications,
+                            contentDescription = null,
+                            tint = IncomeGreen,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = "Daily at ${formatTime(uiState.reminderHour, uiState.reminderMinute)}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Text(
+                        text = "Get a nudge to log anything you've spent or earned today.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    )
+
+                    Button(
+                        onClick = viewModel::showTimePicker,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Change Reminder Time")
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(8.dp))
 
             Button(
@@ -325,4 +432,12 @@ fun SettingsScreen(
             }
         }
     }
+}
+
+private fun formatTime(hour: Int, minute: Int): String {
+    val cal = Calendar.getInstance().apply {
+        set(Calendar.HOUR_OF_DAY, hour)
+        set(Calendar.MINUTE, minute)
+    }
+    return java.text.SimpleDateFormat("h:mm a", java.util.Locale.UK).format(cal.time)
 }

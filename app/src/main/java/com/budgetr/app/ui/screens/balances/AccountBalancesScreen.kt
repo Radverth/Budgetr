@@ -63,7 +63,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.budgetr.app.data.model.AccountBalance
 import com.budgetr.app.data.model.BalanceRollover
-import com.budgetr.app.data.model.SheetTab
 import com.budgetr.app.ui.theme.ExpenseRed
 import com.budgetr.app.ui.theme.FixedCostOrange
 import com.budgetr.app.ui.theme.IncomeGreen
@@ -72,7 +71,7 @@ import com.budgetr.app.util.toCurrencyString
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AccountBalancesScreen(
-    onNavigateToTransactions: ((SheetTab) -> Unit)? = null,
+    onNavigateToTransactions: ((String) -> Unit)? = null,
     viewModel: AccountBalancesViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -280,6 +279,18 @@ fun AccountBalancesScreen(
                         }
                     }
 
+                    if (uiState.goalsCount > 0 || uiState.debtCount > 0) {
+                        item {
+                            GoalsGlanceCard(
+                                goalsCount = uiState.goalsCount,
+                                avgGoalProgress = uiState.avgGoalProgress,
+                                debtCount = uiState.debtCount,
+                                totalDebt = uiState.totalDebt,
+                                modifier = Modifier.padding(horizontal = 16.dp)
+                            )
+                        }
+                    }
+
                     item {
                         Text(
                             text = "Your Accounts",
@@ -291,12 +302,11 @@ fun AccountBalancesScreen(
 
                     items(uiState.balances) { balance ->
                         val rollover = uiState.rollovers.find { it.account == balance.account }
-                        val matchingTab = SheetTab.entries.find { it.sheetName == balance.account }
                         AccountBalanceDetailCard(
                             balance = balance,
                             rollover = rollover,
-                            isClickable = matchingTab != null && onNavigateToTransactions != null,
-                            onClick = { matchingTab?.let { onNavigateToTransactions?.invoke(it) } },
+                            isClickable = onNavigateToTransactions != null,
+                            onClick = { onNavigateToTransactions?.invoke(balance.account) },
                             onRename = { viewModel.showRenameDialog(balance) },
                             onDelete = { viewModel.showDeleteAccountDialog(balance) },
                             onEditRollover = { viewModel.showRolloverEditDialog(balance.account) },
@@ -428,6 +438,56 @@ private fun SummaryHeaderCard(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun GoalsGlanceCard(
+    goalsCount: Int,
+    avgGoalProgress: Float,
+    debtCount: Int,
+    totalDebt: Double,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            if (goalsCount > 0) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "🎯 $goalsCount ${if (goalsCount == 1) "goal" else "goals"}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
+                    Text(
+                        text = "${(avgGoalProgress * 100).toInt()}% average progress",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.75f)
+                    )
+                }
+            }
+            if (debtCount > 0) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "💳 ${totalDebt.toCurrencyString()} owed",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = ExpenseRed
+                    )
+                    Text(
+                        text = "across $debtCount ${if (debtCount == 1) "debt" else "debts"} — see Goals tab",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.75f)
+                    )
+                }
             }
         }
     }

@@ -3,7 +3,6 @@ package com.budgetr.app.ui.screens.transactions
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.budgetr.app.data.model.SheetTab
 import com.budgetr.app.data.model.SortOrder
 import com.budgetr.app.data.model.Transaction
 import com.budgetr.app.data.model.TransactionCategory
@@ -16,6 +15,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -25,7 +25,8 @@ import javax.inject.Inject
 
 data class TransactionsUiState(
     val isRefreshing: Boolean = false,
-    val selectedTab: SheetTab = SheetTab.MONZO,
+    val accounts: List<String> = emptyList(),
+    val selectedAccount: String? = null,
     val transactions: List<Transaction> = emptyList(),
     val categoryFilter: TransactionCategory? = null,
     val searchQuery: String = "",
@@ -46,62 +47,81 @@ class TransactionsViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
-    private val initialTab = savedStateHandle.get<String>("tabName")
-        ?.let { name -> SheetTab.entries.find { it.name == name } }
-        ?: SheetTab.MONZO
+    private val initialAccount = savedStateHandle.get<String>("tabName")
 
-    private val _uiState = MutableStateFlow(TransactionsUiState(selectedTab = initialTab, payDay = prefs.getPayDay()))
+    private val _uiState = MutableStateFlow(
+        TransactionsUiState(selectedAccount = initialAccount, payDay = prefs.getPayDay())
+    )
     val uiState: StateFlow<TransactionsUiState> = _uiState.asStateFlow()
 
-    private val selectedTabFlow = MutableStateFlow(initialTab)
+    private val selectedAccountFlow = MutableStateFlow(initialAccount)
     private val categoryFilterFlow = MutableStateFlow<TransactionCategory?>(null)
     private val searchQueryFlow = MutableStateFlow("")
     private val sortOrderFlow = MutableStateFlow(SortOrder.DATE_DESC)
 
     init {
+        // Accounts are dynamic (user-managed), so there's no fixed default. Once the real
+        // account list arrives, fall back to the first one if nothing valid is selected yet
+        // (e.g. no account was passed via navigation, or the selected one got deleted).
         viewModelScope.launch {
-            selectedTabFlow.flatMapLatest { tab ->
-                combine(
-                    repository.getTransactions(tab),
-                    categoryFilterFlow,
-                    searchQueryFlow,
-                    sortOrderFlow
-                ) { transactions, filter, query, sort ->
-                    val currentMonth = Calendar.getInstance().get(Calendar.MONTH) + 1
-                    val dateFmt = SimpleDateFormat("dd/MM/yyyy", Locale.UK)
-                    var result = transactions
-                        // Hide fixed costs restricted to other months
-                        .filter { tx ->
-                            tx.category != TransactionCategory.FIXED_COST ||
-                            tx.activeMonths == null ||
-                            tx.activeMonths.contains(currentMonth)
+            repository.getAccountBalances().collect { balances ->
+                val names = balances.map { it.account }
+                _uiState.update { it.copy(accounts = names) }
+                val current = selectedAccountFlow.value
+                if (names.isNotEmpty() && (current == null || current !in names)) {
+                    selectAccount(names.first())
+                }
+            }
+        }
+
+        refresh()
+
+        viewModelScope.launch {
+            selectedAccountFlow.flatMapLatest { account ->
+                if (account == null) {
+                    flowOf(emptyList())
+                } else {
+                    combine(
+                        repository.getTransactions(account),
+                        categoryFilterFlow,
+                        searchQueryFlow,
+                        sortOrderFlow
+                    ) { transactions, filter, query, sort ->
+                        val currentMonth = Calendar.getInstance().get(Calendar.MONTH) + 1
+                        val dateFmt = SimpleDateFormat("dd/MM/yyyy", Locale.UK)
+                        var result = transactions
+                            // Hide fixed costs restricted to other months
+                            .filter { tx ->
+                                tx.category != TransactionCategory.FIXED_COST ||
+                                tx.activeMonths == null ||
+                                tx.activeMonths.contains(currentMonth)
+                            }
+                        if (filter != null) result = result.filter { it.category == filter }
+                        if (query.isNotBlank()) {
+                            result = result.filter {
+                                it.info.contains(query, ignoreCase = true) ||
+                                it.date.contains(query, ignoreCase = true)
+                            }
                         }
-                    if (filter != null) result = result.filter { it.category == filter }
-                    if (query.isNotBlank()) {
-                        result = result.filter {
-                            it.info.contains(query, ignoreCase = true) ||
-                            it.date.contains(query, ignoreCase = true)
+                        when (sort) {
+                            SortOrder.DATE_DESC -> result.sortedByDescending { dateFmt.parseToEpoch(it.date) }
+                            SortOrder.DATE_ASC -> result.sortedBy { dateFmt.parseToEpoch(it.date) }
+                            SortOrder.AMOUNT_DESC -> result.sortedByDescending { kotlin.math.abs(it.amount) }
+                            SortOrder.AMOUNT_ASC -> result.sortedBy { kotlin.math.abs(it.amount) }
+                            SortOrder.CATEGORY_ASC -> result.sortedBy { it.category.displayName }
                         }
-                    }
-                    when (sort) {
-                        SortOrder.DATE_DESC -> result.sortedByDescending { dateFmt.parseToEpoch(it.date) }
-                        SortOrder.DATE_ASC -> result.sortedBy { dateFmt.parseToEpoch(it.date) }
-                        SortOrder.AMOUNT_DESC -> result.sortedByDescending { kotlin.math.abs(it.amount) }
-                        SortOrder.AMOUNT_ASC -> result.sortedBy { kotlin.math.abs(it.amount) }
-                        SortOrder.CATEGORY_ASC -> result.sortedBy { it.category.displayName }
                     }
                 }
             }.collect { filtered ->
                 _uiState.update { it.copy(transactions = filtered) }
             }
         }
-        refresh()
     }
 
-    fun selectTab(tab: SheetTab) {
-        selectedTabFlow.value = tab
-        _uiState.update { it.copy(selectedTab = tab) }
-        refresh(tab)
+    fun selectAccount(account: String) {
+        selectedAccountFlow.value = account
+        _uiState.update { it.copy(selectedAccount = account) }
+        refresh(account)
     }
 
     fun setCategoryFilter(category: TransactionCategory?) {
@@ -119,11 +139,12 @@ class TransactionsViewModel @Inject constructor(
         _uiState.update { it.copy(sortOrder = order) }
     }
 
-    fun refresh(tab: SheetTab = _uiState.value.selectedTab) {
+    fun refresh(account: String? = _uiState.value.selectedAccount) {
+        if (account == null) return
         viewModelScope.launch {
             _uiState.update { it.copy(isRefreshing = true, error = null) }
             try {
-                repository.refreshTransactions(tab)
+                repository.refreshTransactions(account)
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = e.message) }
             } finally {
@@ -144,7 +165,7 @@ class TransactionsViewModel @Inject constructor(
             try {
                 if (transaction.rowIndex > 0) {
                     val original = _uiState.value.transactionToEdit
-                    if (original != null && original.sheetTab != transaction.sheetTab) {
+                    if (original != null && original.account != transaction.account) {
                         // Account changed: remove from old account, append to new account
                         repository.deleteTransaction(original)
                         repository.addTransaction(transaction.copy(rowIndex = 0))

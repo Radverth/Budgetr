@@ -18,18 +18,25 @@ import com.budgetr.app.data.api.UpdateSheetProps
 import com.budgetr.app.data.api.ValueRange
 import com.budgetr.app.data.local.dao.AccountBalanceDao
 import com.budgetr.app.data.local.dao.BalanceRolloverDao
+import com.budgetr.app.data.local.dao.DebtDao
+import com.budgetr.app.data.local.dao.SavingsGoalDao
 import com.budgetr.app.data.local.dao.TransactionDao
 import com.budgetr.app.data.local.entity.AccountBalanceEntity
 import com.budgetr.app.data.local.entity.BalanceRolloverEntity
+import com.budgetr.app.data.local.entity.DebtEntity
+import com.budgetr.app.data.local.entity.SavingsGoalEntity
 import com.budgetr.app.data.local.entity.TransactionEntity
 import com.budgetr.app.data.model.AccountBalance
 import com.budgetr.app.data.model.BalanceRollover
-import com.budgetr.app.data.model.SheetTab
+import com.budgetr.app.data.model.Debt
+import com.budgetr.app.data.model.SavingsGoal
 import com.budgetr.app.data.model.Transaction
 import com.budgetr.app.data.model.TransactionCategory
 import com.budgetr.app.util.PreferencesManager
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -37,45 +44,45 @@ import kotlin.math.ceil
 import kotlin.math.floor
 import javax.inject.Inject
 
+private const val SAVINGS_GOALS_SHEET = "Savings Goals"
+private const val DEBTS_SHEET = "Debts"
+
 class SheetsRepositoryImpl @Inject constructor(
     private val api: GoogleSheetsApi,
     private val driveApi: GoogleDriveApi,
     private val transactionDao: TransactionDao,
     private val accountBalanceDao: AccountBalanceDao,
     private val balanceRolloverDao: BalanceRolloverDao,
+    private val savingsGoalDao: SavingsGoalDao,
+    private val debtDao: DebtDao,
     private val prefs: PreferencesManager
 ) : SheetsRepository {
 
     // Cache of sheet title -> numeric sheetId (gid) from the Sheets API
     private var sheetIdCache: Map<String, Int> = emptyMap()
+    private val sheetIdMutex = Mutex()
 
-    private suspend fun resolveSheetId(sheetTab: SheetTab): Int {
-        sheetIdCache[sheetTab.sheetName]?.let { return it }
-        val spreadsheetId = prefs.getSpreadsheetId() ?: return 0
+    private suspend fun resolveSheetIdByName(name: String): Int? = sheetIdMutex.withLock {
+        sheetIdCache[name]?.let { return@withLock it }
+        val spreadsheetId = prefs.getSpreadsheetId() ?: return@withLock null
         val metadata = api.getSpreadsheet(spreadsheetId)
         sheetIdCache = metadata.sheets
             ?.mapNotNull { it.properties }
             ?.associate { it.title to it.sheetId }
             ?: emptyMap()
-        return sheetIdCache[sheetTab.sheetName] ?: 0
+        sheetIdCache[name]
     }
 
-    private suspend fun resolveSheetIdByName(name: String): Int? {
-        sheetIdCache[name]?.let { return it }
-        val spreadsheetId = prefs.getSpreadsheetId() ?: return null
-        val metadata = api.getSpreadsheet(spreadsheetId)
-        sheetIdCache = metadata.sheets
-            ?.mapNotNull { it.properties }
-            ?.associate { it.title to it.sheetId }
-            ?: emptyMap()
-        return sheetIdCache[name]
-    }
-
-    override fun getTransactions(sheetTab: SheetTab): Flow<List<Transaction>> =
-        transactionDao.getTransactionsByTab(sheetTab.name).map { entities ->
+    override fun getTransactions(account: String): Flow<List<Transaction>> =
+        transactionDao.getTransactionsByAccount(account).map { entities ->
             // Guard against any duplicate rowIndex rows left in the cache by an older build:
             // distinct keeps the UI's per-row keys unique so the LazyColumn can't crash.
             entities.map { it.toTransaction() }.distinctBy { it.rowIndex }
+        }
+
+    override fun getAllTransactions(): Flow<List<Transaction>> =
+        transactionDao.getAll().map { entities ->
+            entities.map { it.toTransaction() }.distinctBy { it.account to it.rowIndex }
         }
 
     override fun getAccountBalances(): Flow<List<AccountBalance>> =
@@ -88,9 +95,9 @@ class SheetsRepositoryImpl @Inject constructor(
             entities.map { BalanceRollover(it.account, it.rolloverAmount, it.recordedDate) }
         }
 
-    override suspend fun refreshTransactions(sheetTab: SheetTab) {
+    override suspend fun refreshTransactions(account: String) {
         val spreadsheetId = prefs.getSpreadsheetId() ?: return
-        val range = "${sheetTab.sheetName}!A:F"
+        val range = "$account!A:F"
         val response = api.getValues(spreadsheetId, range)
         val rows = response.values ?: return
 
@@ -103,14 +110,18 @@ class SheetsRepositoryImpl @Inject constructor(
                 info = row.getOrElse(1) { "" },
                 amount = row.getOrElse(2) { "0" }.replace("[£,]".toRegex(), "").toDoubleOrNull() ?: 0.0,
                 category = TransactionCategory.fromString(row.getOrElse(3) { "" }).name,
-                sheetTab = sheetTab.name,
+                account = account,
                 activeMonths = row.getOrElse(5) { "" }.ifBlank { null }
             )
         }
 
-        // Atomic replace so concurrent refreshes of the same tab can't interleave into
+        // Atomic replace so concurrent refreshes of the same account can't interleave into
         // duplicate rowIndex rows (which crash the transactions list with a duplicate key).
-        transactionDao.replaceForTab(sheetTab.name, entities)
+        transactionDao.replaceForAccount(account, entities)
+    }
+
+    override suspend fun refreshAllTransactions() {
+        accountBalanceDao.getAllSync().forEach { refreshTransactions(it.account) }
     }
 
     override suspend fun refreshAccountBalances() {
@@ -137,7 +148,7 @@ class SheetsRepositoryImpl @Inject constructor(
 
     override suspend fun addTransaction(transaction: Transaction) {
         val spreadsheetId = prefs.getSpreadsheetId() ?: return
-        val range = "${transaction.sheetTab.sheetName}!A:F"
+        val range = "${transaction.account}!A:F"
         val rounded = roundedAmount(transaction.amount, transaction.category)
         val activeMonthsStr = transaction.activeMonths?.joinToString(",") ?: ""
         val row = listOf(listOf(
@@ -149,12 +160,12 @@ class SheetsRepositoryImpl @Inject constructor(
             activeMonthsStr
         ))
         api.appendValues(spreadsheetId, range, body = ValueRange(values = row))
-        refreshTransactions(transaction.sheetTab)
+        refreshTransactions(transaction.account)
     }
 
     override suspend fun updateTransaction(transaction: Transaction) {
         val spreadsheetId = prefs.getSpreadsheetId() ?: return
-        val range = "${transaction.sheetTab.sheetName}!A${transaction.rowIndex}:F${transaction.rowIndex}"
+        val range = "${transaction.account}!A${transaction.rowIndex}:F${transaction.rowIndex}"
         val rounded = roundedAmount(transaction.amount, transaction.category)
         val activeMonthsStr = transaction.activeMonths?.joinToString(",") ?: ""
         val row = listOf(listOf(
@@ -166,12 +177,12 @@ class SheetsRepositoryImpl @Inject constructor(
             activeMonthsStr
         ))
         api.updateValues(spreadsheetId, range, body = ValueRange(values = row))
-        refreshTransactions(transaction.sheetTab)
+        refreshTransactions(transaction.account)
     }
 
     override suspend fun deleteTransaction(transaction: Transaction) {
         val spreadsheetId = prefs.getSpreadsheetId() ?: return
-        val sheetId = resolveSheetId(transaction.sheetTab)
+        val sheetId = resolveSheetIdByName(transaction.account) ?: 0
         val rowIndex = transaction.rowIndex - 1 // 0-based for API
         api.batchUpdate(
             spreadsheetId,
@@ -189,15 +200,15 @@ class SheetsRepositoryImpl @Inject constructor(
                 )
             )
         )
-        refreshTransactions(transaction.sheetTab)
+        refreshTransactions(transaction.account)
     }
 
-    override suspend fun deleteOneOffTransactions(sheetTab: SheetTab) {
+    override suspend fun deleteOneOffTransactions(account: String) {
         val spreadsheetId = prefs.getSpreadsheetId() ?: return
-        val sheetId = resolveSheetId(sheetTab)
+        val sheetId = resolveSheetIdByName(account) ?: 0
 
         // Get ONE_OFF_COST rows sorted descending so high indices delete first (prevents index shifting)
-        val oneOffEntities = transactionDao.getTransactionsByTabSync(sheetTab.name)
+        val oneOffEntities = transactionDao.getTransactionsByAccountSync(account)
             .filter { it.category == TransactionCategory.ONE_OFF_COST.name }
             .sortedByDescending { it.rowIndex }
 
@@ -212,7 +223,7 @@ class SheetsRepositoryImpl @Inject constructor(
             )
         }
         api.batchUpdate(spreadsheetId, BatchUpdateRequest(requests = requests))
-        refreshTransactions(sheetTab)
+        refreshTransactions(account)
     }
 
     override suspend fun listSpreadsheets(): List<DriveFile> =
@@ -291,6 +302,11 @@ class SheetsRepositoryImpl @Inject constructor(
             sheetIdCache = emptyMap()
         }
 
+        // The local cache still has rows keyed by the old account name — drop them and
+        // re-fetch under the new name so the combined transaction feed doesn't show a
+        // ghost account until the next full refresh.
+        transactionDao.deleteByAccount(oldName)
+        refreshTransactions(newName)
         refreshAccountBalances()
     }
 
@@ -375,6 +391,7 @@ class SheetsRepositoryImpl @Inject constructor(
         // Remove from local cache
         accountBalanceDao.deleteAll()
         balanceRolloverDao.delete(accountName)
+        transactionDao.deleteByAccount(accountName)
         refreshAccountBalances()
     }
 
@@ -407,43 +424,180 @@ class SheetsRepositoryImpl @Inject constructor(
         }
 
         val spreadsheetId = prefs.getSpreadsheetId()
+        val accounts = balances.map { it.account }
 
         // Carry over FIXED_COST and TRANSFER (update date to new pay date),
         // and RECURRING_INCOME (update date to the same day-of-month in the current period).
+        //
+        // Deliberately not swallowed per-account: if any account's update fails (e.g. a
+        // network blip), we abort before deleting one-off costs or marking the period as
+        // processed below. lastPayPeriodStart stays unset, so the whole operation retries
+        // from scratch next launch instead of silently losing carryover data while still
+        // wiping that period's one-off costs.
         if (spreadsheetId != null) {
-            SheetTab.entries.forEach { tab ->
-                try {
-                    val tabEntities = transactionDao.getTransactionsByTabSync(tab.name)
-                    tabEntities.forEach { entity ->
-                        val newDate = when (entity.category) {
-                            TransactionCategory.FIXED_COST.name,
-                            TransactionCategory.TRANSFER.name -> currentPeriodStart
-                            TransactionCategory.RECURRING_INCOME.name -> {
-                                val day = entity.date.split("/").firstOrNull()?.toIntOrNull() ?: 1
-                                resolveRecurringDate(day, payDay)
-                            }
-                            else -> null
+            accounts.forEach { account ->
+                val entities = transactionDao.getTransactionsByAccountSync(account)
+                entities.forEach { entity ->
+                    val newDate = when (entity.category) {
+                        TransactionCategory.FIXED_COST.name,
+                        TransactionCategory.TRANSFER.name -> currentPeriodStart
+                        TransactionCategory.RECURRING_INCOME.name -> {
+                            val day = entity.date.split("/").firstOrNull()?.toIntOrNull() ?: 1
+                            resolveRecurringDate(day, payDay)
                         }
-                        if (newDate != null && newDate != entity.date) {
-                            val range = "${tab.sheetName}!A${entity.rowIndex}"
-                            api.updateValues(
-                                spreadsheetId, range,
-                                body = ValueRange(values = listOf(listOf(newDate)))
-                            )
-                        }
+                        else -> null
                     }
-                    // Refresh local cache after date updates
-                    refreshTransactions(tab)
-                } catch (_: Exception) {}
+                    if (newDate != null && newDate != entity.date) {
+                        val range = "$account!A${entity.rowIndex}"
+                        api.updateValues(
+                            spreadsheetId, range,
+                            body = ValueRange(values = listOf(listOf(newDate)))
+                        )
+                    }
+                }
+                // Refresh local cache after date updates
+                refreshTransactions(account)
             }
         }
 
-        // Delete all one-off costs for the new pay period
-        SheetTab.entries.forEach { tab ->
-            try { deleteOneOffTransactions(tab) } catch (_: Exception) {}
-        }
+        // Delete all one-off costs for the new pay period. Only reached if every account's
+        // carryover above succeeded (or there was no spreadsheet to carry over).
+        accounts.forEach { account -> deleteOneOffTransactions(account) }
         prefs.setLastPayPeriodStart(currentPeriodStart)
         return true
+    }
+
+    // --- Savings goals ---
+
+    override fun getSavingsGoals(): Flow<List<SavingsGoal>> =
+        savingsGoalDao.getAll().map { entities -> entities.map { it.toSavingsGoal() } }
+
+    override suspend fun refreshSavingsGoals() {
+        val spreadsheetId = prefs.getSpreadsheetId() ?: return
+        if (resolveSheetIdByName(SAVINGS_GOALS_SHEET) == null) return
+        val response = api.getValues(spreadsheetId, "$SAVINGS_GOALS_SHEET!A:D")
+        val rows = response.values ?: emptyList()
+        val entities = rows.drop(1).mapIndexedNotNull { index, row ->
+            val name = row.getOrElse(0) { "" }
+            if (name.isBlank()) return@mapIndexedNotNull null
+            SavingsGoalEntity(
+                name = name,
+                targetAmount = row.getOrElse(1) { "0" }.parseCurrency(),
+                savedAmount = row.getOrElse(2) { "0" }.parseCurrency(),
+                targetDate = row.getOrElse(3) { "" }.ifBlank { null },
+                rowIndex = index + 2
+            )
+        }
+        savingsGoalDao.deleteAll()
+        savingsGoalDao.insertAll(entities)
+    }
+
+    override suspend fun addSavingsGoal(goal: SavingsGoal) {
+        val spreadsheetId = prefs.getSpreadsheetId() ?: return
+        ensureSheetExists(SAVINGS_GOALS_SHEET, listOf("Name", "Target Amount", "Saved Amount", "Target Date"))
+        val row = listOf(listOf(goal.name, goal.targetAmount.toString(), goal.savedAmount.toString(), goal.targetDate ?: ""))
+        api.appendValues(spreadsheetId, "$SAVINGS_GOALS_SHEET!A:D", body = ValueRange(values = row))
+        refreshSavingsGoals()
+    }
+
+    override suspend fun updateSavingsGoal(goal: SavingsGoal) {
+        val spreadsheetId = prefs.getSpreadsheetId() ?: return
+        val row = listOf(listOf(goal.name, goal.targetAmount.toString(), goal.savedAmount.toString(), goal.targetDate ?: ""))
+        api.updateValues(
+            spreadsheetId,
+            "$SAVINGS_GOALS_SHEET!A${goal.rowIndex}:D${goal.rowIndex}",
+            body = ValueRange(values = row)
+        )
+        refreshSavingsGoals()
+    }
+
+    override suspend fun deleteSavingsGoal(name: String) {
+        deleteNamedRow(SAVINGS_GOALS_SHEET, name)
+        refreshSavingsGoals()
+    }
+
+    // --- Debts ---
+
+    override fun getDebts(): Flow<List<Debt>> =
+        debtDao.getAll().map { entities -> entities.map { it.toDebt() } }
+
+    override suspend fun refreshDebts() {
+        val spreadsheetId = prefs.getSpreadsheetId() ?: return
+        if (resolveSheetIdByName(DEBTS_SHEET) == null) return
+        val response = api.getValues(spreadsheetId, "$DEBTS_SHEET!A:D")
+        val rows = response.values ?: emptyList()
+        val entities = rows.drop(1).mapIndexedNotNull { index, row ->
+            val name = row.getOrElse(0) { "" }
+            if (name.isBlank()) return@mapIndexedNotNull null
+            DebtEntity(
+                name = name,
+                balance = row.getOrElse(1) { "0" }.parseCurrency(),
+                aprPercent = row.getOrElse(2) { "0" }.toDoubleOrNull() ?: 0.0,
+                minPayment = row.getOrElse(3) { "0" }.parseCurrency(),
+                rowIndex = index + 2
+            )
+        }
+        debtDao.deleteAll()
+        debtDao.insertAll(entities)
+    }
+
+    override suspend fun addDebt(debt: Debt) {
+        val spreadsheetId = prefs.getSpreadsheetId() ?: return
+        ensureSheetExists(DEBTS_SHEET, listOf("Name", "Balance", "APR %", "Min Payment"))
+        val row = listOf(listOf(debt.name, debt.balance.toString(), debt.aprPercent.toString(), debt.minPayment.toString()))
+        api.appendValues(spreadsheetId, "$DEBTS_SHEET!A:D", body = ValueRange(values = row))
+        refreshDebts()
+    }
+
+    override suspend fun updateDebt(debt: Debt) {
+        val spreadsheetId = prefs.getSpreadsheetId() ?: return
+        val row = listOf(listOf(debt.name, debt.balance.toString(), debt.aprPercent.toString(), debt.minPayment.toString()))
+        api.updateValues(
+            spreadsheetId,
+            "$DEBTS_SHEET!A${debt.rowIndex}:D${debt.rowIndex}",
+            body = ValueRange(values = row)
+        )
+        refreshDebts()
+    }
+
+    override suspend fun deleteDebt(name: String) {
+        deleteNamedRow(DEBTS_SHEET, name)
+        refreshDebts()
+    }
+
+    /** Creates [sheetTitle] with a header row if it doesn't already exist in the spreadsheet. */
+    private suspend fun ensureSheetExists(sheetTitle: String, header: List<String>) {
+        val spreadsheetId = prefs.getSpreadsheetId() ?: return
+        if (resolveSheetIdByName(sheetTitle) != null) return
+        api.batchUpdate(
+            spreadsheetId,
+            BatchUpdateRequest(requests = listOf(Request(addSheet = AddSheetRequestBody(properties = NewSheetProperties(title = sheetTitle)))))
+        )
+        val lastColumn = 'A' + (header.size - 1)
+        api.updateValues(spreadsheetId, "$sheetTitle!A1:${lastColumn}1", body = ValueRange(values = listOf(header)))
+        sheetIdCache = emptyMap()
+    }
+
+    /** Finds the row in [sheetTitle] whose first column equals [name] and deletes it. No-op if not found. */
+    private suspend fun deleteNamedRow(sheetTitle: String, name: String) {
+        val spreadsheetId = prefs.getSpreadsheetId() ?: return
+        val sheetId = resolveSheetIdByName(sheetTitle) ?: return
+        val response = api.getValues(spreadsheetId, "$sheetTitle!A:A")
+        val rows = response.values ?: return
+        val rowIndex = rows.indexOfFirst { it.firstOrNull() == name }
+        if (rowIndex == -1) return
+        api.batchUpdate(
+            spreadsheetId,
+            BatchUpdateRequest(
+                requests = listOf(
+                    Request(
+                        deleteDimension = DeleteDimensionRequest(
+                            range = DimensionRange(sheetId = sheetId, startIndex = rowIndex, endIndex = rowIndex + 1)
+                        )
+                    )
+                )
+            )
+        )
     }
 
     /** Calculates the date for a recurring item that falls on [dayOfMonth] within the current
@@ -520,7 +674,7 @@ class SheetsRepositoryImpl @Inject constructor(
         info = info,
         amount = amount,
         category = TransactionCategory.fromString(category),
-        sheetTab = SheetTab.valueOf(sheetTab),
+        account = account,
         activeMonths = activeMonths?.split(",")?.mapNotNull { it.trim().toIntOrNull() }?.ifEmpty { null }
     )
 
@@ -531,6 +685,22 @@ class SheetsRepositoryImpl @Inject constructor(
         subscriptionCost = subscriptionCost,
         variance = variance,
         shouldBuySub = shouldBuySub
+    )
+
+    private fun SavingsGoalEntity.toSavingsGoal() = SavingsGoal(
+        name = name,
+        targetAmount = targetAmount,
+        savedAmount = savedAmount,
+        targetDate = targetDate,
+        rowIndex = rowIndex
+    )
+
+    private fun DebtEntity.toDebt() = Debt(
+        name = name,
+        balance = balance,
+        aprPercent = aprPercent,
+        minPayment = minPayment,
+        rowIndex = rowIndex
     )
 
     private fun String.parseCurrency(): Double =

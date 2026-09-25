@@ -4,9 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.budgetr.app.data.model.AccountBalance
 import com.budgetr.app.data.model.BalanceRollover
-import com.budgetr.app.data.model.SheetTab
 import com.budgetr.app.data.model.TransactionCategory
 import com.budgetr.app.data.repository.SheetsRepository
+import com.budgetr.app.util.SavingsGoalCalculator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -37,6 +37,11 @@ data class AccountBalancesUiState(
     val totalOutgoings: Double = 0.0,
     val error: String? = null,
     val successMessage: String? = null,
+    // Goals/debts glance (shown as a small teaser card on the dashboard)
+    val goalsCount: Int = 0,
+    val avgGoalProgress: Float = 0f,
+    val debtCount: Int = 0,
+    val totalDebt: Double = 0.0,
     // Rename dialog
     val renameAccount: AccountBalance? = null,
     val renameText: String = "",
@@ -64,18 +69,31 @@ class AccountBalancesViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
+            combine(repository.getSavingsGoals(), repository.getDebts()) { goals, debts -> goals to debts }
+                .collect { (goals, debts) ->
+                    val avgProgress = if (goals.isEmpty()) {
+                        0f
+                    } else {
+                        goals.map { SavingsGoalCalculator.progress(it.savedAmount, it.targetAmount) }.average().toFloat()
+                    }
+                    _uiState.update {
+                        it.copy(
+                            goalsCount = goals.size,
+                            avgGoalProgress = avgProgress,
+                            debtCount = debts.size,
+                            totalDebt = debts.sumOf { debt -> debt.balance }
+                        )
+                    }
+                }
+        }
+
+        viewModelScope.launch {
             val balancesAndRollovers = combine(
                 repository.getAccountBalances(),
                 repository.getBalanceRollovers()
             ) { balances, rollovers -> Pair(balances, rollovers) }
 
-            val allTransactions = combine(
-                repository.getTransactions(SheetTab.MONZO),
-                repository.getTransactions(SheetTab.HALIFAX_DEBIT),
-                repository.getTransactions(SheetTab.HALIFAX_CREDIT)
-            ) { monzoTx, halifaxDebitTx, halifaxCreditTx ->
-                monzoTx + halifaxDebitTx + halifaxCreditTx
-            }
+            val allTransactions = repository.getAllTransactions()
 
             combine(balancesAndRollovers, allTransactions) { (balances, rollovers), allTx ->
                 val today = Calendar.getInstance().apply {
@@ -95,7 +113,7 @@ class AccountBalancesViewModel @Inject constructor(
                             txDate != null && txDate.after(today)
                         }
                     }
-                    .groupBy { it.sheetTab.sheetName }
+                    .groupBy { it.account }
                     .mapValues { (_, txs) -> txs.sumOf { it.amount } }
 
                 val adjustedBalances = balances.map { balance ->
@@ -159,7 +177,9 @@ class AccountBalancesViewModel @Inject constructor(
                 if (wasReset) {
                     _uiState.update { it.copy(successMessage = "New pay period started — balances rolled over and one-off costs cleared") }
                 }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = "Couldn't start the new pay period (${e.message ?: "unknown error"}). It will retry next time you open the app.") }
+            }
         }
     }
 
@@ -168,9 +188,9 @@ class AccountBalancesViewModel @Inject constructor(
             _uiState.update { it.copy(isRefreshing = true, error = null) }
             try {
                 repository.refreshAccountBalances()
-                repository.refreshTransactions(SheetTab.MONZO)
-                repository.refreshTransactions(SheetTab.HALIFAX_DEBIT)
-                repository.refreshTransactions(SheetTab.HALIFAX_CREDIT)
+                repository.refreshAllTransactions()
+                repository.refreshSavingsGoals()
+                repository.refreshDebts()
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = e.message) }
             } finally {
