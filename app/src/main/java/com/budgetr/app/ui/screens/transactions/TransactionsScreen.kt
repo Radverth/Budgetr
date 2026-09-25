@@ -54,7 +54,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.budgetr.app.data.model.SheetTab
 import com.budgetr.app.data.model.SortOrder
 import com.budgetr.app.data.model.Transaction
 import com.budgetr.app.data.model.TransactionCategory
@@ -67,7 +66,6 @@ import com.budgetr.app.util.toCurrencyString
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TransactionsScreen(
-    initialTabName: String? = null,
     viewModel: TransactionsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -81,10 +79,12 @@ fun TransactionsScreen(
         }
     }
 
-    if (uiState.showAddSheet) {
+    val selectedAccount = uiState.selectedAccount
+    if (uiState.showAddSheet && selectedAccount != null) {
         AddEditTransactionSheet(
             existingTransaction = uiState.transactionToEdit,
-            currentTab = uiState.selectedTab,
+            currentAccount = selectedAccount,
+            accounts = uiState.accounts,
             addSaveCount = uiState.addSaveCount,
             payDay = uiState.payDay,
             onSave = viewModel::saveTransaction,
@@ -115,7 +115,7 @@ fun TransactionsScreen(
                 title = { Text("Transactions") },
                 actions = {
                     // Add transaction button
-                    IconButton(onClick = viewModel::showAddSheet) {
+                    IconButton(onClick = viewModel::showAddSheet, enabled = uiState.selectedAccount != null) {
                         Icon(Icons.Default.Add, contentDescription = "Add transaction", tint = MaterialTheme.colorScheme.primary)
                     }
                     // Sort button
@@ -153,14 +153,16 @@ fun TransactionsScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Tabs
-            TabRow(selectedTabIndex = SheetTab.entries.indexOf(uiState.selectedTab)) {
-                SheetTab.entries.forEach { tab ->
-                    Tab(
-                        selected = uiState.selectedTab == tab,
-                        onClick = { viewModel.selectTab(tab) },
-                        text = { Text(tab.displayName) }
-                    )
+            // Account tabs
+            if (uiState.accounts.isNotEmpty()) {
+                TabRow(selectedTabIndex = uiState.accounts.indexOf(uiState.selectedAccount).coerceAtLeast(0)) {
+                    uiState.accounts.forEach { account ->
+                        Tab(
+                            selected = uiState.selectedAccount == account,
+                            onClick = { viewModel.selectAccount(account) },
+                            text = { Text(account) }
+                        )
+                    }
                 }
             }
 
@@ -213,8 +215,11 @@ fun TransactionsScreen(
                 if (uiState.transactions.isEmpty() && !uiState.isRefreshing) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(
-                            text = if (uiState.searchQuery.isNotBlank()) "No matching transactions."
-                                   else "No transactions found.\nPull down to refresh.",
+                            text = when {
+                                uiState.accounts.isEmpty() -> "No accounts yet.\nAdd one from the Accounts tab."
+                                uiState.searchQuery.isNotBlank() -> "No matching transactions."
+                                else -> "No transactions found.\nPull down to refresh."
+                            },
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                         )
@@ -227,7 +232,7 @@ fun TransactionsScreen(
                     ) {
                         items(
                             items = uiState.transactions,
-                            key = { "${it.sheetTab}-${it.rowIndex}" }
+                            key = { "${it.account}-${it.rowIndex}" }
                         ) { transaction ->
                             TransactionItem(
                                 transaction = transaction,

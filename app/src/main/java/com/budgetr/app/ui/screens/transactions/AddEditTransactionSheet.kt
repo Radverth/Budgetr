@@ -42,7 +42,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import com.budgetr.app.data.model.SheetTab
 import com.budgetr.app.data.model.Transaction
 import com.budgetr.app.data.model.TransactionCategory
 import com.budgetr.app.ui.theme.IncomeGreen
@@ -81,7 +80,8 @@ internal fun getPayDate(payDay: Int = 26): String {
 @Composable
 fun AddEditTransactionSheet(
     existingTransaction: Transaction?,
-    currentTab: SheetTab,
+    currentAccount: String,
+    accounts: List<String>,
     addSaveCount: Int,
     payDay: Int = 26,
     onSave: (Transaction) -> Unit,
@@ -104,8 +104,8 @@ fun AddEditTransactionSheet(
         mutableStateOf(existingTransaction?.amount?.let { if (it < 0) (-it).toString() else it.toString() } ?: "")
     }
     var category by remember { mutableStateOf(initialCategory) }
-    var selectedTab by remember { mutableStateOf(existingTransaction?.sheetTab ?: currentTab) }
-    var transferToTab by remember { mutableStateOf<SheetTab?>(null) }
+    var selectedAccount by remember { mutableStateOf(existingTransaction?.account ?: currentAccount) }
+    var transferToAccount by remember { mutableStateOf<String?>(null) }
     var applyPayDate by remember { mutableStateOf(false) }
     var activeMonths by remember {
         mutableStateOf<Set<Int>>(existingTransaction?.activeMonths?.toSet() ?: emptySet())
@@ -144,7 +144,7 @@ fun AddEditTransactionSheet(
         if (addSaveCount > 0) {
             info = ""
             amount = ""
-            transferToTab = null
+            transferToAccount = null
             applyPayDate = false
             savedBanner = true
             date = when (category) {
@@ -282,7 +282,7 @@ fun AddEditTransactionSheet(
                                     category = cat
                                     categoryExpanded = false
                                     if (cat != TransactionCategory.TRANSFER) {
-                                        transferToTab = null
+                                        transferToAccount = null
                                         applyPayDate = false
                                     }
                                 }
@@ -297,7 +297,7 @@ fun AddEditTransactionSheet(
                 onExpandedChange = { tabExpanded = it }
             ) {
                 OutlinedTextField(
-                    value = selectedTab.displayName,
+                    value = selectedAccount,
                     onValueChange = {},
                     label = { Text(if (category == TransactionCategory.TRANSFER) "Transfer From" else "Account") },
                     modifier = Modifier
@@ -310,13 +310,13 @@ fun AddEditTransactionSheet(
                     expanded = tabExpanded,
                     onDismissRequest = { tabExpanded = false }
                 ) {
-                    SheetTab.entries.forEach { tab ->
+                    accounts.forEach { account ->
                         DropdownMenuItem(
-                            text = { Text(tab.displayName) },
+                            text = { Text(account) },
                             onClick = {
-                                selectedTab = tab
+                                selectedAccount = account
                                 tabExpanded = false
-                                if (transferToTab == tab) transferToTab = null
+                                if (transferToAccount == account) transferToAccount = null
                             }
                         )
                     }
@@ -330,7 +330,7 @@ fun AddEditTransactionSheet(
                     onExpandedChange = { transferToExpanded = it }
                 ) {
                     OutlinedTextField(
-                        value = transferToTab?.displayName ?: "Select destination account",
+                        value = transferToAccount ?: "Select destination account",
                         onValueChange = {},
                         label = { Text("Transfer To") },
                         modifier = Modifier
@@ -343,11 +343,11 @@ fun AddEditTransactionSheet(
                         expanded = transferToExpanded,
                         onDismissRequest = { transferToExpanded = false }
                     ) {
-                        SheetTab.entries.filter { it != selectedTab }.forEach { tab ->
+                        accounts.filter { it != selectedAccount }.forEach { account ->
                             DropdownMenuItem(
-                                text = { Text(tab.displayName) },
+                                text = { Text(account) },
                                 onClick = {
-                                    transferToTab = tab
+                                    transferToAccount = account
                                     transferToExpanded = false
                                 }
                             )
@@ -400,7 +400,7 @@ fun AddEditTransactionSheet(
             val parsedAmount = amount.toDoubleOrNull() ?: 0.0
             val isTransfer = category == TransactionCategory.TRANSFER
             val saveEnabled = info.isNotBlank() && amount.isNotBlank() &&
-                    (!isTransfer || isEdit || transferToTab != null)
+                    (!isTransfer || isEdit || transferToAccount != null)
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -420,14 +420,14 @@ fun AddEditTransactionSheet(
                             else -> -parsedAmount
                         }
 
-                        if (isTransfer && !isEdit && transferToTab != null) {
+                        if (isTransfer && !isEdit && transferToAccount != null) {
                             val source = Transaction(
                                 rowIndex = 0,
                                 date = date,
                                 info = info,
                                 amount = -parsedAmount,
                                 category = TransactionCategory.TRANSFER,
-                                sheetTab = selectedTab
+                                account = selectedAccount
                             )
                             val destination = Transaction(
                                 rowIndex = 0,
@@ -435,7 +435,7 @@ fun AddEditTransactionSheet(
                                 info = info,
                                 amount = parsedAmount,
                                 category = TransactionCategory.TRANSFER,
-                                sheetTab = transferToTab!!
+                                account = transferToAccount!!
                             )
                             onSaveTransfer(source, destination)
                         } else {
@@ -449,7 +449,7 @@ fun AddEditTransactionSheet(
                                     info = info,
                                     amount = signedAmount,
                                     category = category,
-                                    sheetTab = selectedTab,
+                                    account = selectedAccount,
                                     activeMonths = resolvedActiveMonths
                                 )
                             )

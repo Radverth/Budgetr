@@ -29,7 +29,6 @@ import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import com.budgetr.app.MainActivity
 import com.budgetr.app.data.local.entity.AccountBalanceEntity
-import com.budgetr.app.data.model.SheetTab
 import com.budgetr.app.data.model.TransactionCategory
 import dagger.hilt.android.EntryPointAccessors
 import java.text.NumberFormat
@@ -60,8 +59,7 @@ class BudgetrWidget : GlanceAppWidget() {
                 set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
             }.time
             val transactionDao = entryPoint.transactionDao()
-            val futureRecurringByAccount = SheetTab.entries
-                .flatMap { tab -> transactionDao.getTransactionsByTabSync(tab.name) }
+            val futureRecurringByAccount = transactionDao.getAllSync()
                 .filter { entity ->
                     entity.category == TransactionCategory.RECURRING_INCOME.name &&
                     run {
@@ -69,9 +67,7 @@ class BudgetrWidget : GlanceAppWidget() {
                         txDate != null && txDate.after(today)
                     }
                 }
-                .groupBy { entity ->
-                    runCatching { SheetTab.valueOf(entity.sheetTab).sheetName }.getOrNull()
-                }
+                .groupBy { entity -> entity.account }
                 .mapValues { (_, txs) -> txs.sumOf { it.amount } }
 
             val rolloverByAccount = entryPoint.balanceRolloverDao().getAllSync()

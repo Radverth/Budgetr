@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.budgetr.app.BuildConfig
 import com.budgetr.app.data.model.AccountBalance
-import com.budgetr.app.data.model.SheetTab
 import com.budgetr.app.data.model.TransactionCategory
 import com.budgetr.app.data.repository.SheetsRepository
 import com.budgetr.app.util.AuthManager
@@ -80,11 +79,7 @@ class HomeViewModel @Inject constructor(
                 repository.getBalanceRollovers()
             ) { balances, rollovers -> Pair(balances, rollovers) }
 
-            val allTransactions = combine(
-                repository.getTransactions(SheetTab.MONZO),
-                repository.getTransactions(SheetTab.HALIFAX_DEBIT),
-                repository.getTransactions(SheetTab.HALIFAX_CREDIT)
-            ) { monzoTx, halifaxDebitTx, halifaxCreditTx -> monzoTx + halifaxDebitTx + halifaxCreditTx }
+            val allTransactions = repository.getAllTransactions()
 
             combine(balancesAndRollovers, allTransactions) { (balances, rollovers), allTx ->
                 val today = Calendar.getInstance().apply {
@@ -101,7 +96,7 @@ class HomeViewModel @Inject constructor(
                             txDate != null && txDate.after(today)
                         }
                     }
-                    .groupBy { it.sheetTab.sheetName }
+                    .groupBy { it.account }
                     .mapValues { (_, txs) -> txs.sumOf { it.amount } }
 
                 val adjustedBalances = balances.map { balance ->
@@ -164,9 +159,7 @@ class HomeViewModel @Inject constructor(
             _uiState.update { it.copy(isRefreshing = true, error = null) }
             try {
                 repository.refreshAccountBalances()
-                repository.refreshTransactions(SheetTab.MONZO)
-                repository.refreshTransactions(SheetTab.HALIFAX_DEBIT)
-                repository.refreshTransactions(SheetTab.HALIFAX_CREDIT)
+                repository.refreshAllTransactions()
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = e.message) }
             } finally {

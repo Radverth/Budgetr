@@ -63,7 +63,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.budgetr.app.data.model.AccountBalance
 import com.budgetr.app.data.model.BalanceRollover
-import com.budgetr.app.data.model.SheetTab
 import com.budgetr.app.ui.theme.ExpenseRed
 import com.budgetr.app.ui.theme.FixedCostOrange
 import com.budgetr.app.ui.theme.IncomeGreen
@@ -72,7 +71,7 @@ import com.budgetr.app.util.toCurrencyString
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AccountBalancesScreen(
-    onNavigateToTransactions: ((SheetTab) -> Unit)? = null,
+    onNavigateToTransactions: ((String) -> Unit)? = null,
     viewModel: AccountBalancesViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -291,12 +290,11 @@ fun AccountBalancesScreen(
 
                     items(uiState.balances) { balance ->
                         val rollover = uiState.rollovers.find { it.account == balance.account }
-                        val matchingTab = SheetTab.entries.find { it.sheetName == balance.account }
                         AccountBalanceDetailCard(
                             balance = balance,
                             rollover = rollover,
-                            isClickable = matchingTab != null && onNavigateToTransactions != null,
-                            onClick = { matchingTab?.let { onNavigateToTransactions?.invoke(it) } },
+                            isClickable = onNavigateToTransactions != null,
+                            onClick = { onNavigateToTransactions?.invoke(balance.account) },
                             onRename = { viewModel.showRenameDialog(balance) },
                             onDelete = { viewModel.showDeleteAccountDialog(balance) },
                             onEditRollover = { viewModel.showRolloverEditDialog(balance.account) },

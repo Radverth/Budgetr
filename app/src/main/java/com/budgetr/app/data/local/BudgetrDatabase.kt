@@ -11,7 +11,7 @@ import com.budgetr.app.data.local.entity.TransactionEntity
 
 @Database(
     entities = [TransactionEntity::class, AccountBalanceEntity::class, BalanceRolloverEntity::class],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class BudgetrDatabase : RoomDatabase() {

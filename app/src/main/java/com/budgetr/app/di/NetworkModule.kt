@@ -1,5 +1,6 @@
 package com.budgetr.app.di
 
+import com.budgetr.app.BuildConfig
 import com.budgetr.app.data.api.AuthInterceptor
 import com.budgetr.app.data.api.GitHubApi
 import com.budgetr.app.data.api.GoogleDriveApi
@@ -33,11 +34,17 @@ object NetworkModule {
     fun provideOkHttpClient(authInterceptor: AuthInterceptor): OkHttpClient =
         OkHttpClient.Builder()
             .addInterceptor(authInterceptor)
-            .addInterceptor(
-                HttpLoggingInterceptor().apply {
-                    level = HttpLoggingInterceptor.Level.BODY
+            .apply {
+                // BODY logging prints the Authorization header and full transaction data to
+                // Logcat, so it must never run in release builds.
+                if (BuildConfig.DEBUG) {
+                    addInterceptor(
+                        HttpLoggingInterceptor().apply {
+                            level = HttpLoggingInterceptor.Level.BODY
+                        }
+                    )
                 }
-            )
+            }
             .build()
 
     @Provides

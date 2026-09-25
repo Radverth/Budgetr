@@ -1,5 +1,6 @@
 package com.budgetr.app.ui.navigation
 
+import android.net.Uri
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalance
@@ -22,7 +23,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.budgetr.app.data.model.SheetTab
 import com.budgetr.app.ui.screens.balances.AccountBalancesScreen
 import com.budgetr.app.ui.screens.settings.SettingsScreen
 import com.budgetr.app.ui.screens.transactions.TransactionsScreen
@@ -85,14 +85,17 @@ fun MainScreen(onSignOut: () -> Unit) {
             composable(
                 route = "transactions_tab/{tabName}",
                 arguments = listOf(navArgument("tabName") { type = NavType.StringType })
-            ) { backStackEntry ->
-                val tabName = backStackEntry.arguments?.getString("tabName") ?: SheetTab.MONZO.name
-                TransactionsScreen(initialTabName = tabName)
+            ) {
+                // The account name is passed as the raw nav arg; TransactionsViewModel reads
+                // it straight from SavedStateHandle, so no need to thread it through here.
+                TransactionsScreen()
             }
             composable(NavRoutes.ACCOUNT_BALANCES) {
                 AccountBalancesScreen(
-                    onNavigateToTransactions = { sheetTab ->
-                        navController.navigate("transactions_tab/${sheetTab.name}") {
+                    onNavigateToTransactions = { account ->
+                        // Account names can contain spaces/special characters, so they must be
+                        // URL-encoded as a path segment.
+                        navController.navigate("transactions_tab/${Uri.encode(account)}") {
                             popUpTo(NavRoutes.ACCOUNT_BALANCES) { saveState = false }
                             launchSingleTop = true
                         }

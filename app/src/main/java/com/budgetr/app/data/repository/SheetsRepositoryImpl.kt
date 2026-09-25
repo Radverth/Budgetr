@@ -24,12 +24,13 @@ import com.budgetr.app.data.local.entity.BalanceRolloverEntity
 import com.budgetr.app.data.local.entity.TransactionEntity
 import com.budgetr.app.data.model.AccountBalance
 import com.budgetr.app.data.model.BalanceRollover
-import com.budgetr.app.data.model.SheetTab
 import com.budgetr.app.data.model.Transaction
 import com.budgetr.app.data.model.TransactionCategory
 import com.budgetr.app.util.PreferencesManager
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -48,34 +49,29 @@ class SheetsRepositoryImpl @Inject constructor(
 
     // Cache of sheet title -> numeric sheetId (gid) from the Sheets API
     private var sheetIdCache: Map<String, Int> = emptyMap()
+    private val sheetIdMutex = Mutex()
 
-    private suspend fun resolveSheetId(sheetTab: SheetTab): Int {
-        sheetIdCache[sheetTab.sheetName]?.let { return it }
-        val spreadsheetId = prefs.getSpreadsheetId() ?: return 0
+    private suspend fun resolveSheetIdByName(name: String): Int? = sheetIdMutex.withLock {
+        sheetIdCache[name]?.let { return@withLock it }
+        val spreadsheetId = prefs.getSpreadsheetId() ?: return@withLock null
         val metadata = api.getSpreadsheet(spreadsheetId)
         sheetIdCache = metadata.sheets
             ?.mapNotNull { it.properties }
             ?.associate { it.title to it.sheetId }
             ?: emptyMap()
-        return sheetIdCache[sheetTab.sheetName] ?: 0
+        sheetIdCache[name]
     }
 
-    private suspend fun resolveSheetIdByName(name: String): Int? {
-        sheetIdCache[name]?.let { return it }
-        val spreadsheetId = prefs.getSpreadsheetId() ?: return null
-        val metadata = api.getSpreadsheet(spreadsheetId)
-        sheetIdCache = metadata.sheets
-            ?.mapNotNull { it.properties }
-            ?.associate { it.title to it.sheetId }
-            ?: emptyMap()
-        return sheetIdCache[name]
-    }
-
-    override fun getTransactions(sheetTab: SheetTab): Flow<List<Transaction>> =
-        transactionDao.getTransactionsByTab(sheetTab.name).map { entities ->
+    override fun getTransactions(account: String): Flow<List<Transaction>> =
+        transactionDao.getTransactionsByAccount(account).map { entities ->
             // Guard against any duplicate rowIndex rows left in the cache by an older build:
             // distinct keeps the UI's per-row keys unique so the LazyColumn can't crash.
             entities.map { it.toTransaction() }.distinctBy { it.rowIndex }
+        }
+
+    override fun getAllTransactions(): Flow<List<Transaction>> =
+        transactionDao.getAll().map { entities ->
+            entities.map { it.toTransaction() }.distinctBy { it.account to it.rowIndex }
         }
 
     override fun getAccountBalances(): Flow<List<AccountBalance>> =
@@ -88,9 +84,9 @@ class SheetsRepositoryImpl @Inject constructor(
             entities.map { BalanceRollover(it.account, it.rolloverAmount, it.recordedDate) }
         }
 
-    override suspend fun refreshTransactions(sheetTab: SheetTab) {
+    override suspend fun refreshTransactions(account: String) {
         val spreadsheetId = prefs.getSpreadsheetId() ?: return
-        val range = "${sheetTab.sheetName}!A:F"
+        val range = "$account!A:F"
         val response = api.getValues(spreadsheetId, range)
         val rows = response.values ?: return
 
@@ -103,14 +99,18 @@ class SheetsRepositoryImpl @Inject constructor(
                 info = row.getOrElse(1) { "" },
                 amount = row.getOrElse(2) { "0" }.replace("[£,]".toRegex(), "").toDoubleOrNull() ?: 0.0,
                 category = TransactionCategory.fromString(row.getOrElse(3) { "" }).name,
-                sheetTab = sheetTab.name,
+                account = account,
                 activeMonths = row.getOrElse(5) { "" }.ifBlank { null }
             )
         }
 
-        // Atomic replace so concurrent refreshes of the same tab can't interleave into
+        // Atomic replace so concurrent refreshes of the same account can't interleave into
         // duplicate rowIndex rows (which crash the transactions list with a duplicate key).
-        transactionDao.replaceForTab(sheetTab.name, entities)
+        transactionDao.replaceForAccount(account, entities)
+    }
+
+    override suspend fun refreshAllTransactions() {
+        accountBalanceDao.getAllSync().forEach { refreshTransactions(it.account) }
     }
 
     override suspend fun refreshAccountBalances() {
@@ -137,7 +137,7 @@ class SheetsRepositoryImpl @Inject constructor(
 
     override suspend fun addTransaction(transaction: Transaction) {
         val spreadsheetId = prefs.getSpreadsheetId() ?: return
-        val range = "${transaction.sheetTab.sheetName}!A:F"
+        val range = "${transaction.account}!A:F"
         val rounded = roundedAmount(transaction.amount, transaction.category)
         val activeMonthsStr = transaction.activeMonths?.joinToString(",") ?: ""
         val row = listOf(listOf(
@@ -149,12 +149,12 @@ class SheetsRepositoryImpl @Inject constructor(
             activeMonthsStr
         ))
         api.appendValues(spreadsheetId, range, body = ValueRange(values = row))
-        refreshTransactions(transaction.sheetTab)
+        refreshTransactions(transaction.account)
     }
 
     override suspend fun updateTransaction(transaction: Transaction) {
         val spreadsheetId = prefs.getSpreadsheetId() ?: return
-        val range = "${transaction.sheetTab.sheetName}!A${transaction.rowIndex}:F${transaction.rowIndex}"
+        val range = "${transaction.account}!A${transaction.rowIndex}:F${transaction.rowIndex}"
         val rounded = roundedAmount(transaction.amount, transaction.category)
         val activeMonthsStr = transaction.activeMonths?.joinToString(",") ?: ""
         val row = listOf(listOf(
@@ -166,12 +166,12 @@ class SheetsRepositoryImpl @Inject constructor(
             activeMonthsStr
         ))
         api.updateValues(spreadsheetId, range, body = ValueRange(values = row))
-        refreshTransactions(transaction.sheetTab)
+        refreshTransactions(transaction.account)
     }
 
     override suspend fun deleteTransaction(transaction: Transaction) {
         val spreadsheetId = prefs.getSpreadsheetId() ?: return
-        val sheetId = resolveSheetId(transaction.sheetTab)
+        val sheetId = resolveSheetIdByName(transaction.account) ?: 0
         val rowIndex = transaction.rowIndex - 1 // 0-based for API
         api.batchUpdate(
             spreadsheetId,
@@ -189,15 +189,15 @@ class SheetsRepositoryImpl @Inject constructor(
                 )
             )
         )
-        refreshTransactions(transaction.sheetTab)
+        refreshTransactions(transaction.account)
     }
 
-    override suspend fun deleteOneOffTransactions(sheetTab: SheetTab) {
+    override suspend fun deleteOneOffTransactions(account: String) {
         val spreadsheetId = prefs.getSpreadsheetId() ?: return
-        val sheetId = resolveSheetId(sheetTab)
+        val sheetId = resolveSheetIdByName(account) ?: 0
 
         // Get ONE_OFF_COST rows sorted descending so high indices delete first (prevents index shifting)
-        val oneOffEntities = transactionDao.getTransactionsByTabSync(sheetTab.name)
+        val oneOffEntities = transactionDao.getTransactionsByAccountSync(account)
             .filter { it.category == TransactionCategory.ONE_OFF_COST.name }
             .sortedByDescending { it.rowIndex }
 
@@ -212,7 +212,7 @@ class SheetsRepositoryImpl @Inject constructor(
             )
         }
         api.batchUpdate(spreadsheetId, BatchUpdateRequest(requests = requests))
-        refreshTransactions(sheetTab)
+        refreshTransactions(account)
     }
 
     override suspend fun listSpreadsheets(): List<DriveFile> =
@@ -291,6 +291,11 @@ class SheetsRepositoryImpl @Inject constructor(
             sheetIdCache = emptyMap()
         }
 
+        // The local cache still has rows keyed by the old account name — drop them and
+        // re-fetch under the new name so the combined transaction feed doesn't show a
+        // ghost account until the next full refresh.
+        transactionDao.deleteByAccount(oldName)
+        refreshTransactions(newName)
         refreshAccountBalances()
     }
 
@@ -375,6 +380,7 @@ class SheetsRepositoryImpl @Inject constructor(
         // Remove from local cache
         accountBalanceDao.deleteAll()
         balanceRolloverDao.delete(accountName)
+        transactionDao.deleteByAccount(accountName)
         refreshAccountBalances()
     }
 
@@ -407,41 +413,45 @@ class SheetsRepositoryImpl @Inject constructor(
         }
 
         val spreadsheetId = prefs.getSpreadsheetId()
+        val accounts = balances.map { it.account }
 
         // Carry over FIXED_COST and TRANSFER (update date to new pay date),
         // and RECURRING_INCOME (update date to the same day-of-month in the current period).
+        //
+        // Deliberately not swallowed per-account: if any account's update fails (e.g. a
+        // network blip), we abort before deleting one-off costs or marking the period as
+        // processed below. lastPayPeriodStart stays unset, so the whole operation retries
+        // from scratch next launch instead of silently losing carryover data while still
+        // wiping that period's one-off costs.
         if (spreadsheetId != null) {
-            SheetTab.entries.forEach { tab ->
-                try {
-                    val tabEntities = transactionDao.getTransactionsByTabSync(tab.name)
-                    tabEntities.forEach { entity ->
-                        val newDate = when (entity.category) {
-                            TransactionCategory.FIXED_COST.name,
-                            TransactionCategory.TRANSFER.name -> currentPeriodStart
-                            TransactionCategory.RECURRING_INCOME.name -> {
-                                val day = entity.date.split("/").firstOrNull()?.toIntOrNull() ?: 1
-                                resolveRecurringDate(day, payDay)
-                            }
-                            else -> null
+            accounts.forEach { account ->
+                val entities = transactionDao.getTransactionsByAccountSync(account)
+                entities.forEach { entity ->
+                    val newDate = when (entity.category) {
+                        TransactionCategory.FIXED_COST.name,
+                        TransactionCategory.TRANSFER.name -> currentPeriodStart
+                        TransactionCategory.RECURRING_INCOME.name -> {
+                            val day = entity.date.split("/").firstOrNull()?.toIntOrNull() ?: 1
+                            resolveRecurringDate(day, payDay)
                         }
-                        if (newDate != null && newDate != entity.date) {
-                            val range = "${tab.sheetName}!A${entity.rowIndex}"
-                            api.updateValues(
-                                spreadsheetId, range,
-                                body = ValueRange(values = listOf(listOf(newDate)))
-                            )
-                        }
+                        else -> null
                     }
-                    // Refresh local cache after date updates
-                    refreshTransactions(tab)
-                } catch (_: Exception) {}
+                    if (newDate != null && newDate != entity.date) {
+                        val range = "$account!A${entity.rowIndex}"
+                        api.updateValues(
+                            spreadsheetId, range,
+                            body = ValueRange(values = listOf(listOf(newDate)))
+                        )
+                    }
+                }
+                // Refresh local cache after date updates
+                refreshTransactions(account)
             }
         }
 
-        // Delete all one-off costs for the new pay period
-        SheetTab.entries.forEach { tab ->
-            try { deleteOneOffTransactions(tab) } catch (_: Exception) {}
-        }
+        // Delete all one-off costs for the new pay period. Only reached if every account's
+        // carryover above succeeded (or there was no spreadsheet to carry over).
+        accounts.forEach { account -> deleteOneOffTransactions(account) }
         prefs.setLastPayPeriodStart(currentPeriodStart)
         return true
     }
@@ -520,7 +530,7 @@ class SheetsRepositoryImpl @Inject constructor(
         info = info,
         amount = amount,
         category = TransactionCategory.fromString(category),
-        sheetTab = SheetTab.valueOf(sheetTab),
+        account = account,
         activeMonths = activeMonths?.split(",")?.mapNotNull { it.trim().toIntOrNull() }?.ifEmpty { null }
     )
 

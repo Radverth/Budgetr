@@ -9,7 +9,6 @@ import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.budgetr.app.R
-import com.budgetr.app.data.model.SheetTab
 import com.budgetr.app.data.model.TransactionCategory
 import com.budgetr.app.data.repository.SheetsRepository
 import com.budgetr.app.ui.screens.transactions.AddEditTransactionSheet
@@ -58,6 +57,8 @@ class QuickAddActivity : ComponentActivity() {
                     viewModel.showAddSheet()
                 }
 
+                val selectedAccount = uiState.selectedAccount
+
                 // After a successful save, refresh balances then update widget and close
                 LaunchedEffect(uiState.addSaveCount) {
                     if (uiState.addSaveCount > 0) {
@@ -71,10 +72,11 @@ class QuickAddActivity : ComponentActivity() {
                     }
                 }
 
-                if (uiState.showAddSheet) {
+                if (uiState.showAddSheet && selectedAccount != null) {
                     AddEditTransactionSheet(
                         existingTransaction = null,
-                        currentTab = SheetTab.MONZO,
+                        currentAccount = selectedAccount,
+                        accounts = uiState.accounts,
                         addSaveCount = uiState.addSaveCount,
                         onSave = viewModel::saveTransaction,
                         onSaveTransfer = viewModel::saveTransfer,
