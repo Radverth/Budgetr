@@ -1,12 +1,15 @@
 package com.budgetr.app.ui.screens.settings
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.budgetr.app.data.api.DriveFile
 import com.budgetr.app.data.repository.SheetsRepository
 import com.budgetr.app.util.AuthManager
 import com.budgetr.app.util.PreferencesManager
+import com.budgetr.app.util.ReminderScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -25,11 +28,16 @@ data class SettingsUiState(
     val showSheetPicker: Boolean = false,
     val sheetPickerError: String? = null,
     val payDay: Int = 26,
-    val showPayDayPicker: Boolean = false
+    val showPayDayPicker: Boolean = false,
+    val reminderEnabled: Boolean = false,
+    val reminderHour: Int = 20,
+    val reminderMinute: Int = 0,
+    val showTimePicker: Boolean = false
 )
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val prefs: PreferencesManager,
     private val authManager: AuthManager,
     private val repository: SheetsRepository
@@ -41,7 +49,10 @@ class SettingsViewModel @Inject constructor(
             spreadsheetName = prefs.getSpreadsheetName() ?: "",
             userEmail = authManager.getUserEmail(),
             userName = authManager.getUserName(),
-            payDay = prefs.getPayDay()
+            payDay = prefs.getPayDay(),
+            reminderEnabled = prefs.isReminderEnabled(),
+            reminderHour = prefs.getReminderHour(),
+            reminderMinute = prefs.getReminderMinute()
         )
     )
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
@@ -96,6 +107,29 @@ class SettingsViewModel @Inject constructor(
         n % 10 == 2 -> "nd"
         n % 10 == 3 -> "rd"
         else -> "th"
+    }
+
+    /** Call only after POST_NOTIFICATIONS has been granted (or isn't required below API 33) —
+     *  the actual runtime permission prompt has to be triggered from the Composable. */
+    fun setReminderEnabled(enabled: Boolean) {
+        prefs.setReminderEnabled(enabled)
+        if (enabled) {
+            ReminderScheduler.schedule(context, prefs.getReminderHour(), prefs.getReminderMinute())
+        } else {
+            ReminderScheduler.cancel(context)
+        }
+        _uiState.update { it.copy(reminderEnabled = enabled) }
+    }
+
+    fun showTimePicker() = _uiState.update { it.copy(showTimePicker = true) }
+    fun dismissTimePicker() = _uiState.update { it.copy(showTimePicker = false) }
+
+    fun setReminderTime(hour: Int, minute: Int) {
+        prefs.setReminderTime(hour, minute)
+        _uiState.update { it.copy(reminderHour = hour, reminderMinute = minute, showTimePicker = false) }
+        if (_uiState.value.reminderEnabled) {
+            ReminderScheduler.schedule(context, hour, minute)
+        }
     }
 
     fun signOut(onComplete: () -> Unit) {
