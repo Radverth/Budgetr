@@ -18,12 +18,18 @@ import com.budgetr.app.data.api.UpdateSheetProps
 import com.budgetr.app.data.api.ValueRange
 import com.budgetr.app.data.local.dao.AccountBalanceDao
 import com.budgetr.app.data.local.dao.BalanceRolloverDao
+import com.budgetr.app.data.local.dao.DebtDao
+import com.budgetr.app.data.local.dao.SavingsGoalDao
 import com.budgetr.app.data.local.dao.TransactionDao
 import com.budgetr.app.data.local.entity.AccountBalanceEntity
 import com.budgetr.app.data.local.entity.BalanceRolloverEntity
+import com.budgetr.app.data.local.entity.DebtEntity
+import com.budgetr.app.data.local.entity.SavingsGoalEntity
 import com.budgetr.app.data.local.entity.TransactionEntity
 import com.budgetr.app.data.model.AccountBalance
 import com.budgetr.app.data.model.BalanceRollover
+import com.budgetr.app.data.model.Debt
+import com.budgetr.app.data.model.SavingsGoal
 import com.budgetr.app.data.model.Transaction
 import com.budgetr.app.data.model.TransactionCategory
 import com.budgetr.app.util.PreferencesManager
@@ -38,12 +44,17 @@ import kotlin.math.ceil
 import kotlin.math.floor
 import javax.inject.Inject
 
+private const val SAVINGS_GOALS_SHEET = "Savings Goals"
+private const val DEBTS_SHEET = "Debts"
+
 class SheetsRepositoryImpl @Inject constructor(
     private val api: GoogleSheetsApi,
     private val driveApi: GoogleDriveApi,
     private val transactionDao: TransactionDao,
     private val accountBalanceDao: AccountBalanceDao,
     private val balanceRolloverDao: BalanceRolloverDao,
+    private val savingsGoalDao: SavingsGoalDao,
+    private val debtDao: DebtDao,
     private val prefs: PreferencesManager
 ) : SheetsRepository {
 
@@ -456,6 +467,139 @@ class SheetsRepositoryImpl @Inject constructor(
         return true
     }
 
+    // --- Savings goals ---
+
+    override fun getSavingsGoals(): Flow<List<SavingsGoal>> =
+        savingsGoalDao.getAll().map { entities -> entities.map { it.toSavingsGoal() } }
+
+    override suspend fun refreshSavingsGoals() {
+        val spreadsheetId = prefs.getSpreadsheetId() ?: return
+        if (resolveSheetIdByName(SAVINGS_GOALS_SHEET) == null) return
+        val response = api.getValues(spreadsheetId, "$SAVINGS_GOALS_SHEET!A:D")
+        val rows = response.values ?: emptyList()
+        val entities = rows.drop(1).mapIndexedNotNull { index, row ->
+            val name = row.getOrElse(0) { "" }
+            if (name.isBlank()) return@mapIndexedNotNull null
+            SavingsGoalEntity(
+                name = name,
+                targetAmount = row.getOrElse(1) { "0" }.parseCurrency(),
+                savedAmount = row.getOrElse(2) { "0" }.parseCurrency(),
+                targetDate = row.getOrElse(3) { "" }.ifBlank { null },
+                rowIndex = index + 2
+            )
+        }
+        savingsGoalDao.deleteAll()
+        savingsGoalDao.insertAll(entities)
+    }
+
+    override suspend fun addSavingsGoal(goal: SavingsGoal) {
+        val spreadsheetId = prefs.getSpreadsheetId() ?: return
+        ensureSheetExists(SAVINGS_GOALS_SHEET, listOf("Name", "Target Amount", "Saved Amount", "Target Date"))
+        val row = listOf(listOf(goal.name, goal.targetAmount.toString(), goal.savedAmount.toString(), goal.targetDate ?: ""))
+        api.appendValues(spreadsheetId, "$SAVINGS_GOALS_SHEET!A:D", body = ValueRange(values = row))
+        refreshSavingsGoals()
+    }
+
+    override suspend fun updateSavingsGoal(goal: SavingsGoal) {
+        val spreadsheetId = prefs.getSpreadsheetId() ?: return
+        val row = listOf(listOf(goal.name, goal.targetAmount.toString(), goal.savedAmount.toString(), goal.targetDate ?: ""))
+        api.updateValues(
+            spreadsheetId,
+            "$SAVINGS_GOALS_SHEET!A${goal.rowIndex}:D${goal.rowIndex}",
+            body = ValueRange(values = row)
+        )
+        refreshSavingsGoals()
+    }
+
+    override suspend fun deleteSavingsGoal(name: String) {
+        deleteNamedRow(SAVINGS_GOALS_SHEET, name)
+        refreshSavingsGoals()
+    }
+
+    // --- Debts ---
+
+    override fun getDebts(): Flow<List<Debt>> =
+        debtDao.getAll().map { entities -> entities.map { it.toDebt() } }
+
+    override suspend fun refreshDebts() {
+        val spreadsheetId = prefs.getSpreadsheetId() ?: return
+        if (resolveSheetIdByName(DEBTS_SHEET) == null) return
+        val response = api.getValues(spreadsheetId, "$DEBTS_SHEET!A:D")
+        val rows = response.values ?: emptyList()
+        val entities = rows.drop(1).mapIndexedNotNull { index, row ->
+            val name = row.getOrElse(0) { "" }
+            if (name.isBlank()) return@mapIndexedNotNull null
+            DebtEntity(
+                name = name,
+                balance = row.getOrElse(1) { "0" }.parseCurrency(),
+                aprPercent = row.getOrElse(2) { "0" }.toDoubleOrNull() ?: 0.0,
+                minPayment = row.getOrElse(3) { "0" }.parseCurrency(),
+                rowIndex = index + 2
+            )
+        }
+        debtDao.deleteAll()
+        debtDao.insertAll(entities)
+    }
+
+    override suspend fun addDebt(debt: Debt) {
+        val spreadsheetId = prefs.getSpreadsheetId() ?: return
+        ensureSheetExists(DEBTS_SHEET, listOf("Name", "Balance", "APR %", "Min Payment"))
+        val row = listOf(listOf(debt.name, debt.balance.toString(), debt.aprPercent.toString(), debt.minPayment.toString()))
+        api.appendValues(spreadsheetId, "$DEBTS_SHEET!A:D", body = ValueRange(values = row))
+        refreshDebts()
+    }
+
+    override suspend fun updateDebt(debt: Debt) {
+        val spreadsheetId = prefs.getSpreadsheetId() ?: return
+        val row = listOf(listOf(debt.name, debt.balance.toString(), debt.aprPercent.toString(), debt.minPayment.toString()))
+        api.updateValues(
+            spreadsheetId,
+            "$DEBTS_SHEET!A${debt.rowIndex}:D${debt.rowIndex}",
+            body = ValueRange(values = row)
+        )
+        refreshDebts()
+    }
+
+    override suspend fun deleteDebt(name: String) {
+        deleteNamedRow(DEBTS_SHEET, name)
+        refreshDebts()
+    }
+
+    /** Creates [sheetTitle] with a header row if it doesn't already exist in the spreadsheet. */
+    private suspend fun ensureSheetExists(sheetTitle: String, header: List<String>) {
+        val spreadsheetId = prefs.getSpreadsheetId() ?: return
+        if (resolveSheetIdByName(sheetTitle) != null) return
+        api.batchUpdate(
+            spreadsheetId,
+            BatchUpdateRequest(requests = listOf(Request(addSheet = AddSheetRequestBody(properties = NewSheetProperties(title = sheetTitle)))))
+        )
+        val lastColumn = 'A' + (header.size - 1)
+        api.updateValues(spreadsheetId, "$sheetTitle!A1:${lastColumn}1", body = ValueRange(values = listOf(header)))
+        sheetIdCache = emptyMap()
+    }
+
+    /** Finds the row in [sheetTitle] whose first column equals [name] and deletes it. No-op if not found. */
+    private suspend fun deleteNamedRow(sheetTitle: String, name: String) {
+        val spreadsheetId = prefs.getSpreadsheetId() ?: return
+        val sheetId = resolveSheetIdByName(sheetTitle) ?: return
+        val response = api.getValues(spreadsheetId, "$sheetTitle!A:A")
+        val rows = response.values ?: return
+        val rowIndex = rows.indexOfFirst { it.firstOrNull() == name }
+        if (rowIndex == -1) return
+        api.batchUpdate(
+            spreadsheetId,
+            BatchUpdateRequest(
+                requests = listOf(
+                    Request(
+                        deleteDimension = DeleteDimensionRequest(
+                            range = DimensionRange(sheetId = sheetId, startIndex = rowIndex, endIndex = rowIndex + 1)
+                        )
+                    )
+                )
+            )
+        )
+    }
+
     /** Calculates the date for a recurring item that falls on [dayOfMonth] within the current
      *  pay period (which starts on [payDay]). If [dayOfMonth] is before [payDay], the income
      *  falls in the next calendar month (e.g. pay day=26, recurring=9 → next month's 9th).
@@ -541,6 +685,22 @@ class SheetsRepositoryImpl @Inject constructor(
         subscriptionCost = subscriptionCost,
         variance = variance,
         shouldBuySub = shouldBuySub
+    )
+
+    private fun SavingsGoalEntity.toSavingsGoal() = SavingsGoal(
+        name = name,
+        targetAmount = targetAmount,
+        savedAmount = savedAmount,
+        targetDate = targetDate,
+        rowIndex = rowIndex
+    )
+
+    private fun DebtEntity.toDebt() = Debt(
+        name = name,
+        balance = balance,
+        aprPercent = aprPercent,
+        minPayment = minPayment,
+        rowIndex = rowIndex
     )
 
     private fun String.parseCurrency(): Double =

@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -24,6 +25,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.budgetr.app.ui.screens.balances.AccountBalancesScreen
+import com.budgetr.app.ui.screens.goals.GoalsScreen
 import com.budgetr.app.ui.screens.settings.SettingsScreen
 import com.budgetr.app.ui.screens.transactions.TransactionsScreen
 
@@ -36,6 +38,7 @@ private data class BottomNavItem(
 private val bottomNavItems = listOf(
     BottomNavItem(NavRoutes.ACCOUNT_BALANCES, "Accounts", Icons.Default.AccountBalance),
     BottomNavItem(NavRoutes.TRANSACTIONS, "Transactions", Icons.Default.List),
+    BottomNavItem(NavRoutes.GOALS, "Goals", Icons.Default.Savings),
     BottomNavItem(NavRoutes.SETTINGS, "Settings", Icons.Default.Settings)
 )
 
@@ -101,6 +104,9 @@ fun MainScreen(onSignOut: () -> Unit) {
                         }
                     }
                 )
+            }
+            composable(NavRoutes.GOALS) {
+                GoalsScreen()
             }
             composable(NavRoutes.SETTINGS) {
                 SettingsScreen(onSignOut = onSignOut)

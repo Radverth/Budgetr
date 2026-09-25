@@ -112,4 +112,7 @@ dependencies {
 
     // Glance (home screen widget)
     implementation(libs.glance.appwidget)
+
+    // Testing
+    testImplementation(libs.junit)
 }

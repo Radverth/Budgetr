@@ -10,5 +10,6 @@ object NavRoutes {
     const val HOME = "home"
     const val TRANSACTIONS = "transactions"
     const val ACCOUNT_BALANCES = "account_balances"
+    const val GOALS = "goals"
     const val SETTINGS = "settings"
 }

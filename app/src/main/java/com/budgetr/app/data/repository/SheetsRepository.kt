@@ -3,6 +3,8 @@ package com.budgetr.app.data.repository
 import com.budgetr.app.data.api.DriveFile
 import com.budgetr.app.data.model.AccountBalance
 import com.budgetr.app.data.model.BalanceRollover
+import com.budgetr.app.data.model.Debt
+import com.budgetr.app.data.model.SavingsGoal
 import com.budgetr.app.data.model.Transaction
 import kotlinx.coroutines.flow.Flow
 
@@ -29,4 +31,18 @@ interface SheetsRepository {
     suspend fun deleteAccount(accountName: String)
     /** Checks if a new pay period has started and, if so, deletes all one-off cost transactions. Returns true if a reset was performed. */
     suspend fun checkAndProcessNewPayPeriod(): Boolean
+
+    // --- Savings goals ---
+    fun getSavingsGoals(): Flow<List<SavingsGoal>>
+    suspend fun refreshSavingsGoals()
+    suspend fun addSavingsGoal(goal: SavingsGoal)
+    suspend fun updateSavingsGoal(goal: SavingsGoal)
+    suspend fun deleteSavingsGoal(name: String)
+
+    // --- Debts ---
+    fun getDebts(): Flow<List<Debt>>
+    suspend fun refreshDebts()
+    suspend fun addDebt(debt: Debt)
+    suspend fun updateDebt(debt: Debt)
+    suspend fun deleteDebt(name: String)
 }
