@@ -279,6 +279,18 @@ fun AccountBalancesScreen(
                         }
                     }
 
+                    if (uiState.goalsCount > 0 || uiState.debtCount > 0) {
+                        item {
+                            GoalsGlanceCard(
+                                goalsCount = uiState.goalsCount,
+                                avgGoalProgress = uiState.avgGoalProgress,
+                                debtCount = uiState.debtCount,
+                                totalDebt = uiState.totalDebt,
+                                modifier = Modifier.padding(horizontal = 16.dp)
+                            )
+                        }
+                    }
+
                     item {
                         Text(
                             text = "Your Accounts",
@@ -426,6 +438,56 @@ private fun SummaryHeaderCard(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun GoalsGlanceCard(
+    goalsCount: Int,
+    avgGoalProgress: Float,
+    debtCount: Int,
+    totalDebt: Double,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            if (goalsCount > 0) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "🎯 $goalsCount ${if (goalsCount == 1) "goal" else "goals"}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
+                    Text(
+                        text = "${(avgGoalProgress * 100).toInt()}% average progress",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.75f)
+                    )
+                }
+            }
+            if (debtCount > 0) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "💳 ${totalDebt.toCurrencyString()} owed",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = ExpenseRed
+                    )
+                    Text(
+                        text = "across $debtCount ${if (debtCount == 1) "debt" else "debts"} — see Goals tab",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.75f)
+                    )
+                }
             }
         }
     }
