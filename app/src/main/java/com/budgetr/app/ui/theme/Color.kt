@@ -55,3 +55,11 @@ val IncomeGreen = Color(0xFF15803D)
 val ExpenseRed = Color(0xFFDC2626)
 val TransferGrey = Color(0xFF6B7280)
 val FixedCostOrange = Color(0xFFD97706)
+
+// Hero gradient — used behind headline figures (Home total, Login/Splash) for a richer, more
+// premium feel than a flat fill. Monochromatic on purpose: white text stays high-contrast
+// against both ends without needing per-gradient contrast checks.
+val HeroGradientStartLight = Color(0xFF115E59)
+val HeroGradientEndLight = Color(0xFF0D9488)
+val HeroGradientStartDark = Color(0xFF042F2E)
+val HeroGradientEndDark = Color(0xFF115E59)

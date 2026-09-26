@@ -1,5 +1,8 @@
 package com.budgetr.app.ui.navigation
 
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
@@ -17,7 +20,11 @@ fun BudgetrNavGraph(
 ) {
     NavHost(
         navController = navController,
-        startDestination = NavRoutes.SPLASH
+        startDestination = NavRoutes.SPLASH,
+        enterTransition = { fadeIn(tween(220)) },
+        exitTransition = { fadeOut(tween(220)) },
+        popEnterTransition = { fadeIn(tween(220)) },
+        popExitTransition = { fadeOut(tween(220)) }
     ) {
         composable(NavRoutes.SPLASH) {
             SplashScreen(
