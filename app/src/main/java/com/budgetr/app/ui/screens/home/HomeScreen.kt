@@ -44,6 +44,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -53,6 +54,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -61,6 +63,7 @@ import com.budgetr.app.data.model.AccountBalance
 import com.budgetr.app.ui.theme.ExpenseRed
 import com.budgetr.app.ui.theme.FixedCostOrange
 import com.budgetr.app.ui.theme.IncomeGreen
+import com.budgetr.app.ui.theme.heroGradient
 import com.budgetr.app.util.toCurrencyString
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -77,6 +80,13 @@ fun HomeScreen(
         uiState.error?.let {
             snackbarHostState.showSnackbar(it)
             viewModel.clearError()
+        }
+    }
+
+    LaunchedEffect(uiState.successMessage) {
+        uiState.successMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearSuccessMessage()
         }
     }
 
@@ -160,6 +170,20 @@ fun HomeScreen(
                         }
                     }
 
+                    if (uiState.goalsCount > 0 || uiState.debtCount > 0) {
+                        item {
+                            GoalsGlanceCard(
+                                goalsCount = uiState.goalsCount,
+                                avgGoalProgress = uiState.avgGoalProgress,
+                                debtCount = uiState.debtCount,
+                                totalDebt = uiState.totalDebt,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp)
+                            )
+                        }
+                    }
+
                     if (uiState.totalIncome > 0 || uiState.totalOutgoings > 0) {
                         item {
                             SpendingBreakdownCard(
@@ -201,10 +225,11 @@ fun HomeScreen(
 
 @Composable
 private fun HomeHeader(userName: String?, totalAvailable: Double, topPadding: Dp) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(topStart = 0.dp, topEnd = 0.dp, bottomEnd = 24.dp, bottomStart = 24.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(topStart = 0.dp, topEnd = 0.dp, bottomEnd = 28.dp, bottomStart = 28.dp))
+            .background(heroGradient())
     ) {
         Column(
             modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = topPadding + 16.dp, bottom = 28.dp)
@@ -212,7 +237,7 @@ private fun HomeHeader(userName: String?, totalAvailable: Double, topPadding: Dp
             Text(
                 text = "Budgetr",
                 style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
+                color = Color.White.copy(alpha = 0.7f)
             )
             if (userName != null) {
                 Spacer(Modifier.height(4.dp))
@@ -220,20 +245,26 @@ private fun HomeHeader(userName: String?, totalAvailable: Double, topPadding: Dp
                     text = "Hi, $userName",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
             Spacer(Modifier.height(20.dp))
             Text(
                 text = "Total Available",
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                color = Color.White.copy(alpha = 0.75f)
             )
             Text(
                 text = totalAvailable.toCurrencyString(),
                 style = MaterialTheme.typography.displaySmall,
                 fontWeight = FontWeight.Bold,
-                color = if (totalAvailable >= 0) IncomeGreen else ExpenseRed
+                // Lighter tints than the standard semantic colors — they're calibrated for
+                // light surfaces and would look muddy against this dark gradient.
+                color = if (totalAvailable >= 0) Color(0xFF7EE8B0) else Color(0xFFFFA8A0),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
@@ -254,14 +285,17 @@ private fun SummaryStatCard(
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                maxLines = 1
             )
             Spacer(Modifier.height(4.dp))
             Text(
                 text = amount.toCurrencyString(),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = color
+                color = color,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
@@ -413,12 +447,15 @@ private fun ChartLegendItem(label: String, amount: Double, color: Color) {
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                maxLines = 1
             )
             Text(
                 text = amount.toCurrencyString(),
                 style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
@@ -474,13 +511,18 @@ private fun AccountBalanceBarItem(balance: AccountBalance, maxBalance: Double) {
             Text(
                 text = balance.account,
                 style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
             Text(
                 text = balance.remainingBalance.toCurrencyString(),
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = barColor
+                color = barColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
         balance.itemCostThisMonth?.let { cost ->
@@ -512,5 +554,74 @@ private fun AccountBalanceBarItem(balance: AccountBalance, maxBalance: Double) {
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun GoalsGlanceCard(
+    goalsCount: Int,
+    avgGoalProgress: Float,
+    debtCount: Int,
+    totalDebt: Double,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            if (goalsCount > 0) {
+                GlanceRow(
+                    emoji = "🎯",
+                    title = if (goalsCount == 1) "1 goal" else "$goalsCount goals",
+                    detail = "${(avgGoalProgress * 100).toInt()}% avg. progress",
+                    titleColor = MaterialTheme.colorScheme.onTertiaryContainer
+                )
+            }
+            if (debtCount > 0) {
+                GlanceRow(
+                    emoji = "💳",
+                    title = totalDebt.toCurrencyString() + " owed",
+                    detail = if (debtCount == 1) "1 debt" else "$debtCount debts",
+                    titleColor = ExpenseRed
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun GlanceRow(
+    emoji: String,
+    title: String,
+    detail: String,
+    titleColor: Color
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(text = emoji, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = titleColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Text(
+            text = detail,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.75f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }

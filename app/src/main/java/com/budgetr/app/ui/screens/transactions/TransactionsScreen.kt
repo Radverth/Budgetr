@@ -32,8 +32,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -153,14 +153,23 @@ fun TransactionsScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Account tabs
+            // Account tabs — scrollable so tabs never get squeezed as accounts are added or renamed
             if (uiState.accounts.isNotEmpty()) {
-                TabRow(selectedTabIndex = uiState.accounts.indexOf(uiState.selectedAccount).coerceAtLeast(0)) {
+                ScrollableTabRow(
+                    selectedTabIndex = uiState.accounts.indexOf(uiState.selectedAccount).coerceAtLeast(0),
+                    edgePadding = 16.dp
+                ) {
                     uiState.accounts.forEach { account ->
                         Tab(
                             selected = uiState.selectedAccount == account,
                             onClick = { viewModel.selectAccount(account) },
-                            text = { Text(account) }
+                            text = {
+                                Text(
+                                    text = account,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         )
                     }
                 }

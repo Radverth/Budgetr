@@ -227,6 +227,7 @@ fun AddEditTransactionSheet(
                 label = { Text("Date") },
                 modifier = Modifier.fillMaxWidth(),
                 readOnly = true,
+                singleLine = true,
                 trailingIcon = {
                     TextButton(onClick = { showDatePicker = true }) { Text("Pick") }
                 },
@@ -267,6 +268,7 @@ fun AddEditTransactionSheet(
                         .fillMaxWidth()
                         .menuAnchor(),
                     readOnly = true,
+                    singleLine = true,
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = categoryExpanded) }
                 )
                 ExposedDropdownMenu(
@@ -304,6 +306,7 @@ fun AddEditTransactionSheet(
                         .fillMaxWidth()
                         .menuAnchor(),
                     readOnly = true,
+                    singleLine = true,
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = tabExpanded) }
                 )
                 ExposedDropdownMenu(
@@ -337,6 +340,7 @@ fun AddEditTransactionSheet(
                             .fillMaxWidth()
                             .menuAnchor(),
                         readOnly = true,
+                        singleLine = true,
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = transferToExpanded) }
                     )
                     ExposedDropdownMenu(

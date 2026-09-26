@@ -6,7 +6,6 @@ import com.budgetr.app.data.model.AccountBalance
 import com.budgetr.app.data.model.BalanceRollover
 import com.budgetr.app.data.model.TransactionCategory
 import com.budgetr.app.data.repository.SheetsRepository
-import com.budgetr.app.util.SavingsGoalCalculator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -22,26 +21,15 @@ import javax.inject.Inject
 
 private data class BalanceSummaryData(
     val balances: List<AccountBalance>,
-    val rollovers: List<BalanceRollover>,
-    val totalAvailable: Double,
-    val totalIncome: Double,
-    val totalOutgoings: Double
+    val rollovers: List<BalanceRollover>
 )
 
 data class AccountBalancesUiState(
     val isRefreshing: Boolean = false,
     val balances: List<AccountBalance> = emptyList(),
     val rollovers: List<BalanceRollover> = emptyList(),
-    val totalAvailable: Double = 0.0,
-    val totalIncome: Double = 0.0,
-    val totalOutgoings: Double = 0.0,
     val error: String? = null,
     val successMessage: String? = null,
-    // Goals/debts glance (shown as a small teaser card on the dashboard)
-    val goalsCount: Int = 0,
-    val avgGoalProgress: Float = 0f,
-    val debtCount: Int = 0,
-    val totalDebt: Double = 0.0,
     // Rename dialog
     val renameAccount: AccountBalance? = null,
     val renameText: String = "",
@@ -68,25 +56,6 @@ class AccountBalancesViewModel @Inject constructor(
     val uiState: StateFlow<AccountBalancesUiState> = _uiState.asStateFlow()
 
     init {
-        viewModelScope.launch {
-            combine(repository.getSavingsGoals(), repository.getDebts()) { goals, debts -> goals to debts }
-                .collect { (goals, debts) ->
-                    val avgProgress = if (goals.isEmpty()) {
-                        0f
-                    } else {
-                        goals.map { SavingsGoalCalculator.progress(it.savedAmount, it.targetAmount) }.average().toFloat()
-                    }
-                    _uiState.update {
-                        it.copy(
-                            goalsCount = goals.size,
-                            avgGoalProgress = avgProgress,
-                            debtCount = debts.size,
-                            totalDebt = debts.sumOf { debt -> debt.balance }
-                        )
-                    }
-                }
-        }
-
         viewModelScope.launch {
             val balancesAndRollovers = combine(
                 repository.getAccountBalances(),
@@ -122,65 +91,12 @@ class AccountBalancesViewModel @Inject constructor(
                     balance.copy(remainingBalance = balance.remainingBalance - futureIncome + rolloverAmount)
                 }
 
-                val income = allTx
-                    .filter {
-                        when (it.category) {
-                            TransactionCategory.INCOME,
-                            TransactionCategory.SALARY -> true
-                            TransactionCategory.RECURRING_INCOME -> {
-                                // Only count recurring income on or after its scheduled date
-                                val txDate = runCatching { dateFmt.parse(it.date) }.getOrNull()
-                                txDate != null && !txDate.after(today)
-                            }
-                            else -> false
-                        }
-                    }
-                    .sumOf { it.amount }
-                val currentMonth = Calendar.getInstance().get(Calendar.MONTH) + 1 // 1–12
-                val outgoings = allTx
-                    .filter {
-                        it.category != TransactionCategory.INCOME &&
-                        it.category != TransactionCategory.SALARY &&
-                        it.category != TransactionCategory.RECURRING_INCOME &&
-                        it.category != TransactionCategory.TRANSFER &&
-                        // Exclude fixed costs restricted to other months
-                        (it.activeMonths == null || it.activeMonths.contains(currentMonth))
-                    }
-                    .sumOf { kotlin.math.abs(it.amount) }
-                BalanceSummaryData(
-                    balances = adjustedBalances,
-                    rollovers = rollovers,
-                    totalAvailable = adjustedBalances.sumOf { it.remainingBalance },
-                    totalIncome = income,
-                    totalOutgoings = outgoings
-                )
+                BalanceSummaryData(balances = adjustedBalances, rollovers = rollovers)
             }.collect { data ->
-                _uiState.update {
-                    it.copy(
-                        balances = data.balances,
-                        rollovers = data.rollovers,
-                        totalAvailable = data.totalAvailable,
-                        totalIncome = data.totalIncome,
-                        totalOutgoings = data.totalOutgoings
-                    )
-                }
+                _uiState.update { it.copy(balances = data.balances, rollovers = data.rollovers) }
             }
         }
-        checkPayPeriod()
         refresh()
-    }
-
-    private fun checkPayPeriod() {
-        viewModelScope.launch {
-            try {
-                val wasReset = repository.checkAndProcessNewPayPeriod()
-                if (wasReset) {
-                    _uiState.update { it.copy(successMessage = "New pay period started — balances rolled over and one-off costs cleared") }
-                }
-            } catch (e: Exception) {
-                _uiState.update { it.copy(error = "Couldn't start the new pay period (${e.message ?: "unknown error"}). It will retry next time you open the app.") }
-            }
-        }
     }
 
     fun refresh() {
@@ -189,8 +105,6 @@ class AccountBalancesViewModel @Inject constructor(
             try {
                 repository.refreshAccountBalances()
                 repository.refreshAllTransactions()
-                repository.refreshSavingsGoals()
-                repository.refreshDebts()
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = e.message) }
             } finally {

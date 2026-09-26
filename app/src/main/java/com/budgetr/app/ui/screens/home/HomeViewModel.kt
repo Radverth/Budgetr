@@ -7,6 +7,7 @@ import com.budgetr.app.data.model.AccountBalance
 import com.budgetr.app.data.model.TransactionCategory
 import com.budgetr.app.data.repository.SheetsRepository
 import com.budgetr.app.util.AuthManager
+import com.budgetr.app.util.SavingsGoalCalculator
 import com.budgetr.app.util.UpdateChecker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,10 +31,15 @@ data class HomeUiState(
     val totalOneOffCosts: Double = 0.0,
     val totalAvailable: Double = 0.0,
     val error: String? = null,
+    val successMessage: String? = null,
     val userName: String? = null,
     val updateAvailable: Boolean = false,
     val updateVersion: String = "",
-    val updateUrl: String = ""
+    val updateUrl: String = "",
+    val goalsCount: Int = 0,
+    val avgGoalProgress: Float = 0f,
+    val debtCount: Int = 0,
+    val totalDebt: Double = 0.0
 )
 
 private data class SummaryData(
@@ -57,8 +63,46 @@ class HomeViewModel @Inject constructor(
 
     init {
         observeData()
+        observeGoalsAndDebts()
+        checkPayPeriod()
         refresh()
         checkForUpdate()
+    }
+
+    /** Home is always the first screen shown, so the pay-period rollover check — which used to
+     *  run only once the user visited the Accounts tab — lives here now. */
+    private fun checkPayPeriod() {
+        viewModelScope.launch {
+            try {
+                val wasReset = repository.checkAndProcessNewPayPeriod()
+                if (wasReset) {
+                    _uiState.update { it.copy(successMessage = "New pay period started — balances rolled over and one-off costs cleared") }
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = "Couldn't start the new pay period (${e.message ?: "unknown error"}). It will retry next time you open the app.") }
+            }
+        }
+    }
+
+    private fun observeGoalsAndDebts() {
+        viewModelScope.launch {
+            combine(repository.getSavingsGoals(), repository.getDebts()) { goals, debts -> goals to debts }
+                .collect { (goals, debts) ->
+                    val avgProgress = if (goals.isEmpty()) {
+                        0f
+                    } else {
+                        goals.map { SavingsGoalCalculator.progress(it.savedAmount, it.targetAmount) }.average().toFloat()
+                    }
+                    _uiState.update {
+                        it.copy(
+                            goalsCount = goals.size,
+                            avgGoalProgress = avgProgress,
+                            debtCount = debts.size,
+                            totalDebt = debts.sumOf { debt -> debt.balance }
+                        )
+                    }
+                }
+        }
     }
 
     private fun checkForUpdate() {
@@ -160,6 +204,8 @@ class HomeViewModel @Inject constructor(
             try {
                 repository.refreshAccountBalances()
                 repository.refreshAllTransactions()
+                repository.refreshSavingsGoals()
+                repository.refreshDebts()
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = e.message) }
             } finally {
@@ -169,4 +215,5 @@ class HomeViewModel @Inject constructor(
     }
 
     fun clearError() = _uiState.update { it.copy(error = null) }
+    fun clearSuccessMessage() = _uiState.update { it.copy(successMessage = null) }
 }

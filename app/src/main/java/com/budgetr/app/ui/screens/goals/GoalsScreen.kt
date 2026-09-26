@@ -47,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -212,7 +213,14 @@ private fun SavingsGoalCard(goal: SavingsGoal, onEdit: () -> Unit, onDelete: () 
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(goal.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(
+                    goal.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
                 Row {
                     IconButton(onClick = onEdit, modifier = Modifier.size(32.dp)) {
                         Icon(Icons.Default.Edit, contentDescription = "Edit goal", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
@@ -223,6 +231,15 @@ private fun SavingsGoalCard(goal: SavingsGoal, onEdit: () -> Unit, onDelete: () 
                 }
             }
 
+            Text(
+                text = "${goal.savedAmount.toCurrencyString()} saved",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = IncomeGreen,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
             LinearProgressIndicator(
                 progress = progress,
                 modifier = Modifier.fillMaxWidth().height(8.dp),
@@ -232,15 +249,19 @@ private fun SavingsGoalCard(goal: SavingsGoal, onEdit: () -> Unit, onDelete: () 
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(
-                    "${goal.savedAmount.toCurrencyString()} of ${goal.targetAmount.toCurrencyString()}",
+                    text = "of ${goal.targetAmount.toCurrencyString()} target",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
                 )
                 Text(
                     "${(progress * 100).toInt()}%",
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = IncomeGreen
+                    color = IncomeGreen,
+                    maxLines = 1
                 )
             }
 
@@ -274,7 +295,14 @@ private fun DebtCard(debt: Debt, onEdit: () -> Unit, onDelete: () -> Unit) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(debt.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(
+                    debt.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
                 Row {
                     IconButton(onClick = onEdit, modifier = Modifier.size(32.dp)) {
                         Icon(Icons.Default.Edit, contentDescription = "Edit debt", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
@@ -287,20 +315,22 @@ private fun DebtCard(debt: Debt, onEdit: () -> Unit, onDelete: () -> Unit) {
 
             Text(
                 debt.balance.toCurrencyString(),
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
-                color = ExpenseRed
+                color = ExpenseRed,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
 
             HorizontalDivider(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f))
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("APR", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
-                Text("${debt.aprPercent}%", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                Text("APR", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f), maxLines = 1)
+                Text("${debt.aprPercent}%", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Min payment", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
-                Text(debt.minPayment.toCurrencyString(), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                Text("Min payment", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f), maxLines = 1)
+                Text(debt.minPayment.toCurrencyString(), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
 
             Text(
