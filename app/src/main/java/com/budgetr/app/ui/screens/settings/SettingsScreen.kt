@@ -56,6 +56,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -185,7 +186,7 @@ fun SettingsScreen(
                     LazyColumn(modifier = Modifier.height(320.dp)) {
                         items(uiState.availableSheets) { sheet ->
                             ListItem(
-                                headlineContent = { Text(sheet.name) },
+                                headlineContent = { Text(sheet.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                                 trailingContent = if (sheet.id == uiState.spreadsheetId) {
                                     { Icon(Icons.Default.CheckCircle, contentDescription = "Selected", tint = IncomeGreen) }
                                 } else null,
@@ -244,12 +245,16 @@ fun SettingsScreen(
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Text("Account", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    uiState.userName?.let { Text(it, style = MaterialTheme.typography.bodyLarge) }
+                    uiState.userName?.let {
+                        Text(it, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
                     uiState.userEmail?.let {
                         Text(
                             it,
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -281,7 +286,9 @@ fun SettingsScreen(
                                 text = uiState.spreadsheetName,
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     } else {
