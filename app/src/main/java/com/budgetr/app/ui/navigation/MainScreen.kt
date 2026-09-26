@@ -1,9 +1,11 @@
 package com.budgetr.app.ui.navigation
 
 import android.net.Uri
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalance
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material.icons.filled.Settings
@@ -17,7 +19,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.navigation.NavDestination.Companion.hierarchy
-import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -26,6 +27,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.budgetr.app.ui.screens.balances.AccountBalancesScreen
 import com.budgetr.app.ui.screens.goals.GoalsScreen
+import com.budgetr.app.ui.screens.home.HomeScreen
 import com.budgetr.app.ui.screens.settings.SettingsScreen
 import com.budgetr.app.ui.screens.transactions.TransactionsScreen
 
@@ -36,6 +38,7 @@ private data class BottomNavItem(
 )
 
 private val bottomNavItems = listOf(
+    BottomNavItem(NavRoutes.HOME, "Home", Icons.Default.Home),
     BottomNavItem(NavRoutes.ACCOUNT_BALANCES, "Accounts", Icons.Default.AccountBalance),
     BottomNavItem(NavRoutes.TRANSACTIONS, "Transactions", Icons.Default.List),
     BottomNavItem(NavRoutes.GOALS, "Goals", Icons.Default.Savings),
@@ -64,10 +67,12 @@ fun MainScreen(onSignOut: () -> Unit) {
                         selected = isSelected,
                         onClick = {
                             navController.navigate(item.route) {
-                                val isAccountsTab = item.route == NavRoutes.ACCOUNT_BALANCES
-                                popUpTo(NavRoutes.ACCOUNT_BALANCES) { saveState = !isAccountsTab }
+                                // Home always reloads fresh (it's the at-a-glance dashboard);
+                                // other tabs keep their scroll/filter state when revisited.
+                                val isHomeTab = item.route == NavRoutes.HOME
+                                popUpTo(NavRoutes.HOME) { saveState = !isHomeTab }
                                 launchSingleTop = true
-                                restoreState = !isAccountsTab
+                                restoreState = !isHomeTab
                             }
                         },
                         icon = { Icon(item.icon, contentDescription = item.label) },
@@ -79,9 +84,23 @@ fun MainScreen(onSignOut: () -> Unit) {
     ) { innerPadding ->
         NavHost(
             navController = navController,
-            startDestination = NavRoutes.ACCOUNT_BALANCES,
-            modifier = Modifier.padding(innerPadding)
+            startDestination = NavRoutes.HOME,
+            // consumeWindowInsets prevents HomeScreen's own Scaffold (which has no top bar and
+            // manually pads for the status bar) from double-counting the inset this outer
+            // Scaffold already reserved.
+            modifier = Modifier
+                .padding(innerPadding)
+                .consumeWindowInsets(innerPadding)
         ) {
+            composable(NavRoutes.HOME) {
+                HomeScreen(
+                    onNavigateToAddTransaction = {
+                        navController.navigate(NavRoutes.TRANSACTIONS) {
+                            launchSingleTop = true
+                        }
+                    }
+                )
+            }
             composable(NavRoutes.TRANSACTIONS) {
                 TransactionsScreen()
             }
