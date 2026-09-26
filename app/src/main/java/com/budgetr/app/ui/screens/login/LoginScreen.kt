@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -30,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.budgetr.app.ui.theme.heroGradient
 
 @Composable
 fun LoginScreen(
@@ -48,7 +51,7 @@ fun LoginScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(heroGradient())
     ) {
         Column(
             modifier = Modifier
@@ -57,50 +60,57 @@ fun LoginScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Text(
-                text = "💰",
-                fontSize = 80.sp
-            )
-            Spacer(modifier = Modifier.height(24.dp))
+            Box(
+                modifier = Modifier
+                    .size(96.dp)
+                    .background(Color.White.copy(alpha = 0.16f), shape = CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(text = "💰", fontSize = 48.sp)
+            }
+            Spacer(modifier = Modifier.height(28.dp))
             Text(
                 text = "Budgetr",
-                style = MaterialTheme.typography.displaySmall,
-                color = MaterialTheme.colorScheme.primary,
+                style = MaterialTheme.typography.displayMedium,
+                color = Color.White,
                 fontWeight = FontWeight.Bold
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = "Track your budget with Google Sheets",
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+                color = Color.White.copy(alpha = 0.8f),
                 textAlign = TextAlign.Center
             )
             Spacer(modifier = Modifier.height(64.dp))
 
             if (uiState.isLoading) {
-                CircularProgressIndicator(modifier = Modifier.size(48.dp))
+                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(48.dp))
             } else {
                 Button(
                     onClick = { launcher.launch(viewModel.getSignInIntent()) },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(52.dp),
+                        .height(56.dp),
+                    shape = RoundedCornerShape(28.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary
+                        containerColor = Color.White,
+                        contentColor = MaterialTheme.colorScheme.primary
                     )
                 ) {
                     Text(
                         text = "Sign in with Google",
-                        style = MaterialTheme.typography.titleMedium
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(20.dp))
             Text(
                 text = "Budgetr requires access to your Google Sheets\nto read and manage your budget data.",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
+                color = Color.White.copy(alpha = 0.65f),
                 textAlign = TextAlign.Center
             )
         }
