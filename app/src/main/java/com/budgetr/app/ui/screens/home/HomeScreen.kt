@@ -44,6 +44,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -62,6 +63,7 @@ import com.budgetr.app.data.model.AccountBalance
 import com.budgetr.app.ui.theme.ExpenseRed
 import com.budgetr.app.ui.theme.FixedCostOrange
 import com.budgetr.app.ui.theme.IncomeGreen
+import com.budgetr.app.ui.theme.heroGradient
 import com.budgetr.app.util.toCurrencyString
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -223,10 +225,11 @@ fun HomeScreen(
 
 @Composable
 private fun HomeHeader(userName: String?, totalAvailable: Double, topPadding: Dp) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(topStart = 0.dp, topEnd = 0.dp, bottomEnd = 24.dp, bottomStart = 24.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(topStart = 0.dp, topEnd = 0.dp, bottomEnd = 28.dp, bottomStart = 28.dp))
+            .background(heroGradient())
     ) {
         Column(
             modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = topPadding + 16.dp, bottom = 28.dp)
@@ -234,7 +237,7 @@ private fun HomeHeader(userName: String?, totalAvailable: Double, topPadding: Dp
             Text(
                 text = "Budgetr",
                 style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
+                color = Color.White.copy(alpha = 0.7f)
             )
             if (userName != null) {
                 Spacer(Modifier.height(4.dp))
@@ -242,7 +245,7 @@ private fun HomeHeader(userName: String?, totalAvailable: Double, topPadding: Dp
                     text = "Hi, $userName",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    color = Color.White,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -251,13 +254,15 @@ private fun HomeHeader(userName: String?, totalAvailable: Double, topPadding: Dp
             Text(
                 text = "Total Available",
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                color = Color.White.copy(alpha = 0.75f)
             )
             Text(
                 text = totalAvailable.toCurrencyString(),
                 style = MaterialTheme.typography.displaySmall,
                 fontWeight = FontWeight.Bold,
-                color = if (totalAvailable >= 0) IncomeGreen else ExpenseRed,
+                // Lighter tints than the standard semantic colors — they're calibrated for
+                // light surfaces and would look muddy against this dark gradient.
+                color = if (totalAvailable >= 0) Color(0xFF7EE8B0) else Color(0xFFFFA8A0),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
