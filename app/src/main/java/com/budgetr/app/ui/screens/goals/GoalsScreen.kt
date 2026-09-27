@@ -27,6 +27,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -53,6 +54,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.budgetr.app.data.model.Debt
 import com.budgetr.app.data.model.SavingsGoal
+import com.budgetr.app.ui.screens.budgets.CAPPABLE_CATEGORIES
 import com.budgetr.app.ui.theme.ExpenseRed
 import com.budgetr.app.ui.theme.IncomeGreen
 import com.budgetr.app.util.DebtPayoffCalculator
@@ -347,6 +349,7 @@ private fun DebtCard(debt: Debt, onEdit: () -> Unit, onDelete: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun GoalDialog(uiState: GoalsUiState, viewModel: GoalsViewModel) {
     val isEdit = uiState.editingGoal != null
@@ -385,6 +388,25 @@ private fun GoalDialog(uiState: GoalsUiState, viewModel: GoalsViewModel) {
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )
+                Text(
+                    text = "Suggest saving underspend from a budget",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = uiState.goalLinkedCategoryInput == null,
+                        onClick = { viewModel.setGoalLinkedCategoryInput(null) },
+                        label = { Text("None") }
+                    )
+                    CAPPABLE_CATEGORIES.forEach { category ->
+                        FilterChip(
+                            selected = uiState.goalLinkedCategoryInput == category,
+                            onClick = { viewModel.setGoalLinkedCategoryInput(category) },
+                            label = { Text(category.displayName) }
+                        )
+                    }
+                }
             }
         },
         confirmButton = {

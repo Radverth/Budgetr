@@ -5,7 +5,10 @@ import androidx.room.Room
 import com.budgetr.app.data.local.BudgetrDatabase
 import com.budgetr.app.data.local.dao.AccountBalanceDao
 import com.budgetr.app.data.local.dao.BalanceRolloverDao
+import com.budgetr.app.data.local.dao.CategoryBudgetDao
 import com.budgetr.app.data.local.dao.DebtDao
+import com.budgetr.app.data.local.dao.GoalCategoryLinkDao
+import com.budgetr.app.data.local.dao.RecurringCostReviewDao
 import com.budgetr.app.data.local.dao.SavingsGoalDao
 import com.budgetr.app.data.local.dao.TransactionDao
 import dagger.Module
@@ -40,4 +43,13 @@ object DatabaseModule {
 
     @Provides
     fun provideDebtDao(db: BudgetrDatabase): DebtDao = db.debtDao()
+
+    @Provides
+    fun provideCategoryBudgetDao(db: BudgetrDatabase): CategoryBudgetDao = db.categoryBudgetDao()
+
+    @Provides
+    fun provideRecurringCostReviewDao(db: BudgetrDatabase): RecurringCostReviewDao = db.recurringCostReviewDao()
+
+    @Provides
+    fun provideGoalCategoryLinkDao(db: BudgetrDatabase): GoalCategoryLinkDao = db.goalCategoryLinkDao()
 }

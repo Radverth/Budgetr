@@ -29,6 +29,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.budgetr.app.ui.screens.balances.AccountBalancesScreen
+import com.budgetr.app.ui.screens.budgets.BudgetsScreen
 import com.budgetr.app.ui.screens.goals.GoalsScreen
 import com.budgetr.app.ui.screens.home.HomeScreen
 import com.budgetr.app.ui.screens.settings.SettingsScreen
@@ -105,8 +106,16 @@ fun MainScreen(onSignOut: () -> Unit) {
                         navController.navigate(NavRoutes.TRANSACTIONS) {
                             launchSingleTop = true
                         }
+                    },
+                    onNavigateToBudgets = {
+                        navController.navigate(NavRoutes.BUDGETS) {
+                            launchSingleTop = true
+                        }
                     }
                 )
+            }
+            composable(NavRoutes.BUDGETS) {
+                BudgetsScreen(onNavigateBack = { navController.popBackStack() })
             }
             composable(NavRoutes.TRANSACTIONS) {
                 TransactionsScreen()
