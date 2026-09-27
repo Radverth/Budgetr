@@ -5,6 +5,8 @@ import android.content.SharedPreferences
 import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import com.budgetr.app.data.repository.BudgetRepository
+import com.budgetr.app.data.repository.BudgetRepositoryImpl
 import com.budgetr.app.data.repository.SheetsRepository
 import com.budgetr.app.data.repository.SheetsRepositoryImpl
 import dagger.Binds
@@ -64,4 +66,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindSheetsRepository(impl: SheetsRepositoryImpl): SheetsRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindBudgetRepository(impl: BudgetRepositoryImpl): BudgetRepository
 }

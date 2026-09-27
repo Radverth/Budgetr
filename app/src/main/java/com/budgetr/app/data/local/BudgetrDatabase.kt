@@ -4,12 +4,18 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import com.budgetr.app.data.local.dao.AccountBalanceDao
 import com.budgetr.app.data.local.dao.BalanceRolloverDao
+import com.budgetr.app.data.local.dao.CategoryBudgetDao
 import com.budgetr.app.data.local.dao.DebtDao
+import com.budgetr.app.data.local.dao.GoalCategoryLinkDao
+import com.budgetr.app.data.local.dao.RecurringCostReviewDao
 import com.budgetr.app.data.local.dao.SavingsGoalDao
 import com.budgetr.app.data.local.dao.TransactionDao
 import com.budgetr.app.data.local.entity.AccountBalanceEntity
 import com.budgetr.app.data.local.entity.BalanceRolloverEntity
+import com.budgetr.app.data.local.entity.CategoryBudgetEntity
 import com.budgetr.app.data.local.entity.DebtEntity
+import com.budgetr.app.data.local.entity.GoalCategoryLinkEntity
+import com.budgetr.app.data.local.entity.RecurringCostReviewEntity
 import com.budgetr.app.data.local.entity.SavingsGoalEntity
 import com.budgetr.app.data.local.entity.TransactionEntity
 
@@ -19,9 +25,12 @@ import com.budgetr.app.data.local.entity.TransactionEntity
         AccountBalanceEntity::class,
         BalanceRolloverEntity::class,
         SavingsGoalEntity::class,
-        DebtEntity::class
+        DebtEntity::class,
+        CategoryBudgetEntity::class,
+        RecurringCostReviewEntity::class,
+        GoalCategoryLinkEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 abstract class BudgetrDatabase : RoomDatabase() {
@@ -30,4 +39,7 @@ abstract class BudgetrDatabase : RoomDatabase() {
     abstract fun balanceRolloverDao(): BalanceRolloverDao
     abstract fun savingsGoalDao(): SavingsGoalDao
     abstract fun debtDao(): DebtDao
+    abstract fun categoryBudgetDao(): CategoryBudgetDao
+    abstract fun recurringCostReviewDao(): RecurringCostReviewDao
+    abstract fun goalCategoryLinkDao(): GoalCategoryLinkDao
 }
