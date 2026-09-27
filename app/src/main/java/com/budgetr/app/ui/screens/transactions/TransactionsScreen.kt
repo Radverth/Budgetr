@@ -87,6 +87,10 @@ fun TransactionsScreen(
             accounts = uiState.accounts,
             addSaveCount = uiState.addSaveCount,
             payDay = uiState.payDay,
+            debts = uiState.debts,
+            savingsGoals = uiState.savingsGoals,
+            spendingPromptEnabled = uiState.spendingPromptEnabled,
+            spendingPromptThreshold = uiState.spendingPromptThreshold,
             onSave = viewModel::saveTransaction,
             onSaveTransfer = viewModel::saveTransfer,
             onDismiss = viewModel::dismissSheet

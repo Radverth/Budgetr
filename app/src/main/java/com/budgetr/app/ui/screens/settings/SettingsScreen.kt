@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
@@ -30,6 +31,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -39,6 +41,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -58,6 +61,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -66,6 +70,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.budgetr.app.ui.theme.ExpenseRed
 import com.budgetr.app.ui.theme.FixedCostOrange
 import com.budgetr.app.ui.theme.IncomeGreen
+import com.budgetr.app.util.toCurrencyString
 import java.util.Calendar
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -148,6 +153,39 @@ fun SettingsScreen(
             },
             dismissButton = {
                 TextButton(onClick = viewModel::dismissTimePicker) { Text("Cancel") }
+            }
+        )
+    }
+
+    // Spending prompt threshold dialog
+    if (uiState.showSpendingPromptThresholdDialog) {
+        AlertDialog(
+            onDismissRequest = viewModel::dismissSpendingPromptThresholdDialog,
+            title = { Text("Prompt threshold") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "One-off costs at or above this amount will show a quick reflection prompt before saving.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                    OutlinedTextField(
+                        value = uiState.spendingPromptThresholdInput,
+                        onValueChange = viewModel::setSpendingPromptThresholdInput,
+                        label = { Text("Amount (£)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = viewModel::confirmSpendingPromptThreshold,
+                    enabled = uiState.spendingPromptThresholdInput.toDoubleOrNull() != null
+                ) { Text("Set") }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::dismissSpendingPromptThresholdDialog) { Text("Cancel") }
             }
         )
     }
@@ -330,6 +368,43 @@ fun SettingsScreen(
                     title = "Reminder time",
                     subtitle = formatTime(uiState.reminderHour, uiState.reminderMinute),
                     onClick = viewModel::showTimePicker,
+                    indentIcon = true
+                )
+            }
+
+            SectionLabel("Spending Prompts")
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                SettingsIconBadge(icon = Icons.Default.Info, tint = MaterialTheme.colorScheme.primary)
+                Spacer(modifier = Modifier.width(16.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Reflect before spending", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                    Text(
+                        text = if (uiState.spendingPromptEnabled) {
+                            "On for one-off costs of ${uiState.spendingPromptThreshold.toCurrencyString()}+"
+                        } else {
+                            "Off"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    )
+                }
+                Switch(
+                    checked = uiState.spendingPromptEnabled,
+                    onCheckedChange = viewModel::setSpendingPromptEnabled
+                )
+            }
+            if (uiState.spendingPromptEnabled) {
+                SettingsRow(
+                    icon = null,
+                    title = "Prompt threshold",
+                    subtitle = uiState.spendingPromptThreshold.toCurrencyString(),
+                    onClick = viewModel::showSpendingPromptThresholdDialog,
                     indentIcon = true
                 )
             }

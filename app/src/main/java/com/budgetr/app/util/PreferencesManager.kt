@@ -19,6 +19,8 @@ class PreferencesManager @Inject constructor(
         private const val KEY_REMINDER_ENABLED = "reminder_enabled"
         private const val KEY_REMINDER_HOUR = "reminder_hour"
         private const val KEY_REMINDER_MINUTE = "reminder_minute"
+        private const val KEY_SPENDING_PROMPT_ENABLED = "spending_prompt_enabled"
+        private const val KEY_SPENDING_PROMPT_THRESHOLD = "spending_prompt_threshold"
     }
 
     fun getAccessToken(): String? = prefs.getString(KEY_ACCESS_TOKEN, null)
@@ -55,6 +57,12 @@ class PreferencesManager @Inject constructor(
     fun setReminderTime(hour: Int, minute: Int) {
         prefs.edit().putInt(KEY_REMINDER_HOUR, hour).putInt(KEY_REMINDER_MINUTE, minute).apply()
     }
+
+    fun isSpendingPromptEnabled(): Boolean = prefs.getBoolean(KEY_SPENDING_PROMPT_ENABLED, true)
+    fun setSpendingPromptEnabled(enabled: Boolean) = prefs.edit().putBoolean(KEY_SPENDING_PROMPT_ENABLED, enabled).apply()
+
+    fun getSpendingPromptThreshold(): Double = prefs.getFloat(KEY_SPENDING_PROMPT_THRESHOLD, 20f).toDouble()
+    fun setSpendingPromptThreshold(amount: Double) = prefs.edit().putFloat(KEY_SPENDING_PROMPT_THRESHOLD, amount.toFloat()).apply()
 
     fun clearAll() = prefs.edit().clear().apply()
 }
