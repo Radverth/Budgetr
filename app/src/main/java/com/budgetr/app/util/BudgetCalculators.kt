@@ -1,13 +1,25 @@
 package com.budgetr.app.util
 
 import com.budgetr.app.data.model.Transaction
+import com.budgetr.app.data.model.TransactionCategory
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
 private const val DAY_MILLIS = 24L * 60 * 60 * 1000
 
 private fun dateFormat() = SimpleDateFormat("dd/MM/yyyy", Locale.UK)
+
+/** Total spend for [category] this period, applying the same "restricted to active months"
+ *  rule fixed costs use elsewhere (e.g. an annual renewal only counted in its billing month). */
+fun spendForCategory(
+    transactions: List<Transaction>,
+    category: TransactionCategory,
+    month: Int = Calendar.getInstance().get(Calendar.MONTH) + 1
+): Double = transactions
+    .filter { it.category == category && (it.activeMonths == null || it.activeMonths.contains(month)) }
+    .sumOf { kotlin.math.abs(it.amount) }
 
 /** Pure calculations behind the category budget caps shown on Home and the Budgets screen. */
 object BudgetCapCalculator {
