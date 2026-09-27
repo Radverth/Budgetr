@@ -745,11 +745,10 @@ private fun SpendingHabitsCard(streakDays: Int?, trend: SpendingTrend?, modifier
                 fontWeight = FontWeight.SemiBold
             )
             if (streakDays != null) {
-                GlanceRow(
+                HabitRow(
                     emoji = "🔥",
                     title = if (streakDays == 1) "1 day no-spend streak" else "$streakDays day no-spend streak",
-                    detail = "on one-off costs",
-                    titleColor = MaterialTheme.colorScheme.onSurface
+                    detail = "on one-off costs"
                 )
             }
             if (trend != null) {
@@ -760,13 +759,36 @@ private fun SpendingHabitsCard(streakDays: Int?, trend: SpendingTrend?, modifier
                     change < 0 -> "down ${-change.toInt()}% vs last week"
                     else -> "same as last week"
                 }
-                GlanceRow(
+                HabitRow(
                     emoji = "📊",
                     title = "This week: ${trend.thisWeek.toCurrencyString()}",
-                    detail = detail,
-                    titleColor = MaterialTheme.colorScheme.onSurface
+                    detail = detail
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun HabitRow(emoji: String, title: String, detail: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Text(text = emoji, style = MaterialTheme.typography.bodyLarge)
+        Column {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = detail,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            )
         }
     }
 }
