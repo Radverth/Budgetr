@@ -1,19 +1,26 @@
 package com.budgetr.app.ui.screens.transactions
 
+import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.budgetr.app.data.model.SortOrder
 import com.budgetr.app.data.model.Transaction
 import com.budgetr.app.data.model.TransactionCategory
+import com.budgetr.app.data.repository.BudgetRepository
 import com.budgetr.app.data.repository.SheetsRepository
+import com.budgetr.app.util.BudgetAlertNotifier
+import com.budgetr.app.util.BudgetCapCalculator
 import com.budgetr.app.util.PreferencesManager
+import com.budgetr.app.util.spendForCategory
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.update
@@ -43,7 +50,9 @@ data class TransactionsUiState(
 @HiltViewModel
 class TransactionsViewModel @Inject constructor(
     private val repository: SheetsRepository,
+    private val budgetRepository: BudgetRepository,
     private val prefs: PreferencesManager,
+    @ApplicationContext private val context: Context,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -174,7 +183,17 @@ class TransactionsViewModel @Inject constructor(
                     }
                     _uiState.update { it.copy(showAddSheet = false, transactionToEdit = null) }
                 } else {
+                    val budget = budgetRepository.getCategoryBudgets().first().find { it.category == transaction.category }
+                    val spendBefore = budget?.let { spendForCategory(repository.getAllTransactions().first(), it.category) }
+
                     repository.addTransaction(transaction)
+
+                    if (budget != null && spendBefore != null && !BudgetCapCalculator.isOverLimit(spendBefore, budget.limit)) {
+                        val spendAfter = spendForCategory(repository.getAllTransactions().first(), budget.category)
+                        if (BudgetCapCalculator.isOverLimit(spendAfter, budget.limit)) {
+                            BudgetAlertNotifier.notifyOverBudget(context, budget.category, spendAfter, budget.limit)
+                        }
+                    }
                     _uiState.update { it.copy(addSaveCount = it.addSaveCount + 1) }
                 }
             } catch (e: Exception) {
