@@ -5,21 +5,50 @@ import androidx.lifecycle.viewModelScope
 import com.budgetr.app.BuildConfig
 import com.budgetr.app.data.model.AccountBalance
 import com.budgetr.app.data.model.TransactionCategory
+import com.budgetr.app.data.repository.BudgetRepository
 import com.budgetr.app.data.repository.SheetsRepository
 import com.budgetr.app.util.AuthManager
+import com.budgetr.app.util.BudgetCapCalculator
+import com.budgetr.app.util.NoSpendStreakCalculator
+import com.budgetr.app.util.PreferencesManager
+import com.budgetr.app.util.RecurringCostReviewCalculator
 import com.budgetr.app.util.SavingsGoalCalculator
+import com.budgetr.app.util.SpendingTrend
+import com.budgetr.app.util.SpendingTrendCalculator
 import com.budgetr.app.util.UpdateChecker
+import com.budgetr.app.util.spendForCategory
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 import javax.inject.Inject
+
+data class BudgetAlertUiItem(
+    val category: TransactionCategory,
+    val spend: Double,
+    val limit: Double,
+    val isOver: Boolean
+)
+
+data class RecurringReviewUiItem(
+    val account: String,
+    val info: String,
+    val amount: Double,
+    val ageDays: Int
+)
+
+data class GoalSuggestionUiItem(
+    val goalName: String,
+    val category: TransactionCategory,
+    val underspendAmount: Double
+)
 
 data class HomeUiState(
     val isLoading: Boolean = false,
@@ -39,7 +68,20 @@ data class HomeUiState(
     val goalsCount: Int = 0,
     val avgGoalProgress: Float = 0f,
     val debtCount: Int = 0,
-    val totalDebt: Double = 0.0
+    val totalDebt: Double = 0.0,
+    val budgetAlerts: List<BudgetAlertUiItem> = emptyList(),
+    val noSpendStreakDays: Int? = null,
+    val spendingTrend: SpendingTrend? = null,
+    val recurringReviews: List<RecurringReviewUiItem> = emptyList(),
+    val goalSuggestions: List<GoalSuggestionUiItem> = emptyList()
+)
+
+private data class SpendingControlsData(
+    val alerts: List<BudgetAlertUiItem>,
+    val streakDays: Int?,
+    val trend: SpendingTrend?,
+    val reviews: List<RecurringReviewUiItem>,
+    val suggestions: List<GoalSuggestionUiItem>
 )
 
 private data class SummaryData(
@@ -54,8 +96,10 @@ private data class SummaryData(
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val repository: SheetsRepository,
+    private val budgetRepository: BudgetRepository,
     private val authManager: AuthManager,
-    private val updateChecker: UpdateChecker
+    private val updateChecker: UpdateChecker,
+    private val prefs: PreferencesManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState(userName = authManager.getUserName()))
@@ -64,9 +108,107 @@ class HomeViewModel @Inject constructor(
     init {
         observeData()
         observeGoalsAndDebts()
+        observeSpendingControls()
         checkPayPeriod()
         refresh()
         checkForUpdate()
+    }
+
+    private fun observeSpendingControls() {
+        viewModelScope.launch {
+            val linksAndGoals = combine(
+                budgetRepository.getGoalCategoryLinks(),
+                repository.getSavingsGoals()
+            ) { links, goals -> links to goals }
+
+            combine(
+                repository.getAllTransactions(),
+                budgetRepository.getCategoryBudgets(),
+                budgetRepository.getRecurringCostReviews(),
+                linksAndGoals
+            ) { allTx, budgets, reviews, (links, goals) ->
+                val currentMonth = Calendar.getInstance().get(Calendar.MONTH) + 1
+
+                val alerts = budgets.mapNotNull { budget ->
+                    val spend = spendForCategory(allTx, budget.category, currentMonth)
+                    val isOver = BudgetCapCalculator.isOverLimit(spend, budget.limit)
+                    val isApproaching = BudgetCapCalculator.isApproachingLimit(spend, budget.limit)
+                    if (isOver || isApproaching) BudgetAlertUiItem(budget.category, spend, budget.limit, isOver) else null
+                }.sortedByDescending { it.isOver }
+
+                val oneOffTx = allTx.filter { it.category == TransactionCategory.ONE_OFF_COST }
+                val periodStart = prefs.getLastPayPeriodStart()?.let {
+                    runCatching { SimpleDateFormat("dd/MM/yyyy", Locale.UK).parse(it) }.getOrNull()
+                }
+                val streakDays = periodStart?.let {
+                    NoSpendStreakCalculator.currentStreakDays(oneOffTx.map { tx -> tx.date }, it)
+                }
+
+                val trend = SpendingTrendCalculator.weekOverWeek(oneOffTx)
+
+                val now = System.currentTimeMillis()
+                val dueReviews = reviews
+                    .filter { RecurringCostReviewCalculator.isDueForReview(it.firstSeenDate, it.dismissedUntil, now) }
+                    .map {
+                        RecurringReviewUiItem(
+                            account = it.account,
+                            info = it.info,
+                            amount = it.lastAmount,
+                            ageDays = ((now - it.firstSeenDate) / (24L * 60 * 60 * 1000)).toInt()
+                        )
+                    }
+                    .sortedByDescending { it.ageDays }
+
+                val goalsByName = goals.associateBy { it.name }
+                val budgetsByCategory = budgets.associateBy { it.category }
+                val suggestions = links.mapNotNull { link ->
+                    goalsByName[link.goalName] ?: return@mapNotNull null
+                    val budget = budgetsByCategory[link.category] ?: return@mapNotNull null
+                    val spend = spendForCategory(allTx, link.category, currentMonth)
+                    val underspend = budget.limit - spend
+                    if (underspend > 1.0) GoalSuggestionUiItem(link.goalName, link.category, underspend) else null
+                }
+
+                SpendingControlsData(alerts, streakDays, trend, dueReviews, suggestions)
+            }.collect { data ->
+                _uiState.update {
+                    it.copy(
+                        budgetAlerts = data.alerts,
+                        noSpendStreakDays = data.streakDays,
+                        spendingTrend = data.trend,
+                        recurringReviews = data.reviews,
+                        goalSuggestions = data.suggestions
+                    )
+                }
+            }
+        }
+    }
+
+    fun dismissRecurringReview(item: RecurringReviewUiItem) {
+        viewModelScope.launch {
+            budgetRepository.dismissRecurringCostReview(item.account, item.info, RecurringCostReviewCalculator.DEFAULT_REVIEW_AGE_DAYS)
+        }
+    }
+
+    fun addUnderspendToGoal(item: GoalSuggestionUiItem) {
+        viewModelScope.launch {
+            try {
+                val goal = repository.getSavingsGoals().first().find { it.name == item.goalName } ?: return@launch
+                repository.updateSavingsGoal(goal.copy(savedAmount = goal.savedAmount + item.underspendAmount))
+                _uiState.update { it.copy(successMessage = "Added to \"${item.goalName}\"") }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = e.message) }
+            }
+        }
+    }
+
+    private suspend fun syncRecurringCostTracking() {
+        val currentMonth = Calendar.getInstance().get(Calendar.MONTH) + 1
+        val activeFixedCosts = repository.getAllTransactions().first().filter {
+            it.category == TransactionCategory.FIXED_COST &&
+                (it.activeMonths == null || it.activeMonths.contains(currentMonth))
+        }
+        budgetRepository.syncRecurringCostTracking(activeFixedCosts)
     }
 
     /** Home is always the first screen shown, so the pay-period rollover check — which used to
@@ -206,6 +348,7 @@ class HomeViewModel @Inject constructor(
                 repository.refreshAllTransactions()
                 repository.refreshSavingsGoals()
                 repository.refreshDebts()
+                syncRecurringCostTracking()
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = e.message) }
             } finally {
