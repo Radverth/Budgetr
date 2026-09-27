@@ -139,9 +139,13 @@ fun AddEditTransactionSheet(
         }
     }
 
-    // Reset form after a successful add (addSaveCount increments each time)
+    // Reset form after a successful add (addSaveCount increments each time). Only applies to the
+    // add flow — without the isEdit guard, opening an edit sheet after any earlier add in this
+    // session would immediately wipe the fields this composable just loaded from
+    // existingTransaction, since LaunchedEffect fires on first composition regardless of whether
+    // the key actually changed.
     LaunchedEffect(addSaveCount) {
-        if (addSaveCount > 0) {
+        if (!isEdit && addSaveCount > 0) {
             info = ""
             amount = ""
             transferToAccount = null
