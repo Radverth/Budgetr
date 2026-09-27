@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.budgetr.app.data.model.Debt
 import com.budgetr.app.data.model.SavingsGoal
+import com.budgetr.app.data.model.TransactionCategory
+import com.budgetr.app.data.repository.BudgetRepository
 import com.budgetr.app.data.repository.SheetsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,6 +29,8 @@ data class GoalsUiState(
     val goalTargetInput: String = "",
     val goalSavedInput: String = "",
     val goalDateInput: String = "",
+    val goalLinkedCategoryInput: TransactionCategory? = null,
+    val goalCategoryLinks: Map<String, TransactionCategory> = emptyMap(),
     val isSavingGoal: Boolean = false,
     val goalToDelete: SavingsGoal? = null,
     // Debt dialog (shared by add/edit — editingDebt null means adding new)
@@ -42,7 +46,8 @@ data class GoalsUiState(
 
 @HiltViewModel
 class GoalsViewModel @Inject constructor(
-    private val repository: SheetsRepository
+    private val repository: SheetsRepository,
+    private val budgetRepository: BudgetRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(GoalsUiState())
@@ -54,6 +59,11 @@ class GoalsViewModel @Inject constructor(
                 .collect { (goals, debts) ->
                     _uiState.update { it.copy(goals = goals, debts = debts) }
                 }
+        }
+        viewModelScope.launch {
+            budgetRepository.getGoalCategoryLinks().collect { links ->
+                _uiState.update { it.copy(goalCategoryLinks = links.associate { link -> link.goalName to link.category }) }
+            }
         }
         refresh()
     }
@@ -75,7 +85,10 @@ class GoalsViewModel @Inject constructor(
     // --- Savings goal dialog ---
 
     fun showAddGoalDialog() = _uiState.update {
-        it.copy(showGoalDialog = true, editingGoal = null, goalNameInput = "", goalTargetInput = "", goalSavedInput = "", goalDateInput = "")
+        it.copy(
+            showGoalDialog = true, editingGoal = null, goalNameInput = "", goalTargetInput = "",
+            goalSavedInput = "", goalDateInput = "", goalLinkedCategoryInput = null
+        )
     }
 
     fun showEditGoalDialog(goal: SavingsGoal) = _uiState.update {
@@ -85,7 +98,8 @@ class GoalsViewModel @Inject constructor(
             goalNameInput = goal.name,
             goalTargetInput = goal.targetAmount.toString(),
             goalSavedInput = goal.savedAmount.toString(),
-            goalDateInput = goal.targetDate ?: ""
+            goalDateInput = goal.targetDate ?: "",
+            goalLinkedCategoryInput = it.goalCategoryLinks[goal.name]
         )
     }
 
@@ -95,6 +109,7 @@ class GoalsViewModel @Inject constructor(
     fun setGoalTargetInput(value: String) = _uiState.update { it.copy(goalTargetInput = value) }
     fun setGoalSavedInput(value: String) = _uiState.update { it.copy(goalSavedInput = value) }
     fun setGoalDateInput(value: String) = _uiState.update { it.copy(goalDateInput = value) }
+    fun setGoalLinkedCategoryInput(category: TransactionCategory?) = _uiState.update { it.copy(goalLinkedCategoryInput = category) }
 
     fun confirmGoalDialog() {
         val state = _uiState.value
@@ -102,6 +117,7 @@ class GoalsViewModel @Inject constructor(
         val target = state.goalTargetInput.toDoubleOrNull() ?: return
         val saved = state.goalSavedInput.toDoubleOrNull() ?: 0.0
         val date = state.goalDateInput.trim().ifBlank { null }
+        val linkedCategory = state.goalLinkedCategoryInput
         if (name.isBlank()) return
 
         viewModelScope.launch {
@@ -112,6 +128,11 @@ class GoalsViewModel @Inject constructor(
                     repository.updateSavingsGoal(editing.copy(name = name, targetAmount = target, savedAmount = saved, targetDate = date))
                 } else {
                     repository.addSavingsGoal(SavingsGoal(name = name, targetAmount = target, savedAmount = saved, targetDate = date))
+                }
+                if (linkedCategory != null) {
+                    budgetRepository.setGoalCategoryLink(name, linkedCategory)
+                } else {
+                    budgetRepository.clearGoalCategoryLink(name)
                 }
                 _uiState.update {
                     it.copy(isSavingGoal = false, showGoalDialog = false, editingGoal = null, successMessage = "\"$name\" saved")
@@ -130,6 +151,7 @@ class GoalsViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 repository.deleteSavingsGoal(goal.name)
+                budgetRepository.clearGoalCategoryLink(goal.name)
                 _uiState.update { it.copy(goalToDelete = null, successMessage = "\"${goal.name}\" deleted") }
             } catch (e: Exception) {
                 _uiState.update { it.copy(goalToDelete = null, error = e.message) }
