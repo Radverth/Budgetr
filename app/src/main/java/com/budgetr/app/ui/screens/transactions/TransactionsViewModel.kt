@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.budgetr.app.data.model.Debt
+import com.budgetr.app.data.model.SavingsGoal
 import com.budgetr.app.data.model.SortOrder
 import com.budgetr.app.data.model.Transaction
 import com.budgetr.app.data.model.TransactionCategory
@@ -43,7 +45,11 @@ data class TransactionsUiState(
     val transactionToEdit: Transaction? = null,
     val showAddSheet: Boolean = false,
     val addSaveCount: Int = 0,
-    val payDay: Int = 26
+    val payDay: Int = 26,
+    val debts: List<Debt> = emptyList(),
+    val savingsGoals: List<SavingsGoal> = emptyList(),
+    val spendingPromptEnabled: Boolean = true,
+    val spendingPromptThreshold: Double = 20.0
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -59,7 +65,12 @@ class TransactionsViewModel @Inject constructor(
     private val initialAccount = savedStateHandle.get<String>("tabName")
 
     private val _uiState = MutableStateFlow(
-        TransactionsUiState(selectedAccount = initialAccount, payDay = prefs.getPayDay())
+        TransactionsUiState(
+            selectedAccount = initialAccount,
+            payDay = prefs.getPayDay(),
+            spendingPromptEnabled = prefs.isSpendingPromptEnabled(),
+            spendingPromptThreshold = prefs.getSpendingPromptThreshold()
+        )
     )
     val uiState: StateFlow<TransactionsUiState> = _uiState.asStateFlow()
 
@@ -84,6 +95,13 @@ class TransactionsViewModel @Inject constructor(
         }
 
         refresh()
+
+        viewModelScope.launch {
+            combine(repository.getDebts(), repository.getSavingsGoals()) { debts, goals -> debts to goals }
+                .collect { (debts, goals) ->
+                    _uiState.update { it.copy(debts = debts, savingsGoals = goals) }
+                }
+        }
 
         viewModelScope.launch {
             selectedAccountFlow.flatMapLatest { account ->
@@ -169,7 +187,7 @@ class TransactionsViewModel @Inject constructor(
     fun confirmDelete(transaction: Transaction) = _uiState.update { it.copy(transactionToDelete = transaction) }
     fun dismissDelete() = _uiState.update { it.copy(transactionToDelete = null) }
 
-    fun saveTransaction(transaction: Transaction) {
+    fun saveTransaction(transaction: Transaction, linkAction: TransactionLinkAction? = null) {
         viewModelScope.launch {
             try {
                 if (transaction.rowIndex > 0) {
@@ -194,10 +212,28 @@ class TransactionsViewModel @Inject constructor(
                             BudgetAlertNotifier.notifyOverBudget(context, budget.category, spendAfter, budget.limit)
                         }
                     }
+                    linkAction?.let { applyLinkAction(it, kotlin.math.abs(transaction.amount)) }
                     _uiState.update { it.copy(addSaveCount = it.addSaveCount + 1) }
                 }
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = e.message) }
+            }
+        }
+    }
+
+    /** Applies a one-time balance adjustment for a transaction linked to a debt or goal. Not
+     *  reversible — editing or deleting the transaction afterwards won't undo it (see
+     *  TransactionLinkAction). */
+    private suspend fun applyLinkAction(action: TransactionLinkAction, amount: Double) {
+        val delta = if (action.direction == LinkDirection.INCREASE) amount else -amount
+        when (action.targetType) {
+            LinkTargetType.DEBT -> {
+                val debt = repository.getDebts().first().find { it.name == action.targetName } ?: return
+                repository.updateDebt(debt.copy(balance = (debt.balance + delta).coerceAtLeast(0.0)))
+            }
+            LinkTargetType.GOAL -> {
+                val goal = repository.getSavingsGoals().first().find { it.name == action.targetName } ?: return
+                repository.updateSavingsGoal(goal.copy(savedAmount = (goal.savedAmount + delta).coerceAtLeast(0.0)))
             }
         }
     }

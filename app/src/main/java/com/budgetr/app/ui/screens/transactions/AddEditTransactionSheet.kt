@@ -13,7 +13,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenuItem
@@ -42,13 +44,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.budgetr.app.data.model.Debt
+import com.budgetr.app.data.model.SavingsGoal
 import com.budgetr.app.data.model.Transaction
 import com.budgetr.app.data.model.TransactionCategory
+import com.budgetr.app.ui.theme.ExpenseRed
 import com.budgetr.app.ui.theme.IncomeGreen
+import com.budgetr.app.util.toCurrencyString
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+
+private data class LinkOption(val label: String, val action: TransactionLinkAction?)
 
 /**
  * Returns the pay date for the given [payDay] day-of-month.
@@ -84,7 +92,11 @@ fun AddEditTransactionSheet(
     accounts: List<String>,
     addSaveCount: Int,
     payDay: Int = 26,
-    onSave: (Transaction) -> Unit,
+    debts: List<Debt> = emptyList(),
+    savingsGoals: List<SavingsGoal> = emptyList(),
+    spendingPromptEnabled: Boolean = true,
+    spendingPromptThreshold: Double = 20.0,
+    onSave: (Transaction, TransactionLinkAction?) -> Unit,
     onSaveTransfer: (source: Transaction, destination: Transaction) -> Unit,
     onDismiss: () -> Unit,
     presetCategory: TransactionCategory? = null
@@ -117,6 +129,27 @@ fun AddEditTransactionSheet(
     var transferToExpanded by remember { mutableStateOf(false) }
     var savedBanner by remember { mutableStateOf(false) }
 
+    // "Link to" a debt/goal — a one-time balance adjustment applied alongside this transaction.
+    // Only offered when adding (not editing), since it isn't reversible if the transaction is
+    // later changed or deleted.
+    val linkOptions = remember(debts, savingsGoals) {
+        buildList {
+            add(LinkOption("None", null))
+            debts.forEach { debt ->
+                add(LinkOption("Pay down \"${debt.name}\"", TransactionLinkAction(LinkTargetType.DEBT, debt.name, LinkDirection.DECREASE)))
+                add(LinkOption("Add to \"${debt.name}\" (new charge)", TransactionLinkAction(LinkTargetType.DEBT, debt.name, LinkDirection.INCREASE)))
+            }
+            savingsGoals.forEach { goal ->
+                add(LinkOption("Contribute to \"${goal.name}\"", TransactionLinkAction(LinkTargetType.GOAL, goal.name, LinkDirection.INCREASE)))
+                add(LinkOption("Withdraw from \"${goal.name}\"", TransactionLinkAction(LinkTargetType.GOAL, goal.name, LinkDirection.DECREASE)))
+            }
+        }
+    }
+    var selectedLinkOption by remember { mutableStateOf(linkOptions.first()) }
+    var linkExpanded by remember { mutableStateOf(false) }
+
+    var showReflectionPrompt by remember { mutableStateOf(false) }
+
     // Auto-set date based on category and applyPayDate toggle
     LaunchedEffect(category) {
         if (!isEdit) {
@@ -139,9 +172,13 @@ fun AddEditTransactionSheet(
         }
     }
 
-    // Reset form after a successful add (addSaveCount increments each time)
+    // Reset form after a successful add (addSaveCount increments each time). Only applies to the
+    // add flow — without the isEdit guard, opening an edit sheet after any earlier add in this
+    // session would immediately wipe the fields this composable just loaded from
+    // existingTransaction, since LaunchedEffect fires on first composition regardless of whether
+    // the key actually changed.
     LaunchedEffect(addSaveCount) {
-        if (addSaveCount > 0) {
+        if (!isEdit && addSaveCount > 0) {
             info = ""
             amount = ""
             transferToAccount = null
@@ -399,12 +436,106 @@ fun AddEditTransactionSheet(
                 )
             }
 
+            // Link to a debt/goal — only offered for new cost transactions, since the balance
+            // adjustment isn't reversible if this transaction is edited or deleted later.
+            val showLinkPicker = !isEdit &&
+                (category == TransactionCategory.ONE_OFF_COST || category == TransactionCategory.FIXED_COST) &&
+                linkOptions.size > 1
+            AnimatedVisibility(visible = showLinkPicker) {
+                ExposedDropdownMenuBox(
+                    expanded = linkExpanded,
+                    onExpandedChange = { linkExpanded = it }
+                ) {
+                    OutlinedTextField(
+                        value = selectedLinkOption.label,
+                        onValueChange = {},
+                        label = { Text("Link to a debt or goal (optional)") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor(),
+                        readOnly = true,
+                        singleLine = true,
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = linkExpanded) }
+                    )
+                    ExposedDropdownMenu(
+                        expanded = linkExpanded,
+                        onDismissRequest = { linkExpanded = false }
+                    ) {
+                        linkOptions.forEach { option ->
+                            DropdownMenuItem(
+                                text = { Text(option.label) },
+                                onClick = {
+                                    selectedLinkOption = option
+                                    linkExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(4.dp))
 
             val parsedAmount = amount.toDoubleOrNull() ?: 0.0
             val isTransfer = category == TransactionCategory.TRANSFER
             val saveEnabled = info.isNotBlank() && amount.isNotBlank() &&
                     (!isTransfer || isEdit || transferToAccount != null)
+
+            val performSave = {
+                val signedAmount = when (category) {
+                    TransactionCategory.INCOME,
+                    TransactionCategory.SALARY,
+                    TransactionCategory.RECURRING_INCOME -> parsedAmount
+                    else -> -parsedAmount
+                }
+
+                if (isTransfer && !isEdit && transferToAccount != null) {
+                    val source = Transaction(
+                        rowIndex = 0,
+                        date = date,
+                        info = info,
+                        amount = -parsedAmount,
+                        category = TransactionCategory.TRANSFER,
+                        account = selectedAccount
+                    )
+                    val destination = Transaction(
+                        rowIndex = 0,
+                        date = date,
+                        info = info,
+                        amount = parsedAmount,
+                        category = TransactionCategory.TRANSFER,
+                        account = transferToAccount!!
+                    )
+                    onSaveTransfer(source, destination)
+                } else {
+                    val resolvedActiveMonths = if (category == TransactionCategory.FIXED_COST && activeMonths.isNotEmpty()) {
+                        activeMonths.sorted()
+                    } else null
+                    onSave(
+                        Transaction(
+                            rowIndex = existingTransaction?.rowIndex ?: 0,
+                            date = date,
+                            info = info,
+                            amount = signedAmount,
+                            category = category,
+                            account = selectedAccount,
+                            activeMonths = resolvedActiveMonths
+                        ),
+                        if (showLinkPicker) selectedLinkOption.action else null
+                    )
+                }
+            }
+
+            if (showReflectionPrompt) {
+                SpendingReflectionDialog(
+                    amount = parsedAmount,
+                    onSaveAnyway = {
+                        showReflectionPrompt = false
+                        performSave()
+                    },
+                    onReconsider = { showReflectionPrompt = false }
+                )
+            }
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -417,47 +548,10 @@ fun AddEditTransactionSheet(
 
                 Button(
                     onClick = {
-                        val signedAmount = when (category) {
-                            TransactionCategory.INCOME,
-                            TransactionCategory.SALARY,
-                            TransactionCategory.RECURRING_INCOME -> parsedAmount
-                            else -> -parsedAmount
-                        }
-
-                        if (isTransfer && !isEdit && transferToAccount != null) {
-                            val source = Transaction(
-                                rowIndex = 0,
-                                date = date,
-                                info = info,
-                                amount = -parsedAmount,
-                                category = TransactionCategory.TRANSFER,
-                                account = selectedAccount
-                            )
-                            val destination = Transaction(
-                                rowIndex = 0,
-                                date = date,
-                                info = info,
-                                amount = parsedAmount,
-                                category = TransactionCategory.TRANSFER,
-                                account = transferToAccount!!
-                            )
-                            onSaveTransfer(source, destination)
-                        } else {
-                            val resolvedActiveMonths = if (category == TransactionCategory.FIXED_COST && activeMonths.isNotEmpty()) {
-                                activeMonths.sorted()
-                            } else null
-                            onSave(
-                                Transaction(
-                                    rowIndex = existingTransaction?.rowIndex ?: 0,
-                                    date = date,
-                                    info = info,
-                                    amount = signedAmount,
-                                    category = category,
-                                    account = selectedAccount,
-                                    activeMonths = resolvedActiveMonths
-                                )
-                            )
-                        }
+                        val needsReflection = !isEdit && spendingPromptEnabled &&
+                            category == TransactionCategory.ONE_OFF_COST &&
+                            parsedAmount >= spendingPromptThreshold
+                        if (needsReflection) showReflectionPrompt = true else performSave()
                     },
                     modifier = Modifier.weight(1f),
                     enabled = saveEnabled
@@ -465,6 +559,29 @@ fun AddEditTransactionSheet(
             }
         }
     }
+}
+
+@Composable
+private fun SpendingReflectionDialog(amount: Double, onSaveAnyway: () -> Unit, onReconsider: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onReconsider,
+        title = { Text("Before you spend ${amount.toCurrencyString()}…") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Do you really need this right now?")
+                Text("Would waiting 24 hours change your mind?")
+                Text("Is there a cheaper way to get the same thing?")
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onSaveAnyway) { Text("Save anyway") }
+        },
+        dismissButton = {
+            TextButton(onClick = onReconsider, colors = ButtonDefaults.textButtonColors(contentColor = ExpenseRed)) {
+                Text("Let me reconsider")
+            }
+        }
+    )
 }
 
 private val MONTH_NAMES = listOf("Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec")

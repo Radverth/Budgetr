@@ -32,7 +32,11 @@ data class SettingsUiState(
     val reminderEnabled: Boolean = false,
     val reminderHour: Int = 20,
     val reminderMinute: Int = 0,
-    val showTimePicker: Boolean = false
+    val showTimePicker: Boolean = false,
+    val spendingPromptEnabled: Boolean = true,
+    val spendingPromptThreshold: Double = 20.0,
+    val showSpendingPromptThresholdDialog: Boolean = false,
+    val spendingPromptThresholdInput: String = ""
 )
 
 @HiltViewModel
@@ -52,7 +56,9 @@ class SettingsViewModel @Inject constructor(
             payDay = prefs.getPayDay(),
             reminderEnabled = prefs.isReminderEnabled(),
             reminderHour = prefs.getReminderHour(),
-            reminderMinute = prefs.getReminderMinute()
+            reminderMinute = prefs.getReminderMinute(),
+            spendingPromptEnabled = prefs.isSpendingPromptEnabled(),
+            spendingPromptThreshold = prefs.getSpendingPromptThreshold()
         )
     )
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
@@ -130,6 +136,25 @@ class SettingsViewModel @Inject constructor(
         if (_uiState.value.reminderEnabled) {
             ReminderScheduler.schedule(context, hour, minute)
         }
+    }
+
+    fun setSpendingPromptEnabled(enabled: Boolean) {
+        prefs.setSpendingPromptEnabled(enabled)
+        _uiState.update { it.copy(spendingPromptEnabled = enabled) }
+    }
+
+    fun showSpendingPromptThresholdDialog() = _uiState.update {
+        it.copy(showSpendingPromptThresholdDialog = true, spendingPromptThresholdInput = it.spendingPromptThreshold.toString())
+    }
+
+    fun dismissSpendingPromptThresholdDialog() = _uiState.update { it.copy(showSpendingPromptThresholdDialog = false) }
+
+    fun setSpendingPromptThresholdInput(value: String) = _uiState.update { it.copy(spendingPromptThresholdInput = value) }
+
+    fun confirmSpendingPromptThreshold() {
+        val amount = _uiState.value.spendingPromptThresholdInput.toDoubleOrNull() ?: return
+        prefs.setSpendingPromptThreshold(amount)
+        _uiState.update { it.copy(spendingPromptThreshold = amount, showSpendingPromptThresholdDialog = false) }
     }
 
     fun signOut(onComplete: () -> Unit) {
