@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.budgetr.app.util.AuthManager
 import com.budgetr.app.util.PreferencesManager
 import com.google.android.gms.auth.GoogleAuthUtil
+import com.google.android.gms.auth.UserRecoverableAuthException
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.google.android.gms.common.api.ApiException
@@ -65,6 +66,16 @@ class LoginViewModel @Inject constructor(
             } catch (e: ApiException) {
                 _uiState.update {
                     it.copy(isLoading = false, error = "Sign-in failed: ${e.statusCode}")
+                }
+            } catch (e: UserRecoverableAuthException) {
+                // Google didn't grant Sheets/Drive access even though the consent screen asked
+                // for it — happens with e.g. Workspace accounts an admin has restricted. Retrying
+                // the same flow won't help; the user needs a different account or admin approval.
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        error = "Google didn't grant access to Sheets/Drive for this account. Try a different account, or ask your Google Workspace admin to allow it."
+                    )
                 }
             } catch (e: Exception) {
                 _uiState.update {
