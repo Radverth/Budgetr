@@ -88,7 +88,7 @@ class InsightsViewModel @Inject constructor(
                 )
 
                 val limitsByTag = envelopes.associate { it.tag.lowercase() to it.limit }
-                val tags = HistoryCalculator.tagInsights(history, SpendTags.oneOffSpendByTag(transactions))
+                val tags = HistoryCalculator.tagInsights(history, SpendTags.oneOffSpendByTag(transactions, period))
                     .map { TagInsightUiItem(it, limitsByTag[it.tag.lowercase()]) }
 
                 InsightsUiState(

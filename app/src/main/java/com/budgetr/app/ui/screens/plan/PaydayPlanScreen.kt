@@ -120,7 +120,7 @@ fun PaydayPlanScreen(onNavigateBack: () -> Unit, viewModel: PaydayPlanViewModel 
                         modifier = Modifier.padding(top = 8.dp)
                     )
                     Text(
-                        text = "Set £0 to remove a category's budget.",
+                        text = "Set £0 to remove a category's budget. Leave a box empty to keep it as it is.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )

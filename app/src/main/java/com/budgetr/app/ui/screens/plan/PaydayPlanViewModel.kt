@@ -42,11 +42,11 @@ data class PaydayPlanUiState(
 ) {
     val totals: PaydayPlanTotals
         get() = PaydayPlanTotals(
-            income = incomeInput.toDoubleOrNull() ?: 0.0,
+            income = PaydayPlanCalculator.parseAmount(incomeInput) ?: 0.0,
             fixedCosts = fixedCosts,
             goals = if (includeGoals) goalContributions else 0.0,
             debts = if (includeDebts) debtMinimums else 0.0,
-            assigned = lines.sumOf { it.amountInput.toDoubleOrNull()?.coerceAtLeast(0.0) ?: 0.0 }
+            assigned = lines.sumOf { PaydayPlanCalculator.parseAmount(it.amountInput)?.coerceAtLeast(0.0) ?: 0.0 }
         )
 
     /** Tags that could still be added to the plan. */
@@ -128,7 +128,7 @@ class PaydayPlanViewModel @Inject constructor(
         val left = state.totals.leftToAssign
         state.copy(lines = state.lines.map { line ->
             if (line.tag != tag) return@map line
-            val current = line.amountInput.toDoubleOrNull() ?: 0.0
+            val current = PaydayPlanCalculator.parseAmount(line.amountInput) ?: 0.0
             line.copy(amountInput = formatAmount((current + left).coerceAtLeast(0.0)))
         })
     }
@@ -141,7 +141,8 @@ class PaydayPlanViewModel @Inject constructor(
             try {
                 val existing = budgetRepository.getEnvelopes().first().associateBy { it.tag.lowercase() }
                 state.lines.forEach { line ->
-                    val amount = line.amountInput.toDoubleOrNull() ?: 0.0
+                    // Blank or unreadable leaves the budget as it is; only an explicit 0 removes it
+                    val amount = PaydayPlanCalculator.parseAmount(line.amountInput) ?: return@forEach
                     val current = existing[line.tag.lowercase()]
                     if (amount > 0) {
                         budgetRepository.setEnvelope(line.tag, amount, rollover = current?.rollover ?: false)

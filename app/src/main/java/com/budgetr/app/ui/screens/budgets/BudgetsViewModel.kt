@@ -52,7 +52,9 @@ data class EnvelopeDialogState(
     val originalTag: String? = null,
     val tag: String = "",
     val limitInput: String = "",
-    val rollover: Boolean = false
+    val rollover: Boolean = false,
+    /** Shown inside the dialog, since a snackbar would sit behind it. */
+    val error: String? = null
 )
 
 private data class BudgetsData(
@@ -176,12 +178,17 @@ class BudgetsViewModel @Inject constructor(
         val dialog = _uiState.value.envelopeDialog ?: return
         val tag = SpendTags.normalise(dialog.tag) ?: return
         val limit = dialog.limitInput.toDoubleOrNull()?.takeIf { it > 0 } ?: return
+        // Typing the name of a different category that already has a budget would replace it
+        val clash = _uiState.value.envelopes.map { it.envelope.tag }.firstOrNull { existing ->
+            existing.equals(tag, ignoreCase = true) && !existing.equals(dialog.originalTag, ignoreCase = true)
+        }
+        if (clash != null) {
+            updateEnvelopeDialog { it.copy(error = "$clash already has a budget. Edit that one instead.") }
+            return
+        }
         viewModelScope.launch {
             try {
-                if (dialog.originalTag != null && !dialog.originalTag.equals(tag, ignoreCase = true)) {
-                    budgetRepository.deleteEnvelope(dialog.originalTag)
-                }
-                budgetRepository.setEnvelope(tag, limit, dialog.rollover)
+                budgetRepository.setEnvelope(tag, limit, dialog.rollover, renameFrom = dialog.originalTag)
                 _uiState.update { it.copy(envelopeDialog = null, successMessage = "$tag budget saved") }
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = e.message) }

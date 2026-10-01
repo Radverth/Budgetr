@@ -21,15 +21,18 @@ fun spendForCategory(
     month: Int = Calendar.getInstance().get(Calendar.MONTH) + 1,
     period: PayPeriod? = null
 ): Double {
-    val fmt = dateFormat()
     return transactions
         .filter { it.category == category && (it.activeMonths == null || it.activeMonths.contains(month)) }
-        .filter { tx ->
-            if (period == null || tx.category == TransactionCategory.FIXED_COST) return@filter true
-            val date = runCatching { fmt.parse(tx.date) }.getOrNull() ?: return@filter true
-            !date.before(period.start) && date.before(period.nextPayday)
-        }
+        .filter { tx -> tx.category == TransactionCategory.FIXED_COST || isDatedInPeriod(tx, period) }
         .sumOf { kotlin.math.abs(it.amount) }
+}
+
+/** True if [tx] is dated inside [period], or there's no period to check. Undated or
+ *  unreadable rows count as inside, so nothing silently drops out of a total. */
+fun isDatedInPeriod(tx: Transaction, period: PayPeriod?): Boolean {
+    if (period == null) return true
+    val date = runCatching { dateFormat().parse(tx.date) }.getOrNull() ?: return true
+    return !date.before(period.start) && date.before(period.nextPayday)
 }
 
 /** Pure calculations behind the category budget caps shown on Home and the Budgets screen. */
