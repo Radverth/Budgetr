@@ -64,7 +64,18 @@ data class TransactionsUiState(
     val savingsGoals: List<SavingsGoal> = emptyList(),
     val spendingPromptEnabled: Boolean = true,
     val spendingPromptThreshold: Double = 20.0
-)
+) {
+    internal fun withTransactions(filtered: List<Transaction>): TransactionsUiState = copy(
+        transactions = filtered,
+        selectedRows = selectedRows.intersect(filtered.filter {
+            it.account == selectedAccount && it.category == TransactionCategory.ONE_OFF_COST
+        }.map { it.rowIndex }.toSet())
+    )
+
+    internal fun withAccount(account: String): TransactionsUiState = copy(
+        selectedAccount = account, transactions = emptyList(), selectedRows = emptySet(), isSelecting = false
+    )
+}
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -167,14 +178,7 @@ class TransactionsViewModel @Inject constructor(
                     }
                 }
             }.collect { filtered ->
-                _uiState.update { state ->
-                    state.copy(
-                        transactions = filtered,
-                        selectedRows = state.selectedRows.intersect(filtered.filter {
-                            it.account == state.selectedAccount && it.category == TransactionCategory.ONE_OFF_COST
-                        }.map { it.rowIndex }.toSet())
-                    )
-                }
+                _uiState.update { it.withTransactions(filtered) }
             }
         }
     }
@@ -182,7 +186,7 @@ class TransactionsViewModel @Inject constructor(
     fun selectAccount(account: String) {
         if (_uiState.value.isAssigningCategory) return
         selectedAccountFlow.value = account
-        _uiState.update { it.copy(selectedAccount = account, transactions = emptyList(), selectedRows = emptySet(), isSelecting = false) }
+        _uiState.update { it.withAccount(account) }
         refresh(account)
     }
 
