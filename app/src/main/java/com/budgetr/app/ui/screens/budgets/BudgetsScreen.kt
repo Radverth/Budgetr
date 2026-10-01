@@ -325,7 +325,7 @@ private fun EnvelopeDialog(dialog: EnvelopeDialogState, availableTags: List<Stri
             ) {
                 OutlinedTextField(
                     value = dialog.tag,
-                    onValueChange = { value -> viewModel.updateEnvelopeDialog { it.copy(tag = value.take(24)) } },
+                    onValueChange = { value -> viewModel.updateEnvelopeDialog { it.copy(tag = value.take(24), error = null) } },
                     label = { Text("Category") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
@@ -337,7 +337,7 @@ private fun EnvelopeDialog(dialog: EnvelopeDialogState, availableTags: List<Stri
                     availableTags.forEach { tag ->
                         FilterChip(
                             selected = tag.equals(dialog.tag.trim(), ignoreCase = true),
-                            onClick = { viewModel.updateEnvelopeDialog { it.copy(tag = tag) } },
+                            onClick = { viewModel.updateEnvelopeDialog { it.copy(tag = tag, error = null) } },
                             label = { Text(tag, style = MaterialTheme.typography.labelMedium) }
                         )
                     }
@@ -364,6 +364,9 @@ private fun EnvelopeDialog(dialog: EnvelopeDialogState, availableTags: List<Stri
                         checked = dialog.rollover,
                         onCheckedChange = { checked -> viewModel.updateEnvelopeDialog { it.copy(rollover = checked) } }
                     )
+                }
+                dialog.error?.let { message ->
+                    Text(text = message, style = MaterialTheme.typography.bodySmall, color = ExpenseRed)
                 }
                 dialog.originalTag?.let { tag ->
                     TextButton(
