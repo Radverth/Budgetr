@@ -443,6 +443,16 @@ class SheetsRepositoryImpl @Inject constructor(
         // Snapshot current balances as rollover BEFORE clearing one-off costs,
         // so the carried-over amount reflects the true end-of-period balance.
         val balances = accountBalanceDao.getAllSync()
+        // Summarise the ending period now, before carryover re-dates recurring income into
+        // the new one; it's written to the History tab further down.
+        val endingPayPeriod = endingPeriod(lastProcessed, currentPeriodStart)
+        val endingSummary = endingPayPeriod?.let { period ->
+            HistoryCalculator.summarise(
+                transactions = transactionDao.getAllSync().map { it.toTransaction() },
+                period = period,
+                endBalance = balances.sumOf { it.remainingBalance }
+            )
+        }
         val today = SimpleDateFormat("dd/MM/yyyy", Locale.UK).format(java.util.Date())
         balances.forEach { entity ->
             balanceRolloverDao.insertOrReplace(
@@ -496,11 +506,10 @@ class SheetsRepositoryImpl @Inject constructor(
         // Only spending dated in the ending period counts; a cost already added for the new
         // period (e.g. from the widget before the app was opened) mustn't eat into the carry.
         val endingTransactions = transactionDao.getAllSync().map { it.toTransaction() }
-        val endingPeriod = endingPeriod(lastProcessed, currentPeriodStart)
         envelopeDao.getAllSync().forEach { entity ->
             if (entity.carriedForPeriod == currentPeriodStart) return@forEach
             val envelope = Envelope(entity.tag, entity.limitAmount, entity.rollover, entity.carriedOver)
-            val spent = EnvelopeCalculator.spent(endingTransactions, entity.tag, endingPeriod)
+            val spent = EnvelopeCalculator.spent(endingTransactions, entity.tag, endingPayPeriod)
             envelopeDao.upsert(
                 entity.copy(carriedOver = EnvelopeCalculator.nextCarry(envelope, spent), carriedForPeriod = currentPeriodStart)
             )
@@ -509,11 +518,7 @@ class SheetsRepositoryImpl @Inject constructor(
         // Save a summary of the ending period to the History tab, since its one-off costs are
         // about to go. A failure here aborts like the carryover above, so nothing is lost.
         if (spreadsheetId != null) {
-            recordPeriodSummary(
-                periodStart = lastProcessed,
-                nextPeriodStart = currentPeriodStart,
-                endBalance = balances.sumOf { it.remainingBalance }
-            )
+            endingSummary?.let { recordPeriodSummary(it) }
         }
 
         // Delete all one-off costs for the new pay period. Only reached if every account's
@@ -538,26 +543,16 @@ class SheetsRepositoryImpl @Inject constructor(
         periodSummaryDao.replaceAll(rows.drop(1).mapNotNull { PeriodSummaryRow.decode(it)?.toEntity() })
     }
 
-    /** Appends one History row for the period [periodStart]..day before [nextPeriodStart].
-     *  Skipped if that period already has a row, so a retried rollover doesn't add it twice. */
-    private suspend fun recordPeriodSummary(periodStart: String, nextPeriodStart: String, endBalance: Double) {
+    /** Appends [summary] to the History tab. Skipped if its period already has a row, so a
+     *  retried rollover doesn't add it twice. */
+    private suspend fun recordPeriodSummary(summary: PeriodSummary) {
         val spreadsheetId = prefs.getSpreadsheetId() ?: return
-        val fmt = SimpleDateFormat("dd/MM/yyyy", Locale.UK)
-        val start = runCatching { fmt.parse(periodStart) }.getOrNull() ?: return
-        val nextStart = runCatching { fmt.parse(nextPeriodStart) }.getOrNull() ?: return
-
         ensureSheetExists(HISTORY_SHEET, PeriodSummaryRow.HEADER)
         val existingStarts = api.getValues(spreadsheetId, "$HISTORY_SHEET!A:A").values
             ?.mapNotNull { it.firstOrNull()?.trim() }
             .orEmpty()
-        if (periodStart in existingStarts) return
+        if (summary.periodStart in existingStarts) return
 
-        val summary = HistoryCalculator.summarise(
-            transactions = transactionDao.getAllSync().map { it.toTransaction() },
-            start = start,
-            end = HistoryCalculator.dayBefore(nextStart),
-            endBalance = endBalance
-        )
         api.appendValues(spreadsheetId, "$HISTORY_SHEET!A:G", body = ValueRange(values = listOf(PeriodSummaryRow.encode(summary))))
         periodSummaryDao.insertAll(listOf(summary.toEntity()))
     }

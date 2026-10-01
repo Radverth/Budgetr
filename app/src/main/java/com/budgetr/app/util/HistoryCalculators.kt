@@ -66,27 +66,30 @@ object PeriodSummaryRow {
 /** Pure calculations behind the History tab and the Insights screen. */
 object HistoryCalculator {
 
-    /** Summarises the period [start]..[end] (inclusive) from the transactions still in the
-     *  Sheet at payday. Fixed costs use the active-months rule for the month the period ends
-     *  in, since most of a late-month pay period falls in that month. */
-    fun summarise(transactions: List<Transaction>, start: Date, end: Date, endBalance: Double): PeriodSummary {
+    /** Summarises the ending [period] from the transactions still in the Sheet at payday,
+     *  before anything is re-dated. One-off costs and recurring income only count when dated
+     *  inside the period, so costs already added for the new period stay out. Salary and
+     *  other income rows count as they do on Home. Fixed costs use the active-months rule for
+     *  the month the period ends in, since most of a late-month pay period falls in it. */
+    fun summarise(transactions: List<Transaction>, period: PayPeriod, endBalance: Double): PeriodSummary {
+        val end = dayBefore(period.nextPayday)
         val endMonth = Calendar.getInstance().apply { time = end }.get(Calendar.MONTH) + 1
         val income = transactions
             .filter {
                 it.category == TransactionCategory.INCOME ||
                     it.category == TransactionCategory.SALARY ||
-                    it.category == TransactionCategory.RECURRING_INCOME
+                    (it.category == TransactionCategory.RECURRING_INCOME && isDatedInPeriod(it, period))
             }
             .sumOf { it.amount }
         val fmt = historyDateFormat()
         return PeriodSummary(
-            periodStart = fmt.format(start),
+            periodStart = fmt.format(period.start),
             periodEnd = fmt.format(end),
             income = income,
             fixedCosts = spendForCategory(transactions, TransactionCategory.FIXED_COST, endMonth),
-            oneOffCosts = spendForCategory(transactions, TransactionCategory.ONE_OFF_COST, endMonth),
+            oneOffCosts = spendForCategory(transactions, TransactionCategory.ONE_OFF_COST, endMonth, period),
             endBalance = endBalance,
-            byTag = SpendTags.oneOffSpendByTag(transactions)
+            byTag = SpendTags.oneOffSpendByTag(transactions, period)
         )
     }
 
