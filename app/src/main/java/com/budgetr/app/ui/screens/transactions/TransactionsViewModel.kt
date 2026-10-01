@@ -65,16 +65,23 @@ data class TransactionsUiState(
     val spendingPromptEnabled: Boolean = true,
     val spendingPromptThreshold: Double = 20.0
 ) {
-    internal fun withTransactions(filtered: List<Transaction>): TransactionsUiState = copy(
-        transactions = filtered,
-        selectedRows = selectedRows.intersect(filtered.filter {
-            it.account == selectedAccount && it.category == TransactionCategory.ONE_OFF_COST
-        }.map { it.rowIndex }.toSet())
-    )
+    /** Keeps a selected row only while the exact same transaction is still in it. Deleting a
+     *  row shifts the ones below up, so a row number alone could point at a different cost. */
+    internal fun withTransactions(filtered: List<Transaction>): TransactionsUiState {
+        val selectedBefore = transactions.filter { it.account == selectedAccount && it.rowIndex in selectedRows }
+            .associateBy { it.rowIndex }
+        val stillSelected = filtered.filter {
+            it.account == selectedAccount && it.category == TransactionCategory.ONE_OFF_COST &&
+                selectedBefore[it.rowIndex] == it
+        }.map { it.rowIndex }.toSet()
+        return copy(transactions = filtered, selectedRows = stillSelected)
+    }
 
-    internal fun withAccount(account: String): TransactionsUiState = copy(
-        selectedAccount = account, transactions = emptyList(), selectedRows = emptySet(), isSelecting = false
-    )
+    /** Re-picking the current account keeps its cached rows (useful offline); a different
+     *  account starts with an empty list and no selection. */
+    internal fun withAccount(account: String): TransactionsUiState =
+        if (account == selectedAccount) this
+        else copy(selectedAccount = account, transactions = emptyList(), selectedRows = emptySet(), isSelecting = false)
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -284,7 +291,7 @@ class TransactionsViewModel @Inject constructor(
                 repository.assignSpendingCategory(selected, tag)
                 _uiState.update { it.copy(
                     isSelecting = false, selectedRows = emptySet(), showBulkCategoryDialog = false,
-                    message = "Updated spending category for ${selected.size} transactions."
+                    message = "Updated spending category for ${transactionCount(selected.size)}."
                 ) }
             } catch (e: CancellationException) {
                 throw e
@@ -299,6 +306,8 @@ class TransactionsViewModel @Inject constructor(
     }
 
     fun clearMessage() = _uiState.update { it.copy(message = null) }
+
+    private fun transactionCount(n: Int) = if (n == 1) "1 transaction" else "$n transactions"
 
     fun showAddSheet() = _uiState.update { it.copy(showAddSheet = true, transactionToEdit = null) }
     fun showEditSheet(transaction: Transaction) = _uiState.update { it.copy(transactionToEdit = transaction, showAddSheet = true) }

@@ -93,7 +93,10 @@ fun TransactionsScreen(
         var tag by remember { mutableStateOf<String?>(null) }
         AlertDialog(
             onDismissRequest = viewModel::dismissBulkCategoryDialog,
-            title = { Text("Categorise ${uiState.selectedRows.size} transactions") },
+            title = {
+                val n = uiState.selectedRows.size
+                Text(if (n == 1) "Categorise 1 transaction" else "Categorise $n transactions")
+            },
             text = {
                 Column(
                     modifier = Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState()),
