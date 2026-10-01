@@ -8,8 +8,14 @@ import org.junit.Test
 
 class SpendTagsTest {
 
-    private fun tx(info: String, amount: Double, tag: String?, category: TransactionCategory = TransactionCategory.ONE_OFF_COST) =
-        Transaction(rowIndex = 0, date = "01/10/2026", info = info, amount = amount, category = category, account = "A", tag = tag)
+    private fun tx(
+        info: String,
+        amount: Double,
+        tag: String?,
+        category: TransactionCategory = TransactionCategory.ONE_OFF_COST,
+        rowIndex: Int = 0,
+        date: String = "01/10/2026"
+    ) = Transaction(rowIndex = rowIndex, date = date, info = info, amount = amount, category = category, account = "A", tag = tag)
 
     @Test
     fun `blank tags are treated as none`() {
@@ -29,6 +35,31 @@ class SpendTagsTest {
             listOf(tx("Tesco", -5.0, "Shopping"), tx(" tesco ", -8.0, "Groceries"), tx("Bus", -2.0, null))
         )
         assertEquals(mapOf("tesco" to "Groceries"), suggestions)
+    }
+
+    @Test
+    fun `suggestions prefer the newest row even when listed newest first`() {
+        val suggestions = SpendTags.suggestionsByInfo(
+            listOf(tx("Tesco", -8.0, "Groceries", rowIndex = 9), tx("Tesco", -5.0, "Shopping", rowIndex = 2))
+        )
+        assertEquals("Groceries", suggestions["tesco"])
+    }
+
+    @Test
+    fun `custom tags group regardless of case`() {
+        val result = SpendTags.oneOffSpendByTag(listOf(tx("a", -10.0, "Pets"), tx("b", -5.0, "pets")))
+        assertEquals(listOf(TagSpend("Pets", 15.0)), result)
+    }
+
+    @Test
+    fun `spend by tag can be limited to a pay period`() {
+        val fmt = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.UK)
+        val period = PayPeriod(fmt.parse("25/09/2026")!!, fmt.parse("26/10/2026")!!)
+        val result = SpendTags.oneOffSpendByTag(
+            listOf(tx("a", -10.0, "Fun", date = "01/10/2026"), tx("b", -7.0, "Fun", date = "26/10/2026")),
+            period
+        )
+        assertEquals(listOf(TagSpend("Fun", 10.0)), result)
     }
 
     @Test

@@ -52,8 +52,13 @@ class HistoryCalculatorTest {
 
     private val fmt = SimpleDateFormat("dd/MM/yyyy", Locale.UK)
 
-    private fun tx(amount: Double, category: TransactionCategory, tag: String? = null, activeMonths: List<Int>? = null) =
-        Transaction(rowIndex = 0, date = "01/10/2026", info = "", amount = amount, category = category, account = "A", activeMonths = activeMonths, tag = tag)
+    private fun tx(
+        amount: Double,
+        category: TransactionCategory,
+        tag: String? = null,
+        activeMonths: List<Int>? = null,
+        date: String = "01/10/2026"
+    ) = Transaction(rowIndex = 0, date = date, info = "", amount = amount, category = category, account = "A", activeMonths = activeMonths, tag = tag)
 
     private fun summary(start: String, vararg byTag: TagSpend) =
         PeriodSummary(start, start, 0.0, 0.0, byTag.sumOf { it.amount }, 0.0, byTag.toList())
@@ -67,10 +72,12 @@ class HistoryCalculatorTest {
                 tx(-800.0, TransactionCategory.FIXED_COST),
                 tx(-60.0, TransactionCategory.FIXED_COST, activeMonths = listOf(3)),
                 tx(-30.0, TransactionCategory.ONE_OFF_COST, tag = "Fun"),
-                tx(-100.0, TransactionCategory.TRANSFER)
+                tx(-100.0, TransactionCategory.TRANSFER),
+                // Already in the next period: left out
+                tx(-45.0, TransactionCategory.ONE_OFF_COST, tag = "Fun", date = "26/10/2026"),
+                tx(75.0, TransactionCategory.RECURRING_INCOME, date = "09/11/2026")
             ),
-            start = fmt.parse("25/09/2026")!!,
-            end = fmt.parse("25/10/2026")!!,
+            period = PayPeriod(fmt.parse("25/09/2026")!!, fmt.parse("26/10/2026")!!),
             endBalance = 120.0
         )
         assertEquals(2050.0, result.income, 0.001)

@@ -85,8 +85,9 @@ class BudgetRepositoryImpl @Inject constructor(
     override fun getEnvelopes(): Flow<List<Envelope>> =
         envelopeDao.getAll().map { entities -> entities.map { it.toModel() } }
 
-    override suspend fun setEnvelope(tag: String, limit: Double, rollover: Boolean) {
-        val existing = envelopeDao.getAllSync().find { it.tag.equals(tag, ignoreCase = true) }
+    override suspend fun setEnvelope(tag: String, limit: Double, rollover: Boolean, renameFrom: String?) {
+        val source = renameFrom ?: tag
+        val existing = envelopeDao.getAllSync().find { it.tag.equals(source, ignoreCase = true) }
         if (existing != null && existing.tag != tag) envelopeDao.delete(existing.tag)
         envelopeDao.upsert(
             EnvelopeEntity(
