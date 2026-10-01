@@ -13,5 +13,7 @@ data class TransactionEntity(
     val category: String,
     val account: String,
     /** Comma-separated month numbers (e.g. "1,6,12"). Null means active every month. */
-    val activeMonths: String? = null
+    val activeMonths: String? = null,
+    /** Optional spending category, e.g. "Groceries". Null means untagged. */
+    val tag: String? = null
 )

@@ -16,7 +16,9 @@ import com.budgetr.app.util.RecurringCostReviewCalculator
 import com.budgetr.app.util.SafeToSpend
 import com.budgetr.app.util.SafeToSpendCalculator
 import com.budgetr.app.util.SavingsGoalCalculator
+import com.budgetr.app.util.SpendTags
 import com.budgetr.app.util.SpendingTrend
+import com.budgetr.app.util.TagSpend
 import com.budgetr.app.util.SpendingTrendCalculator
 import com.budgetr.app.util.UpdateChecker
 import com.budgetr.app.util.spendForCategory
@@ -61,6 +63,7 @@ data class HomeUiState(
     val totalOutgoings: Double = 0.0,
     val totalFixedCosts: Double = 0.0,
     val totalOneOffCosts: Double = 0.0,
+    val oneOffByTag: List<TagSpend> = emptyList(),
     val totalAvailable: Double = 0.0,
     val safeToSpend: SafeToSpend? = null,
     val error: String? = null,
@@ -97,7 +100,8 @@ private data class SummaryData(
     val income: Double,
     val outgoings: Double,
     val fixedCosts: Double,
-    val oneOffCosts: Double
+    val oneOffCosts: Double,
+    val oneOffByTag: List<TagSpend>
 )
 
 @HiltViewModel
@@ -335,7 +339,10 @@ class HomeViewModel @Inject constructor(
                 val totalAvailable = adjustedBalances.sumOf { it.remainingBalance }
                 val daysLeft = PayPeriodCalculator.current(prefs.getPayDay(), today).daysUntilPayday(today)
                 val safeToSpend = SafeToSpendCalculator.calculate(totalAvailable, daysLeft)
-                SummaryData(adjustedBalances, totalAvailable, safeToSpend, income, outgoings, fixedCosts, oneOffCosts)
+                SummaryData(
+                    adjustedBalances, totalAvailable, safeToSpend, income, outgoings, fixedCosts, oneOffCosts,
+                    SpendTags.oneOffSpendByTag(allTx)
+                )
             }.collect { data ->
                 _uiState.update {
                     it.copy(
@@ -344,6 +351,7 @@ class HomeViewModel @Inject constructor(
                         totalOutgoings = data.outgoings,
                         totalFixedCosts = data.fixedCosts,
                         totalOneOffCosts = data.oneOffCosts,
+                        oneOffByTag = data.oneOffByTag,
                         totalAvailable = data.totalAvailable,
                         safeToSpend = data.safeToSpend
                     )

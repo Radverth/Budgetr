@@ -68,6 +68,7 @@ import com.budgetr.app.ui.theme.IncomeGreen
 import com.budgetr.app.ui.theme.heroGradient
 import com.budgetr.app.util.SafeToSpend
 import com.budgetr.app.util.SpendingTrend
+import com.budgetr.app.util.TagSpend
 import com.budgetr.app.util.toCurrencyString
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -206,6 +207,7 @@ fun HomeScreen(
                                 totalIncome = uiState.totalIncome,
                                 totalFixedCosts = uiState.totalFixedCosts,
                                 totalOneOffCosts = uiState.totalOneOffCosts,
+                                oneOffByTag = uiState.oneOffByTag,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(horizontal = 16.dp)
@@ -409,6 +411,7 @@ private fun SpendingBreakdownCard(
     totalIncome: Double,
     totalFixedCosts: Double,
     totalOneOffCosts: Double,
+    oneOffByTag: List<TagSpend>,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -450,6 +453,58 @@ private fun SpendingBreakdownCard(
                         label = "Remaining",
                         amount = remaining,
                         color = IncomeGreen
+                    )
+                }
+            }
+            // Only worth showing once something has been tagged
+            if (oneOffByTag.any { it.tag != null }) {
+                Spacer(Modifier.height(20.dp))
+                OneOffByTagBars(oneOffByTag)
+            }
+        }
+    }
+}
+
+/** One-off spend per spending category as simple horizontal bars, largest first. */
+@Composable
+private fun OneOffByTagBars(byTag: List<TagSpend>) {
+    val maxAmount = byTag.maxOf { it.amount }.coerceAtLeast(0.01)
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(
+            text = "One-off costs by category",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+        )
+        byTag.forEach { item ->
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(
+                        text = item.tag ?: "Untagged",
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        text = item.amount.toCurrencyString(),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth((item.amount / maxAmount).toFloat().coerceIn(0f, 1f))
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(if (item.tag == null) ExpenseRed.copy(alpha = 0.4f) else ExpenseRed)
                     )
                 }
             }

@@ -26,6 +26,9 @@ object DatabaseModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): BudgetrDatabase =
         Room.databaseBuilder(context, BudgetrDatabase::class.java, "budgetr.db")
+            // Real migrations keep device-only data (budget caps, reviews) across updates;
+            // the destructive fallback only covers versions older than these.
+            .addMigrations(BudgetrDatabase.MIGRATION_6_7)
             .fallbackToDestructiveMigration()
             .build()
 

@@ -2,6 +2,8 @@ package com.budgetr.app.data.local
 
 import androidx.room.Database
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.budgetr.app.data.local.dao.AccountBalanceDao
 import com.budgetr.app.data.local.dao.BalanceRolloverDao
 import com.budgetr.app.data.local.dao.CategoryBudgetDao
@@ -30,7 +32,7 @@ import com.budgetr.app.data.local.entity.TransactionEntity
         RecurringCostReviewEntity::class,
         GoalCategoryLinkEntity::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 abstract class BudgetrDatabase : RoomDatabase() {
@@ -42,4 +44,13 @@ abstract class BudgetrDatabase : RoomDatabase() {
     abstract fun categoryBudgetDao(): CategoryBudgetDao
     abstract fun recurringCostReviewDao(): RecurringCostReviewDao
     abstract fun goalCategoryLinkDao(): GoalCategoryLinkDao
+
+    companion object {
+        /** Adds the optional spending category to cached transactions. */
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE transactions ADD COLUMN tag TEXT")
+            }
+        }
+    }
 }

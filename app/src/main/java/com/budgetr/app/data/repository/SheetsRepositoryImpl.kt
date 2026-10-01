@@ -34,6 +34,7 @@ import com.budgetr.app.data.model.Transaction
 import com.budgetr.app.data.model.TransactionCategory
 import com.budgetr.app.util.PayPeriodCalculator
 import com.budgetr.app.util.PreferencesManager
+import com.budgetr.app.util.SpendTags
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
@@ -62,6 +63,9 @@ class SheetsRepositoryImpl @Inject constructor(
     // Cache of sheet title -> numeric sheetId (gid) from the Sheets API
     private var sheetIdCache: Map<String, Int> = emptyMap()
     private val sheetIdMutex = Mutex()
+
+    // Accounts whose column G header has been written this session (see ensureTagHeader)
+    private val tagHeaderWritten = mutableSetOf<String>()
 
     private suspend fun resolveSheetIdByName(name: String): Int? = sheetIdMutex.withLock {
         sheetIdCache[name]?.let { return@withLock it }
@@ -98,7 +102,7 @@ class SheetsRepositoryImpl @Inject constructor(
 
     override suspend fun refreshTransactions(account: String) {
         val spreadsheetId = prefs.getSpreadsheetId() ?: return
-        val range = "$account!A:F"
+        val range = "$account!A:G"
         val response = api.getValues(spreadsheetId, range)
         val rows = response.values ?: return
 
@@ -112,7 +116,8 @@ class SheetsRepositoryImpl @Inject constructor(
                 amount = row.getOrElse(2) { "0" }.replace("[£,]".toRegex(), "").toDoubleOrNull() ?: 0.0,
                 category = TransactionCategory.fromString(row.getOrElse(3) { "" }).name,
                 account = account,
-                activeMonths = row.getOrElse(5) { "" }.ifBlank { null }
+                activeMonths = row.getOrElse(5) { "" }.ifBlank { null },
+                tag = SpendTags.normalise(row.getOrElse(6) { "" })
             )
         }
 
@@ -149,7 +154,7 @@ class SheetsRepositoryImpl @Inject constructor(
 
     override suspend fun addTransaction(transaction: Transaction) {
         val spreadsheetId = prefs.getSpreadsheetId() ?: return
-        val range = "${transaction.account}!A:F"
+        val range = "${transaction.account}!A:G"
         val rounded = roundedAmount(transaction.amount, transaction.category)
         val activeMonthsStr = transaction.activeMonths?.joinToString(",") ?: ""
         val row = listOf(listOf(
@@ -158,15 +163,17 @@ class SheetsRepositoryImpl @Inject constructor(
             transaction.amount.toString(),
             transaction.category.displayName,
             rounded.toString(),
-            activeMonthsStr
+            activeMonthsStr,
+            SpendTags.normalise(transaction.tag) ?: ""
         ))
         api.appendValues(spreadsheetId, range, body = ValueRange(values = row))
+        ensureTagHeader(transaction)
         refreshTransactions(transaction.account)
     }
 
     override suspend fun updateTransaction(transaction: Transaction) {
         val spreadsheetId = prefs.getSpreadsheetId() ?: return
-        val range = "${transaction.account}!A${transaction.rowIndex}:F${transaction.rowIndex}"
+        val range = "${transaction.account}!A${transaction.rowIndex}:G${transaction.rowIndex}"
         val rounded = roundedAmount(transaction.amount, transaction.category)
         val activeMonthsStr = transaction.activeMonths?.joinToString(",") ?: ""
         val row = listOf(listOf(
@@ -175,10 +182,21 @@ class SheetsRepositoryImpl @Inject constructor(
             transaction.amount.toString(),
             transaction.category.displayName,
             rounded.toString(),
-            activeMonthsStr
+            activeMonthsStr,
+            SpendTags.normalise(transaction.tag) ?: ""
         ))
         api.updateValues(spreadsheetId, range, body = ValueRange(values = row))
+        ensureTagHeader(transaction)
         refreshTransactions(transaction.account)
+    }
+
+    /** Sheets made before tags existed have no header over column G. Label it the first time
+     *  a tagged transaction is written to that account this session. */
+    private suspend fun ensureTagHeader(transaction: Transaction) {
+        if (SpendTags.normalise(transaction.tag) == null || transaction.account in tagHeaderWritten) return
+        val spreadsheetId = prefs.getSpreadsheetId() ?: return
+        api.updateValues(spreadsheetId, "${transaction.account}!G1", body = ValueRange(values = listOf(listOf("Tag"))))
+        tagHeaderWritten += transaction.account
     }
 
     override suspend fun deleteTransaction(transaction: Transaction) {
@@ -258,9 +276,9 @@ class SheetsRepositoryImpl @Inject constructor(
         api.appendValues(spreadsheetId, "Cover Sheet!A:F", body = ValueRange(values = accountRows))
 
         // Add headers to each transaction sheet
-        val txHeaders = listOf(listOf("Date", "Info", "Amount", "Category", "RoundedAmount", "ActiveMonths"))
+        val txHeaders = listOf(listOf("Date", "Info", "Amount", "Category", "RoundedAmount", "ActiveMonths", "Tag"))
         listOf("Monzo", "Halifax Debit Card", "Halifax Credit Card").forEach { sheet ->
-            api.updateValues(spreadsheetId, "$sheet!A1:F1", body = ValueRange(values = txHeaders))
+            api.updateValues(spreadsheetId, "$sheet!A1:G1", body = ValueRange(values = txHeaders))
         }
 
         return spreadsheetId
@@ -329,8 +347,8 @@ class SheetsRepositoryImpl @Inject constructor(
         )
 
         // Add header row to the new sheet
-        val headers = listOf(listOf("Date", "Info", "Amount", "Category", "RoundedAmount"))
-        api.appendValues(spreadsheetId, "$accountName!A1:E1", body = ValueRange(values = headers))
+        val headers = listOf(listOf("Date", "Info", "Amount", "Category", "RoundedAmount", "ActiveMonths", "Tag"))
+        api.appendValues(spreadsheetId, "$accountName!A1:G1", body = ValueRange(values = headers))
 
         // Add account to Cover Sheet
         val coverRow = listOf(listOf(accountName, "0", "0", "0", "0", ""))
@@ -646,7 +664,8 @@ class SheetsRepositoryImpl @Inject constructor(
         amount = amount,
         category = TransactionCategory.fromString(category),
         account = account,
-        activeMonths = activeMonths?.split(",")?.mapNotNull { it.trim().toIntOrNull() }?.ifEmpty { null }
+        activeMonths = activeMonths?.split(",")?.mapNotNull { it.trim().toIntOrNull() }?.ifEmpty { null },
+        tag = tag
     )
 
     private fun AccountBalanceEntity.toAccountBalance() = AccountBalance(
