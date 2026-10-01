@@ -67,7 +67,11 @@ import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BudgetsScreen(onNavigateBack: () -> Unit, viewModel: BudgetsViewModel = hiltViewModel()) {
+fun BudgetsScreen(
+    onNavigateBack: () -> Unit,
+    onNavigateToPaydayPlan: () -> Unit,
+    viewModel: BudgetsViewModel = hiltViewModel()
+) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -160,10 +164,15 @@ fun BudgetsScreen(onNavigateBack: () -> Unit, viewModel: BudgetsViewModel = hilt
                 EnvelopeCard(status = status, onEdit = { viewModel.showEditEnvelope(status.envelope.tag) })
             }
             item {
-                OutlinedButton(onClick = viewModel::showAddEnvelope, modifier = Modifier.fillMaxWidth()) {
-                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Add category budget")
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = viewModel::showAddEnvelope, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Add category budget")
+                    }
+                    OutlinedButton(onClick = onNavigateToPaydayPlan, modifier = Modifier.fillMaxWidth()) {
+                        Text("Re-plan this pay period")
+                    }
                 }
             }
             item { SectionHeader("Overall caps") }

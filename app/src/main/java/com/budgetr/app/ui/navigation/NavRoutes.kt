@@ -16,4 +16,5 @@ object NavRoutes {
     // Reachable from Home, not a bottom nav tab
     const val BUDGETS = "budgets"
     const val INSIGHTS = "insights"
+    const val PAYDAY_PLAN = "payday_plan"
 }

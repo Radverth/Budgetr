@@ -68,6 +68,8 @@ data class HomeUiState(
     val oneOffByTag: List<TagSpend> = emptyList(),
     val totalAvailable: Double = 0.0,
     val safeToSpend: SafeToSpend? = null,
+    /** A new pay period started and its payday plan hasn't been done or skipped yet. */
+    val paydayPlanPending: Boolean = false,
     val error: String? = null,
     val successMessage: String? = null,
     val userName: String? = null,
@@ -246,7 +248,13 @@ class HomeViewModel @Inject constructor(
             try {
                 val wasReset = repository.checkAndProcessNewPayPeriod()
                 if (wasReset) {
-                    _uiState.update { it.copy(successMessage = "New pay period started — balances rolled over and one-off costs cleared") }
+                    prefs.setPaydayPlanPending(true)
+                    _uiState.update {
+                        it.copy(
+                            successMessage = "New pay period started — balances rolled over and one-off costs cleared",
+                            paydayPlanPending = true
+                        )
+                    }
                 }
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = "Couldn't start the new pay period (${e.message ?: "unknown error"}). It will retry next time you open the app.") }
@@ -390,6 +398,14 @@ class HomeViewModel @Inject constructor(
                 _uiState.update { it.copy(isRefreshing = false, isLoading = false) }
             }
         }
+    }
+
+    /** Re-reads the flag, since the plan screen clears it when the plan is saved. */
+    fun syncPaydayPlanPending() = _uiState.update { it.copy(paydayPlanPending = prefs.isPaydayPlanPending()) }
+
+    fun skipPaydayPlan() {
+        prefs.setPaydayPlanPending(false)
+        _uiState.update { it.copy(paydayPlanPending = false) }
     }
 
     fun clearError() = _uiState.update { it.copy(error = null) }

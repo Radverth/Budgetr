@@ -35,6 +35,7 @@ import com.budgetr.app.ui.screens.budgets.BudgetsScreen
 import com.budgetr.app.ui.screens.goals.GoalsScreen
 import com.budgetr.app.ui.screens.home.HomeScreen
 import com.budgetr.app.ui.screens.insights.InsightsScreen
+import com.budgetr.app.ui.screens.plan.PaydayPlanScreen
 import com.budgetr.app.ui.screens.settings.SettingsScreen
 import com.budgetr.app.ui.screens.transactions.TransactionsScreen
 
@@ -126,11 +127,26 @@ fun MainScreen(onSignOut: () -> Unit) {
                         navController.navigate(NavRoutes.INSIGHTS) {
                             launchSingleTop = true
                         }
+                    },
+                    onNavigateToPaydayPlan = {
+                        navController.navigate(NavRoutes.PAYDAY_PLAN) {
+                            launchSingleTop = true
+                        }
                     }
                 )
             }
             composable(NavRoutes.BUDGETS) {
-                BudgetsScreen(onNavigateBack = { navController.popBackStack() })
+                BudgetsScreen(
+                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateToPaydayPlan = {
+                        navController.navigate(NavRoutes.PAYDAY_PLAN) {
+                            launchSingleTop = true
+                        }
+                    }
+                )
+            }
+            composable(NavRoutes.PAYDAY_PLAN) {
+                PaydayPlanScreen(onNavigateBack = { navController.popBackStack() })
             }
             composable(NavRoutes.INSIGHTS) {
                 InsightsScreen(onNavigateBack = { navController.popBackStack() })

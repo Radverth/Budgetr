@@ -77,6 +77,7 @@ fun HomeScreen(
     onNavigateToAddTransaction: () -> Unit,
     onNavigateToBudgets: () -> Unit,
     onNavigateToInsights: () -> Unit,
+    onNavigateToPaydayPlan: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -89,6 +90,9 @@ fun HomeScreen(
             viewModel.clearError()
         }
     }
+
+    // Home leaves composition while the plan screen is open, so this re-runs on return
+    LaunchedEffect(Unit) { viewModel.syncPaydayPlanPending() }
 
     LaunchedEffect(uiState.successMessage) {
         uiState.successMessage?.let {
@@ -153,6 +157,16 @@ fun HomeScreen(
                             totalAvailable = uiState.totalAvailable,
                             topPadding = paddingValues.calculateTopPadding()
                         )
+                    }
+
+                    if (uiState.paydayPlanPending) {
+                        item {
+                            PaydayPlanPromptCard(
+                                onPlan = onNavigateToPaydayPlan,
+                                onSkip = viewModel::skipPaydayPlan,
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                            )
+                        }
                     }
 
                     val safeToSpend = uiState.safeToSpend
@@ -341,6 +355,32 @@ private fun HomeHeader(userName: String?, totalAvailable: Double, topPadding: Dp
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+        }
+    }
+}
+
+@Composable
+private fun PaydayPlanPromptCard(onPlan: () -> Unit, onSkip: () -> Unit, modifier: Modifier = Modifier) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                text = "It's payday: plan your money",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+            Text(
+                text = "Cover bills, goals and debts, then give the rest to your spending categories.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onPlan) { Text("Plan now") }
+                TextButton(onClick = onSkip) { Text("Not now") }
+            }
         }
     }
 }

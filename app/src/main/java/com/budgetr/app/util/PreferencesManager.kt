@@ -21,6 +21,9 @@ class PreferencesManager @Inject constructor(
         private const val KEY_REMINDER_MINUTE = "reminder_minute"
         private const val KEY_SPENDING_PROMPT_ENABLED = "spending_prompt_enabled"
         private const val KEY_SPENDING_PROMPT_THRESHOLD = "spending_prompt_threshold"
+        private const val KEY_PAYDAY_PLAN_PENDING = "payday_plan_pending"
+        private const val KEY_PLAN_INCLUDE_GOALS = "plan_include_goals"
+        private const val KEY_PLAN_INCLUDE_DEBTS = "plan_include_debts"
     }
 
     fun getAccessToken(): String? = prefs.getString(KEY_ACCESS_TOKEN, null)
@@ -63,6 +66,16 @@ class PreferencesManager @Inject constructor(
 
     fun getSpendingPromptThreshold(): Double = prefs.getFloat(KEY_SPENDING_PROMPT_THRESHOLD, 20f).toDouble()
     fun setSpendingPromptThreshold(amount: Double) = prefs.edit().putFloat(KEY_SPENDING_PROMPT_THRESHOLD, amount.toFloat()).apply()
+
+    /** Set when a new pay period starts; cleared once the payday plan is saved or skipped. */
+    fun isPaydayPlanPending(): Boolean = prefs.getBoolean(KEY_PAYDAY_PLAN_PENDING, false)
+    fun setPaydayPlanPending(pending: Boolean) = prefs.edit().putBoolean(KEY_PAYDAY_PLAN_PENDING, pending).apply()
+
+    fun isPlanIncludeGoals(): Boolean = prefs.getBoolean(KEY_PLAN_INCLUDE_GOALS, true)
+    fun setPlanIncludeGoals(include: Boolean) = prefs.edit().putBoolean(KEY_PLAN_INCLUDE_GOALS, include).apply()
+
+    fun isPlanIncludeDebts(): Boolean = prefs.getBoolean(KEY_PLAN_INCLUDE_DEBTS, true)
+    fun setPlanIncludeDebts(include: Boolean) = prefs.edit().putBoolean(KEY_PLAN_INCLUDE_DEBTS, include).apply()
 
     fun clearAll() = prefs.edit().clear().apply()
 }

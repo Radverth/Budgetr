@@ -60,9 +60,6 @@ import com.budgetr.app.ui.theme.IncomeGreen
 import com.budgetr.app.util.DebtPayoffCalculator
 import com.budgetr.app.util.SavingsGoalCalculator
 import com.budgetr.app.util.toCurrencyString
-import java.text.SimpleDateFormat
-import java.util.Locale
-import kotlin.math.max
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -199,7 +196,7 @@ private fun EmptyHint(text: String) {
 @Composable
 private fun SavingsGoalCard(goal: SavingsGoal, onEdit: () -> Unit, onDelete: () -> Unit) {
     val progress = SavingsGoalCalculator.progress(goal.savedAmount, goal.targetAmount)
-    val monthsRemaining = goal.targetDate?.let { monthsUntil(it) }
+    val monthsRemaining = goal.targetDate?.let { SavingsGoalCalculator.monthsUntil(it) }
     val suggestion = monthsRemaining?.let {
         SavingsGoalCalculator.suggestedMonthlyContribution(goal.savedAmount, goal.targetAmount, it)
     }
@@ -475,16 +472,6 @@ private fun DebtDialog(uiState: GoalsUiState, viewModel: GoalsViewModel) {
         },
         dismissButton = { TextButton(onClick = viewModel::dismissDebtDialog) { Text("Cancel") } }
     )
-}
-
-private fun monthsUntil(targetDate: String): Int? {
-    val fmt = SimpleDateFormat("dd/MM/yyyy", Locale.UK)
-    val target = runCatching { fmt.parse(targetDate) }.getOrNull() ?: return null
-    val now = java.util.Calendar.getInstance()
-    val then = java.util.Calendar.getInstance().apply { time = target }
-    val months = (then.get(java.util.Calendar.YEAR) - now.get(java.util.Calendar.YEAR)) * 12 +
-        (then.get(java.util.Calendar.MONTH) - now.get(java.util.Calendar.MONTH))
-    return max(months, 1)
 }
 
 private fun formatMonths(months: Int): String = when {

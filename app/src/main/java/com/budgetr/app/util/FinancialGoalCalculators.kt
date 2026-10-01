@@ -1,5 +1,10 @@
 package com.budgetr.app.util
 
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
+
 /** Pure calculations behind the savings goal and debt payoff screens. */
 object SavingsGoalCalculator {
 
@@ -17,6 +22,17 @@ object SavingsGoalCalculator {
         val remaining = target - saved
         if (remaining <= 0 || monthsRemaining <= 0) return null
         return remaining / monthsRemaining
+    }
+
+    /** Calendar months from [today] to [targetDate] (dd/MM/yyyy), at least 1. Null if the date
+     *  can't be read. */
+    fun monthsUntil(targetDate: String, today: Date = Date()): Int? {
+        val target = runCatching { SimpleDateFormat("dd/MM/yyyy", Locale.UK).parse(targetDate) }.getOrNull() ?: return null
+        val now = Calendar.getInstance().apply { time = today }
+        val then = Calendar.getInstance().apply { time = target }
+        val months = (then.get(Calendar.YEAR) - now.get(Calendar.YEAR)) * 12 +
+            (then.get(Calendar.MONTH) - now.get(Calendar.MONTH))
+        return months.coerceAtLeast(1)
     }
 }
 
