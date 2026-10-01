@@ -20,6 +20,7 @@ import com.budgetr.app.util.SpendTags
 import com.budgetr.app.util.spendForCategory
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -37,6 +38,12 @@ import javax.inject.Inject
 
 data class TransactionsUiState(
     val isRefreshing: Boolean = false,
+    val isSelecting: Boolean = false,
+    val selectedRows: Set<Int> = emptySet(),
+    val showBulkCategoryDialog: Boolean = false,
+    val isAssigningCategory: Boolean = false,
+    val bulkCategoryError: String? = null,
+    val message: String? = null,
     val accounts: List<String> = emptyList(),
     val selectedAccount: String? = null,
     val transactions: List<Transaction> = emptyList(),
@@ -57,7 +64,25 @@ data class TransactionsUiState(
     val savingsGoals: List<SavingsGoal> = emptyList(),
     val spendingPromptEnabled: Boolean = true,
     val spendingPromptThreshold: Double = 20.0
-)
+) {
+    /** Keeps a selected row only while the exact same transaction is still in it. Deleting a
+     *  row shifts the ones below up, so a row number alone could point at a different cost. */
+    internal fun withTransactions(filtered: List<Transaction>): TransactionsUiState {
+        val selectedBefore = transactions.filter { it.account == selectedAccount && it.rowIndex in selectedRows }
+            .associateBy { it.rowIndex }
+        val stillSelected = filtered.filter {
+            it.account == selectedAccount && it.category == TransactionCategory.ONE_OFF_COST &&
+                selectedBefore[it.rowIndex] == it
+        }.map { it.rowIndex }.toSet()
+        return copy(transactions = filtered, selectedRows = stillSelected)
+    }
+
+    /** Re-picking the current account keeps its cached rows (useful offline); a different
+     *  account starts with an empty list and no selection. */
+    internal fun withAccount(account: String): TransactionsUiState =
+        if (account == selectedAccount) this
+        else copy(selectedAccount = account, transactions = emptyList(), selectedRows = emptySet(), isSelecting = false)
+}
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -160,31 +185,35 @@ class TransactionsViewModel @Inject constructor(
                     }
                 }
             }.collect { filtered ->
-                _uiState.update { it.copy(transactions = filtered) }
+                _uiState.update { it.withTransactions(filtered) }
             }
         }
     }
 
     fun selectAccount(account: String) {
+        if (_uiState.value.isAssigningCategory) return
         selectedAccountFlow.value = account
-        _uiState.update { it.copy(selectedAccount = account) }
+        _uiState.update { it.withAccount(account) }
         refresh(account)
     }
 
     fun setCategoryFilter(category: TransactionCategory?) {
+        if (_uiState.value.isAssigningCategory) return
         categoryFilterFlow.value = category
-        _uiState.update { it.copy(categoryFilter = category) }
+        _uiState.update { it.copy(categoryFilter = category, selectedRows = emptySet(), isSelecting = false) }
         if (category != TransactionCategory.ONE_OFF_COST) setTagFilter(null)
     }
 
     fun setTagFilter(tag: String?) {
+        if (_uiState.value.isAssigningCategory) return
         tagFilterFlow.value = tag
-        _uiState.update { it.copy(tagFilter = tag) }
+        _uiState.update { it.copy(tagFilter = tag, selectedRows = emptySet()) }
     }
 
     fun setSearchQuery(query: String) {
+        if (_uiState.value.isAssigningCategory) return
         searchQueryFlow.value = query
-        _uiState.update { it.copy(searchQuery = query) }
+        _uiState.update { it.copy(searchQuery = query, selectedRows = emptySet()) }
     }
 
     fun setSortOrder(order: SortOrder) {
@@ -193,7 +222,8 @@ class TransactionsViewModel @Inject constructor(
     }
 
     fun refresh(account: String? = _uiState.value.selectedAccount) {
-        if (account == null) return
+        if (account == null || _uiState.value.isAssigningCategory) return
+        _uiState.update { it.copy(selectedRows = emptySet()) }
         viewModelScope.launch {
             _uiState.update { it.copy(isRefreshing = true, error = null) }
             try {
@@ -205,6 +235,79 @@ class TransactionsViewModel @Inject constructor(
             }
         }
     }
+
+    fun startSelection() {
+        if (_uiState.value.isRefreshing || _uiState.value.isAssigningCategory) return
+        setCategoryFilter(TransactionCategory.ONE_OFF_COST)
+        _uiState.update { it.copy(isSelecting = true, selectedRows = emptySet()) }
+    }
+
+    fun cancelSelection() {
+        if (_uiState.value.isAssigningCategory) return
+        _uiState.update { it.copy(isSelecting = false, selectedRows = emptySet(), showBulkCategoryDialog = false) }
+    }
+
+    fun toggleSelection(transaction: Transaction) {
+        val state = _uiState.value
+        if (!state.isSelecting || state.isAssigningCategory || state.isRefreshing ||
+            transaction.account != state.selectedAccount || transaction.category != TransactionCategory.ONE_OFF_COST ||
+            transaction.rowIndex <= 1) return
+        _uiState.update {
+            it.copy(selectedRows = if (transaction.rowIndex in it.selectedRows) it.selectedRows - transaction.rowIndex
+                else it.selectedRows + transaction.rowIndex)
+        }
+    }
+
+    fun selectAllShown() {
+        val state = _uiState.value
+        if (!state.isSelecting || state.isAssigningCategory || state.isRefreshing) return
+        val rows = state.transactions.filter {
+            it.account == state.selectedAccount && it.category == TransactionCategory.ONE_OFF_COST && it.rowIndex > 1
+        }.map { it.rowIndex }.toSet()
+        _uiState.update { it.copy(selectedRows = if (it.selectedRows == rows) emptySet() else rows) }
+    }
+
+    fun showBulkCategoryDialog() {
+        if (_uiState.value.selectedRows.isEmpty() || _uiState.value.isRefreshing) return
+        _uiState.update { it.copy(showBulkCategoryDialog = true, bulkCategoryError = null) }
+    }
+
+    fun dismissBulkCategoryDialog() {
+        if (_uiState.value.isAssigningCategory) return
+        _uiState.update { it.copy(showBulkCategoryDialog = false, bulkCategoryError = null) }
+    }
+
+    fun assignSpendingCategory(tag: String?) {
+        val state = _uiState.value
+        if (state.isAssigningCategory || state.isRefreshing) return
+        val selected = state.transactions.filter {
+            it.account == state.selectedAccount && it.rowIndex in state.selectedRows &&
+                it.category == TransactionCategory.ONE_OFF_COST
+        }
+        if (selected.isEmpty()) return
+        _uiState.update { it.copy(isAssigningCategory = true, bulkCategoryError = null) }
+        viewModelScope.launch {
+            try {
+                repository.assignSpendingCategory(selected, tag)
+                _uiState.update { it.copy(
+                    isSelecting = false, selectedRows = emptySet(), showBulkCategoryDialog = false,
+                    message = "Updated spending category for ${transactionCount(selected.size)}."
+                ) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _uiState.update { it.copy(
+                    bulkCategoryError = "Could not confirm the update. Close this dialog and refresh before retrying. ${e.message.orEmpty()}"
+                ) }
+            } finally {
+                _uiState.update { it.copy(isAssigningCategory = false) }
+            }
+        }
+    }
+
+    fun clearMessage() = _uiState.update { it.copy(message = null) }
+
+    private fun transactionCount(n: Int) = if (n == 1) "1 transaction" else "$n transactions"
 
     fun showAddSheet() = _uiState.update { it.copy(showAddSheet = true, transactionToEdit = null) }
     fun showEditSheet(transaction: Transaction) = _uiState.update { it.copy(transactionToEdit = transaction, showAddSheet = true) }

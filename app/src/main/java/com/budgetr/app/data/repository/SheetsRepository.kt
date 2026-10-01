@@ -21,6 +21,8 @@ interface SheetsRepository {
     suspend fun refreshAccountBalances()
     suspend fun addTransaction(transaction: Transaction)
     suspend fun updateTransaction(transaction: Transaction)
+    /** Assigns or clears spending tags in a single Sheets request, then refreshes the cache. */
+    suspend fun assignSpendingCategory(transactions: List<Transaction>, tag: String?)
     suspend fun deleteTransaction(transaction: Transaction)
     suspend fun deleteOneOffTransactions(account: String)
     suspend fun listSpreadsheets(): List<DriveFile>
