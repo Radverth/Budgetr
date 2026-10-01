@@ -30,3 +30,7 @@ Alternatively, prepare one consolidated integration PR targeting main and close 
 Keep main's current version metadata when resolving integration: the feature branch still has versionCode 15 / versionName 1.0.14, while main has 16 / 1.0.15. The next release must advance beyond the installed version. Before using categories, check the handoff's requirement that column G of each account sheet is available. History begins at the next processed payday; it is not retroactive.
 
 This is a source/history audit, not a new runtime or phone-screen validation. No application code was changed. The audit PR targets `agent/payday-plan` so its diff contains documentation only; it does not itself deliver the missing features to main.
+
+## Repeat check — 1 October 2026
+
+Fetched origin again and rechecked live PR states and releases. Main remains at `6179173`; v1.0.15 is still the latest release, with an identical app tree. PRs #23–#28 are still open and #29 is merged only into `agent/payday-plan`. The cumulative app tree on this audit branch matches `origin/agent/payday-plan`. No further feature integration has occurred since the original audit.
