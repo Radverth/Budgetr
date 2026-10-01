@@ -26,7 +26,8 @@ interface BudgetRepository {
     suspend fun clearGoalCategoryLink(goalName: String)
 
     fun getEnvelopes(): Flow<List<Envelope>>
-    /** Creates or updates the envelope for [tag], keeping any money already carried over. */
-    suspend fun setEnvelope(tag: String, limit: Double, rollover: Boolean)
+    /** Creates or updates the envelope for [tag], keeping any money already carried over.
+     *  With [renameFrom], the envelope of that name is renamed to [tag] and keeps its carry. */
+    suspend fun setEnvelope(tag: String, limit: Double, rollover: Boolean, renameFrom: String? = null)
     suspend fun deleteEnvelope(tag: String)
 }

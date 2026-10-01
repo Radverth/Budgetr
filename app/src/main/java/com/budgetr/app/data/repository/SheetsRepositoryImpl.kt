@@ -40,6 +40,7 @@ import com.budgetr.app.data.model.TransactionCategory
 import com.budgetr.app.util.EnvelopeCalculator
 import com.budgetr.app.util.HistoryCalculator
 import com.budgetr.app.util.PeriodSummaryRow
+import com.budgetr.app.util.PayPeriod
 import com.budgetr.app.util.PayPeriodCalculator
 import com.budgetr.app.util.PreferencesManager
 import com.budgetr.app.util.SpendTags
@@ -492,11 +493,14 @@ class SheetsRepositoryImpl @Inject constructor(
 
         // Carry unspent envelope money forward while the ending period's one-offs still exist.
         // carriedForPeriod makes this safe to repeat if the deletion below fails and retries.
+        // Only spending dated in the ending period counts; a cost already added for the new
+        // period (e.g. from the widget before the app was opened) mustn't eat into the carry.
         val endingTransactions = transactionDao.getAllSync().map { it.toTransaction() }
+        val endingPeriod = endingPeriod(lastProcessed, currentPeriodStart)
         envelopeDao.getAllSync().forEach { entity ->
             if (entity.carriedForPeriod == currentPeriodStart) return@forEach
             val envelope = Envelope(entity.tag, entity.limitAmount, entity.rollover, entity.carriedOver)
-            val spent = EnvelopeCalculator.spent(endingTransactions, entity.tag)
+            val spent = EnvelopeCalculator.spent(endingTransactions, entity.tag, endingPeriod)
             envelopeDao.upsert(
                 entity.copy(carriedOver = EnvelopeCalculator.nextCarry(envelope, spent), carriedForPeriod = currentPeriodStart)
             )
@@ -577,6 +581,15 @@ class SheetsRepositoryImpl @Inject constructor(
         endBalance = endBalance,
         byTag = PeriodSummaryRow.decodeTags(tagTotals)
     )
+
+    /** The pay period that ran from [start] up to [nextStart] (both dd/MM/yyyy), or null if
+     *  either can't be read, in which case callers count every row. */
+    private fun endingPeriod(start: String, nextStart: String): PayPeriod? {
+        val fmt = SimpleDateFormat("dd/MM/yyyy", Locale.UK)
+        val from = runCatching { fmt.parse(start) }.getOrNull() ?: return null
+        val to = runCatching { fmt.parse(nextStart) }.getOrNull() ?: return null
+        return PayPeriod(from, to)
+    }
 
     // --- Savings goals ---
 
