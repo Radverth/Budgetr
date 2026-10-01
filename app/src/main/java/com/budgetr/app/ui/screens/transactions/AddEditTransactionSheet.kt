@@ -611,7 +611,7 @@ private fun SpendingReflectionDialog(amount: Double, onSaveAnyway: () -> Unit, o
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
-private fun SpendTagPicker(
+internal fun SpendTagPicker(
     knownTags: List<String>,
     selected: String?,
     onSelect: (String?) -> Unit

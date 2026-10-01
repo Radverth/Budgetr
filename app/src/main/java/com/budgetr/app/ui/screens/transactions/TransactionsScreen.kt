@@ -1,5 +1,13 @@
 package com.budgetr.app.ui.screens.transactions
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -72,6 +80,50 @@ fun TransactionsScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     var sortMenuExpanded by remember { mutableStateOf(false) }
 
+    BackHandler(enabled = uiState.isSelecting) { viewModel.cancelSelection() }
+
+    LaunchedEffect(uiState.message) {
+        uiState.message?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearMessage()
+        }
+    }
+
+    if (uiState.showBulkCategoryDialog) {
+        var tag by remember { mutableStateOf<String?>(null) }
+        AlertDialog(
+            onDismissRequest = viewModel::dismissBulkCategoryDialog,
+            title = { Text("Categorise ${uiState.selectedRows.size} transactions") },
+            text = {
+                Column(
+                    modifier = Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    if (uiState.isAssigningCategory) {
+                        CircularProgressIndicator()
+                        Text("Saving spending categories…")
+                    } else {
+                        Text("This replaces the spending category on every selected transaction.")
+                        SpendTagPicker(knownTags = uiState.knownTags, selected = tag, onSelect = { tag = it })
+                        if (tag == null) Text("No category selected. Clear categories removes their existing categories.")
+                        uiState.bulkCategoryError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { viewModel.assignSpendingCategory(tag) },
+                    enabled = !uiState.isAssigningCategory && uiState.selectedRows.isNotEmpty() && uiState.bulkCategoryError == null
+                ) { Text(if (tag == null) "Clear categories" else "Apply category") }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::dismissBulkCategoryDialog, enabled = !uiState.isAssigningCategory) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
     LaunchedEffect(uiState.error) {
         uiState.error?.let {
             snackbarHostState.showSnackbar(it)
@@ -121,7 +173,7 @@ fun TransactionsScreen(
                 title = { Text("Transactions") },
                 actions = {
                     // Add transaction button
-                    IconButton(onClick = viewModel::showAddSheet, enabled = uiState.selectedAccount != null) {
+                    IconButton(onClick = viewModel::showAddSheet, enabled = uiState.selectedAccount != null && !uiState.isSelecting) {
                         Icon(Icons.Default.Add, contentDescription = "Add transaction", tint = MaterialTheme.colorScheme.primary)
                     }
                     // Sort button
@@ -179,6 +231,32 @@ fun TransactionsScreen(
                         )
                     }
                 }
+            }
+
+            if (uiState.isSelecting) {
+                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("${uiState.selectedRows.size} selected", modifier = Modifier.weight(1f))
+                        TextButton(onClick = viewModel::cancelSelection, enabled = !uiState.isAssigningCategory) { Text("Cancel") }
+                    }
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        val selectableCount = uiState.transactions.count {
+                            it.category == TransactionCategory.ONE_OFF_COST && it.rowIndex > 1
+                        }
+                        TextButton(onClick = viewModel::selectAllShown, enabled = !uiState.isRefreshing && !uiState.isAssigningCategory && selectableCount > 0) {
+                            Text(if (selectableCount > 0 && uiState.selectedRows.size == selectableCount) "Deselect all" else "Select all shown")
+                        }
+                        TextButton(onClick = viewModel::showBulkCategoryDialog, enabled = uiState.selectedRows.isNotEmpty() && !uiState.isRefreshing && !uiState.isAssigningCategory) {
+                            Text("Set category")
+                        }
+                    }
+                }
+            } else {
+                TextButton(
+                    onClick = viewModel::startSelection,
+                    enabled = uiState.selectedAccount != null && !uiState.isRefreshing,
+                    modifier = Modifier.padding(horizontal = 8.dp)
+                ) { Text("Bulk assign spending categories") }
             }
 
             // Search bar
@@ -274,7 +352,11 @@ fun TransactionsScreen(
                             TransactionItem(
                                 transaction = transaction,
                                 onEdit = { viewModel.showEditSheet(transaction) },
-                                onDelete = { viewModel.confirmDelete(transaction) }
+                                onDelete = { viewModel.confirmDelete(transaction) },
+                                selectionMode = uiState.isSelecting,
+                                selected = transaction.rowIndex in uiState.selectedRows,
+                                selectionEnabled = !uiState.isRefreshing && !uiState.isAssigningCategory,
+                                onToggleSelection = { viewModel.toggleSelection(transaction) }
                             )
                         }
                     }
@@ -296,7 +378,11 @@ fun TransactionsScreen(
 private fun TransactionItem(
     transaction: Transaction,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    selectionMode: Boolean = false,
+    selected: Boolean = false,
+    selectionEnabled: Boolean = true,
+    onToggleSelection: () -> Unit = {}
 ) {
     val amountColor = when (transaction.category) {
         TransactionCategory.INCOME,
@@ -367,7 +453,14 @@ private fun TransactionItem(
                 modifier = androidx.compose.ui.Modifier.padding(horizontal = 8.dp)
             )
 
-            Row {
+            if (selectionMode) {
+                Checkbox(
+                    checked = selected,
+                    onCheckedChange = { onToggleSelection() },
+                    enabled = selectionEnabled && transaction.category == TransactionCategory.ONE_OFF_COST && transaction.rowIndex > 1,
+                    modifier = Modifier.semantics { contentDescription = "Select ${transaction.info}, ${transaction.date}" }
+                )
+            } else Row {
                 IconButton(
                     onClick = onEdit,
                     modifier = androidx.compose.ui.Modifier.size(40.dp)
