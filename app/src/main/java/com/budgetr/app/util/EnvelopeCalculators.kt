@@ -32,6 +32,9 @@ object EnvelopeCalculator {
     fun status(envelope: Envelope, transactions: List<Transaction>, period: PayPeriod, daysLeft: Int) =
         EnvelopeStatus(envelope, spent(transactions, envelope.tag, period), daysLeft)
 
+    /** Money still unspent across category budgets. Overspent budgets set nothing aside. */
+    fun reserved(statuses: List<EnvelopeStatus>): Double = statuses.sumOf { it.left.coerceAtLeast(0.0) }
+
     /** What carries into next period: unspent money for rollover envelopes, never negative,
      *  so overspending one period doesn't shrink the next. */
     fun nextCarry(envelope: Envelope, spent: Double): Double =

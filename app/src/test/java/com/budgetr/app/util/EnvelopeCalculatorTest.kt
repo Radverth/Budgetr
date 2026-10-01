@@ -52,6 +52,15 @@ class EnvelopeCalculatorTest {
     }
 
     @Test
+    fun `reserved sums what's left and ignores overspent budgets`() {
+        val statuses = listOf(
+            EnvelopeStatus(Envelope("Groceries", 200.0), spent = 50.0, daysLeft = 10),
+            EnvelopeStatus(Envelope("Fun", 40.0), spent = 60.0, daysLeft = 10)
+        )
+        assertEquals(150.0, EnvelopeCalculator.reserved(statuses), 0.001)
+    }
+
+    @Test
     fun `carry is unspent money for rollover envelopes`() {
         assertEquals(30.0, EnvelopeCalculator.nextCarry(Envelope("Fun", 100.0, rollover = true, carriedOver = 10.0), spent = 80.0), 0.001)
     }
