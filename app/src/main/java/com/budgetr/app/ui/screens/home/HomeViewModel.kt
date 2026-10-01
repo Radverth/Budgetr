@@ -9,6 +9,7 @@ import com.budgetr.app.data.repository.BudgetRepository
 import com.budgetr.app.data.repository.SheetsRepository
 import com.budgetr.app.util.AuthManager
 import com.budgetr.app.util.BudgetCapCalculator
+import com.budgetr.app.util.EnvelopeCalculator
 import com.budgetr.app.util.NoSpendStreakCalculator
 import com.budgetr.app.util.PayPeriodCalculator
 import com.budgetr.app.util.PreferencesManager
@@ -36,7 +37,8 @@ import java.util.Locale
 import javax.inject.Inject
 
 data class BudgetAlertUiItem(
-    val category: TransactionCategory,
+    /** Category name, e.g. "One Off Cost" or a spending category like "Groceries". */
+    val label: String,
     val spend: Double,
     val limit: Double,
     val isOver: Boolean
@@ -132,21 +134,34 @@ class HomeViewModel @Inject constructor(
                 repository.getSavingsGoals()
             ) { links, goals -> links to goals }
 
+            val budgetsAndEnvelopes = combine(
+                budgetRepository.getCategoryBudgets(),
+                budgetRepository.getEnvelopes()
+            ) { budgets, envelopes -> budgets to envelopes }
+
             combine(
                 repository.getAllTransactions(),
-                budgetRepository.getCategoryBudgets(),
+                budgetsAndEnvelopes,
                 budgetRepository.getRecurringCostReviews(),
                 linksAndGoals
-            ) { allTx, budgets, reviews, (links, goals) ->
+            ) { allTx, (budgets, envelopes), reviews, (links, goals) ->
                 val currentMonth = Calendar.getInstance().get(Calendar.MONTH) + 1
                 val period = PayPeriodCalculator.current(prefs.getPayDay())
 
-                val alerts = budgets.mapNotNull { budget ->
+                val capAlerts = budgets.mapNotNull { budget ->
                     val spend = spendForCategory(allTx, budget.category, currentMonth, period)
                     val isOver = BudgetCapCalculator.isOverLimit(spend, budget.limit)
                     val isApproaching = BudgetCapCalculator.isApproachingLimit(spend, budget.limit)
-                    if (isOver || isApproaching) BudgetAlertUiItem(budget.category, spend, budget.limit, isOver) else null
-                }.sortedByDescending { it.isOver }
+                    if (isOver || isApproaching) BudgetAlertUiItem(budget.category.displayName, spend, budget.limit, isOver) else null
+                }
+                val daysLeft = period.daysUntilPayday()
+                val envelopeAlerts = envelopes.mapNotNull { envelope ->
+                    val status = EnvelopeCalculator.status(envelope, allTx, period, daysLeft)
+                    if (status.isOver || status.isApproaching) {
+                        BudgetAlertUiItem(envelope.tag, status.spent, status.available, status.isOver)
+                    } else null
+                }
+                val alerts = (capAlerts + envelopeAlerts).sortedByDescending { it.isOver }
 
                 val oneOffTx = allTx.filter { it.category == TransactionCategory.ONE_OFF_COST }
                 val periodStart = prefs.getLastPayPeriodStart()?.let {

@@ -800,9 +800,9 @@ private fun BudgetAlertsCard(alerts: List<BudgetAlertUiItem>, resetDays: Int, mo
             )
             alerts.forEach { alert ->
                 val message = if (alert.isOver) {
-                    "${alert.category.displayName}: ${alert.spend.toCurrencyString()} — over your ${alert.limit.toCurrencyString()} cap"
+                    "${alert.label}: ${alert.spend.toCurrencyString()} — over your ${alert.limit.toCurrencyString()} cap"
                 } else {
-                    "${alert.category.displayName}: ${alert.spend.toCurrencyString()} — nearing your ${alert.limit.toCurrencyString()} cap"
+                    "${alert.label}: ${alert.spend.toCurrencyString()} — nearing your ${alert.limit.toCurrencyString()} cap"
                 }
                 Text(
                     text = message,

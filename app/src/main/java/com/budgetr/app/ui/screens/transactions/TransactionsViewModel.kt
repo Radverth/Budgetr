@@ -13,6 +13,7 @@ import com.budgetr.app.data.repository.BudgetRepository
 import com.budgetr.app.data.repository.SheetsRepository
 import com.budgetr.app.util.BudgetAlertNotifier
 import com.budgetr.app.util.BudgetCapCalculator
+import com.budgetr.app.util.EnvelopeCalculator
 import com.budgetr.app.util.PayPeriodCalculator
 import com.budgetr.app.util.PreferencesManager
 import com.budgetr.app.util.SpendTags
@@ -229,6 +230,12 @@ class TransactionsViewModel @Inject constructor(
                     val budget = budgetRepository.getCategoryBudgets().first().find { it.category == transaction.category }
                     val period = PayPeriodCalculator.current(prefs.getPayDay())
                     val spendBefore = budget?.let { spendForCategory(repository.getAllTransactions().first(), it.category, period = period) }
+                    val envelope = transaction.tag?.let { tag ->
+                        budgetRepository.getEnvelopes().first().find { it.tag.equals(tag, ignoreCase = true) }
+                    }
+                    val envelopeWasOver = envelope?.let {
+                        EnvelopeCalculator.status(it, repository.getAllTransactions().first(), period, 1).isOver
+                    }
 
                     repository.addTransaction(transaction)
 
@@ -237,6 +244,10 @@ class TransactionsViewModel @Inject constructor(
                         if (BudgetCapCalculator.isOverLimit(spendAfter, budget.limit)) {
                             BudgetAlertNotifier.notifyOverBudget(context, budget.category, spendAfter, budget.limit)
                         }
+                    }
+                    if (envelope != null && envelopeWasOver == false) {
+                        val after = EnvelopeCalculator.status(envelope, repository.getAllTransactions().first(), period, 1)
+                        if (after.isOver) BudgetAlertNotifier.notifyEnvelopeOver(context, envelope.tag, after.spent, after.available)
                     }
                     linkAction?.let { applyLinkAction(it, kotlin.math.abs(transaction.amount)) }
                     _uiState.update { it.copy(addSaveCount = it.addSaveCount + 1) }

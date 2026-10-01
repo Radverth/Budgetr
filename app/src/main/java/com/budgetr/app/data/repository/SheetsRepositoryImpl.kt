@@ -19,6 +19,7 @@ import com.budgetr.app.data.api.ValueRange
 import com.budgetr.app.data.local.dao.AccountBalanceDao
 import com.budgetr.app.data.local.dao.BalanceRolloverDao
 import com.budgetr.app.data.local.dao.DebtDao
+import com.budgetr.app.data.local.dao.EnvelopeDao
 import com.budgetr.app.data.local.dao.SavingsGoalDao
 import com.budgetr.app.data.local.dao.TransactionDao
 import com.budgetr.app.data.local.entity.AccountBalanceEntity
@@ -29,9 +30,11 @@ import com.budgetr.app.data.local.entity.TransactionEntity
 import com.budgetr.app.data.model.AccountBalance
 import com.budgetr.app.data.model.BalanceRollover
 import com.budgetr.app.data.model.Debt
+import com.budgetr.app.data.model.Envelope
 import com.budgetr.app.data.model.SavingsGoal
 import com.budgetr.app.data.model.Transaction
 import com.budgetr.app.data.model.TransactionCategory
+import com.budgetr.app.util.EnvelopeCalculator
 import com.budgetr.app.util.PayPeriodCalculator
 import com.budgetr.app.util.PreferencesManager
 import com.budgetr.app.util.SpendTags
@@ -57,6 +60,7 @@ class SheetsRepositoryImpl @Inject constructor(
     private val balanceRolloverDao: BalanceRolloverDao,
     private val savingsGoalDao: SavingsGoalDao,
     private val debtDao: DebtDao,
+    private val envelopeDao: EnvelopeDao,
     private val prefs: PreferencesManager
 ) : SheetsRepository {
 
@@ -477,6 +481,18 @@ class SheetsRepositoryImpl @Inject constructor(
                 // Refresh local cache after date updates
                 refreshTransactions(account)
             }
+        }
+
+        // Carry unspent envelope money forward while the ending period's one-offs still exist.
+        // carriedForPeriod makes this safe to repeat if the deletion below fails and retries.
+        val endingTransactions = transactionDao.getAllSync().map { it.toTransaction() }
+        envelopeDao.getAllSync().forEach { entity ->
+            if (entity.carriedForPeriod == currentPeriodStart) return@forEach
+            val envelope = Envelope(entity.tag, entity.limitAmount, entity.rollover, entity.carriedOver)
+            val spent = EnvelopeCalculator.spent(endingTransactions, entity.tag)
+            envelopeDao.upsert(
+                entity.copy(carriedOver = EnvelopeCalculator.nextCarry(envelope, spent), carriedForPeriod = currentPeriodStart)
+            )
         }
 
         // Delete all one-off costs for the new pay period. Only reached if every account's

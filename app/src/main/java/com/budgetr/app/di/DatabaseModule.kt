@@ -7,6 +7,7 @@ import com.budgetr.app.data.local.dao.AccountBalanceDao
 import com.budgetr.app.data.local.dao.BalanceRolloverDao
 import com.budgetr.app.data.local.dao.CategoryBudgetDao
 import com.budgetr.app.data.local.dao.DebtDao
+import com.budgetr.app.data.local.dao.EnvelopeDao
 import com.budgetr.app.data.local.dao.GoalCategoryLinkDao
 import com.budgetr.app.data.local.dao.RecurringCostReviewDao
 import com.budgetr.app.data.local.dao.SavingsGoalDao
@@ -28,7 +29,7 @@ object DatabaseModule {
         Room.databaseBuilder(context, BudgetrDatabase::class.java, "budgetr.db")
             // Real migrations keep device-only data (budget caps, reviews) across updates;
             // the destructive fallback only covers versions older than these.
-            .addMigrations(BudgetrDatabase.MIGRATION_6_7)
+            .addMigrations(BudgetrDatabase.MIGRATION_6_7, BudgetrDatabase.MIGRATION_7_8)
             .fallbackToDestructiveMigration()
             .build()
 
@@ -55,4 +56,7 @@ object DatabaseModule {
 
     @Provides
     fun provideGoalCategoryLinkDao(db: BudgetrDatabase): GoalCategoryLinkDao = db.goalCategoryLinkDao()
+
+    @Provides
+    fun provideEnvelopeDao(db: BudgetrDatabase): EnvelopeDao = db.envelopeDao()
 }

@@ -1,12 +1,15 @@
 package com.budgetr.app.data.repository
 
 import com.budgetr.app.data.local.dao.CategoryBudgetDao
+import com.budgetr.app.data.local.dao.EnvelopeDao
 import com.budgetr.app.data.local.dao.GoalCategoryLinkDao
 import com.budgetr.app.data.local.dao.RecurringCostReviewDao
 import com.budgetr.app.data.local.entity.CategoryBudgetEntity
+import com.budgetr.app.data.local.entity.EnvelopeEntity
 import com.budgetr.app.data.local.entity.GoalCategoryLinkEntity
 import com.budgetr.app.data.local.entity.RecurringCostReviewEntity
 import com.budgetr.app.data.model.CategoryBudget
+import com.budgetr.app.data.model.Envelope
 import com.budgetr.app.data.model.GoalCategoryLink
 import com.budgetr.app.data.model.RecurringCostReview
 import com.budgetr.app.data.model.Transaction
@@ -18,7 +21,8 @@ import javax.inject.Inject
 class BudgetRepositoryImpl @Inject constructor(
     private val categoryBudgetDao: CategoryBudgetDao,
     private val recurringCostReviewDao: RecurringCostReviewDao,
-    private val goalCategoryLinkDao: GoalCategoryLinkDao
+    private val goalCategoryLinkDao: GoalCategoryLinkDao,
+    private val envelopeDao: EnvelopeDao
 ) : BudgetRepository {
 
     override fun getCategoryBudgets(): Flow<List<CategoryBudget>> =
@@ -77,7 +81,36 @@ class BudgetRepositoryImpl @Inject constructor(
     override suspend fun clearGoalCategoryLink(goalName: String) {
         goalCategoryLinkDao.delete(goalName)
     }
+
+    override fun getEnvelopes(): Flow<List<Envelope>> =
+        envelopeDao.getAll().map { entities -> entities.map { it.toModel() } }
+
+    override suspend fun setEnvelope(tag: String, limit: Double, rollover: Boolean) {
+        val existing = envelopeDao.getAllSync().find { it.tag.equals(tag, ignoreCase = true) }
+        if (existing != null && existing.tag != tag) envelopeDao.delete(existing.tag)
+        envelopeDao.upsert(
+            EnvelopeEntity(
+                tag = tag,
+                limitAmount = limit,
+                rollover = rollover,
+                // Turning rollover off drops what was carried, so the envelope shows just its limit
+                carriedOver = if (rollover) existing?.carriedOver ?: 0.0 else 0.0,
+                carriedForPeriod = existing?.carriedForPeriod
+            )
+        )
+    }
+
+    override suspend fun deleteEnvelope(tag: String) {
+        envelopeDao.delete(tag)
+    }
 }
+
+private fun EnvelopeEntity.toModel() = Envelope(
+    tag = tag,
+    limit = limitAmount,
+    rollover = rollover,
+    carriedOver = carriedOver
+)
 
 private fun RecurringCostReviewEntity.toModel() = RecurringCostReview(
     account = account,
