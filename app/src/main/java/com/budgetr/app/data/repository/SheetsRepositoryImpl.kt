@@ -32,6 +32,7 @@ import com.budgetr.app.data.model.Debt
 import com.budgetr.app.data.model.SavingsGoal
 import com.budgetr.app.data.model.Transaction
 import com.budgetr.app.data.model.TransactionCategory
+import com.budgetr.app.util.PayPeriodCalculator
 import com.budgetr.app.util.PreferencesManager
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -621,40 +622,10 @@ class SheetsRepositoryImpl @Inject constructor(
         return fmt.format(cal.time)
     }
 
-    /** Calculates the effective start date of the current pay period (with weekend → Friday adjustment).
-     *
-     *  We compare today against the EFFECTIVE (weekend-adjusted) payday for the current month,
-     *  not the raw configured day. Without this, a payDay of 26 (Sunday → effective Friday 24)
-     *  would not trigger the rollover on Friday 24 because 24 < 26, causing the rollover to fire
-     *  two days late on Monday 27 instead. */
-    private fun resolveCurrentPayPeriodStart(payDay: Int): String {
-        val fmt = SimpleDateFormat("dd/MM/yyyy", Locale.UK)
-        val cal = Calendar.getInstance()
-        val todayDayOfMonth = cal.get(Calendar.DAY_OF_MONTH)
-
-        // Compute the effective (weekend-adjusted) pay day for the current calendar month
-        // so the comparison uses the real trigger date, not the raw configured day.
-        val thisMonthCal = Calendar.getInstance()
-        val maxDayThisMonth = thisMonthCal.getActualMaximum(Calendar.DAY_OF_MONTH)
-        thisMonthCal.set(Calendar.DAY_OF_MONTH, minOf(payDay, maxDayThisMonth))
-        when (thisMonthCal.get(Calendar.DAY_OF_WEEK)) {
-            Calendar.SATURDAY -> thisMonthCal.add(Calendar.DAY_OF_MONTH, -1)
-            Calendar.SUNDAY -> thisMonthCal.add(Calendar.DAY_OF_MONTH, -2)
-        }
-        val effectivePayDayThisMonth = thisMonthCal.get(Calendar.DAY_OF_MONTH)
-
-        if (todayDayOfMonth < effectivePayDayThisMonth) {
-            cal.add(Calendar.MONTH, -1)
-        }
-        val maxDay = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
-        cal.set(Calendar.DAY_OF_MONTH, minOf(payDay, maxDay))
-        when (cal.get(Calendar.DAY_OF_WEEK)) {
-            Calendar.SATURDAY -> cal.add(Calendar.DAY_OF_MONTH, -1)
-            Calendar.SUNDAY -> cal.add(Calendar.DAY_OF_MONTH, -2)
-        }
-
-        return fmt.format(cal.time)
-    }
+    /** Effective start date of the current pay period (with weekend → Friday adjustment).
+     *  Shared with Home's "safe to spend" so the rollover and the days-to-payday count agree. */
+    private fun resolveCurrentPayPeriodStart(payDay: Int): String =
+        SimpleDateFormat("dd/MM/yyyy", Locale.UK).format(PayPeriodCalculator.current(payDay).start)
 
     // Replicates: =IF(OR(EQ(D,"Income"),EQ(D,"Transfer")), C, IF(C<0, ROUNDUP(C,0), C))
     // ROUNDUP rounds away from zero, so -2.99 → -3, 2.99 → 3

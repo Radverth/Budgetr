@@ -66,6 +66,7 @@ import com.budgetr.app.ui.theme.ExpenseRed
 import com.budgetr.app.ui.theme.FixedCostOrange
 import com.budgetr.app.ui.theme.IncomeGreen
 import com.budgetr.app.ui.theme.heroGradient
+import com.budgetr.app.util.SafeToSpend
 import com.budgetr.app.util.SpendingTrend
 import com.budgetr.app.util.toCurrencyString
 
@@ -150,6 +151,17 @@ fun HomeScreen(
                             totalAvailable = uiState.totalAvailable,
                             topPadding = paddingValues.calculateTopPadding()
                         )
+                    }
+
+                    val safeToSpend = uiState.safeToSpend
+                    if (safeToSpend != null && uiState.accountBalances.isNotEmpty()) {
+                        item {
+                            SafeToSpendCard(
+                                safeToSpend = safeToSpend,
+                                totalAvailable = uiState.totalAvailable,
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                            )
+                        }
                     }
 
                     item {
@@ -315,6 +327,46 @@ private fun HomeHeader(userName: String?, totalAvailable: Double, topPadding: Dp
                 color = if (totalAvailable >= 0) Color(0xFF7EE8B0) else Color(0xFFFFA8A0),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun SafeToSpendCard(safeToSpend: SafeToSpend, totalAvailable: Double, modifier: Modifier = Modifier) {
+    val days = safeToSpend.daysLeft
+    val daysText = if (days == 1) "Payday tomorrow" else "$days days to payday"
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = if (safeToSpend.isOverspent) "Overspent this pay period" else "Safe to spend today",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+            )
+            Text(
+                text = if (safeToSpend.isOverspent) {
+                    "${(-totalAvailable).toCurrencyString()} over"
+                } else {
+                    safeToSpend.perDay.toCurrencyString()
+                },
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                color = if (safeToSpend.isOverspent) ExpenseRed else IncomeGreen,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = if (safeToSpend.isOverspent) {
+                    "$daysText · try to hold off on one-off costs"
+                } else {
+                    "${safeToSpend.thisWeek.toCurrencyString()} this week · $daysText"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
             )
         }
     }
