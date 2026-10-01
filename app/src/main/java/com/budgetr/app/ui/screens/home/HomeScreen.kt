@@ -76,6 +76,7 @@ import com.budgetr.app.util.toCurrencyString
 fun HomeScreen(
     onNavigateToAddTransaction: () -> Unit,
     onNavigateToBudgets: () -> Unit,
+    onNavigateToInsights: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -226,8 +227,17 @@ fun HomeScreen(
                     }
 
                     item {
-                        BudgetsEntryCard(
+                        NavEntryCard(
+                            label = "Manage budgets",
                             onClick = onNavigateToBudgets,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                        )
+                    }
+
+                    item {
+                        NavEntryCard(
+                            label = "Spending history",
+                            onClick = onNavigateToInsights,
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
                         )
                     }
@@ -820,7 +830,7 @@ private fun BudgetAlertsCard(alerts: List<BudgetAlertUiItem>, resetDays: Int, mo
 }
 
 @Composable
-private fun BudgetsEntryCard(onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun NavEntryCard(label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Card(
         modifier = modifier,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
@@ -833,12 +843,12 @@ private fun BudgetsEntryCard(onClick: () -> Unit, modifier: Modifier = Modifier)
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Manage budgets",
+                text = label,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold
             )
             IconButton(onClick = onClick) {
-                Icon(Icons.Default.ChevronRight, contentDescription = "Manage budgets")
+                Icon(Icons.Default.ChevronRight, contentDescription = label)
             }
         }
     }

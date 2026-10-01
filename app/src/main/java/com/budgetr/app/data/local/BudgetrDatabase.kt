@@ -10,6 +10,7 @@ import com.budgetr.app.data.local.dao.CategoryBudgetDao
 import com.budgetr.app.data.local.dao.DebtDao
 import com.budgetr.app.data.local.dao.EnvelopeDao
 import com.budgetr.app.data.local.dao.GoalCategoryLinkDao
+import com.budgetr.app.data.local.dao.PeriodSummaryDao
 import com.budgetr.app.data.local.dao.RecurringCostReviewDao
 import com.budgetr.app.data.local.dao.SavingsGoalDao
 import com.budgetr.app.data.local.dao.TransactionDao
@@ -19,6 +20,7 @@ import com.budgetr.app.data.local.entity.CategoryBudgetEntity
 import com.budgetr.app.data.local.entity.DebtEntity
 import com.budgetr.app.data.local.entity.EnvelopeEntity
 import com.budgetr.app.data.local.entity.GoalCategoryLinkEntity
+import com.budgetr.app.data.local.entity.PeriodSummaryEntity
 import com.budgetr.app.data.local.entity.RecurringCostReviewEntity
 import com.budgetr.app.data.local.entity.SavingsGoalEntity
 import com.budgetr.app.data.local.entity.TransactionEntity
@@ -33,9 +35,10 @@ import com.budgetr.app.data.local.entity.TransactionEntity
         CategoryBudgetEntity::class,
         RecurringCostReviewEntity::class,
         GoalCategoryLinkEntity::class,
-        EnvelopeEntity::class
+        EnvelopeEntity::class,
+        PeriodSummaryEntity::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = false
 )
 abstract class BudgetrDatabase : RoomDatabase() {
@@ -48,6 +51,7 @@ abstract class BudgetrDatabase : RoomDatabase() {
     abstract fun recurringCostReviewDao(): RecurringCostReviewDao
     abstract fun goalCategoryLinkDao(): GoalCategoryLinkDao
     abstract fun envelopeDao(): EnvelopeDao
+    abstract fun periodSummaryDao(): PeriodSummaryDao
 
     companion object {
         /** Adds the optional spending category to cached transactions. */
@@ -63,6 +67,17 @@ abstract class BudgetrDatabase : RoomDatabase() {
                 db.execSQL(
                     "CREATE TABLE IF NOT EXISTS `envelopes` (`tag` TEXT NOT NULL, `limitAmount` REAL NOT NULL, " +
                         "`rollover` INTEGER NOT NULL, `carriedOver` REAL NOT NULL, `carriedForPeriod` TEXT, PRIMARY KEY(`tag`))"
+                )
+            }
+        }
+
+        /** Adds the local cache of the Sheet's History tab. */
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `period_summaries` (`periodStart` TEXT NOT NULL, `periodEnd` TEXT NOT NULL, " +
+                        "`income` REAL NOT NULL, `fixedCosts` REAL NOT NULL, `oneOffCosts` REAL NOT NULL, " +
+                        "`endBalance` REAL NOT NULL, `tagTotals` TEXT NOT NULL, PRIMARY KEY(`periodStart`))"
                 )
             }
         }

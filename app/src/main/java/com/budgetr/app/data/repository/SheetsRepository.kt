@@ -4,6 +4,7 @@ import com.budgetr.app.data.api.DriveFile
 import com.budgetr.app.data.model.AccountBalance
 import com.budgetr.app.data.model.BalanceRollover
 import com.budgetr.app.data.model.Debt
+import com.budgetr.app.data.model.PeriodSummary
 import com.budgetr.app.data.model.SavingsGoal
 import com.budgetr.app.data.model.Transaction
 import kotlinx.coroutines.flow.Flow
@@ -45,4 +46,8 @@ interface SheetsRepository {
     suspend fun addDebt(debt: Debt)
     suspend fun updateDebt(debt: Debt)
     suspend fun deleteDebt(name: String)
+
+    // --- History (one summary row per finished pay period) ---
+    fun getPeriodSummaries(): Flow<List<PeriodSummary>>
+    suspend fun refreshPeriodSummaries()
 }

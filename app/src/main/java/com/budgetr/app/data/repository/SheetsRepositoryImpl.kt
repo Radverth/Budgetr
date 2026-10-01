@@ -20,21 +20,26 @@ import com.budgetr.app.data.local.dao.AccountBalanceDao
 import com.budgetr.app.data.local.dao.BalanceRolloverDao
 import com.budgetr.app.data.local.dao.DebtDao
 import com.budgetr.app.data.local.dao.EnvelopeDao
+import com.budgetr.app.data.local.dao.PeriodSummaryDao
 import com.budgetr.app.data.local.dao.SavingsGoalDao
 import com.budgetr.app.data.local.dao.TransactionDao
 import com.budgetr.app.data.local.entity.AccountBalanceEntity
 import com.budgetr.app.data.local.entity.BalanceRolloverEntity
 import com.budgetr.app.data.local.entity.DebtEntity
+import com.budgetr.app.data.local.entity.PeriodSummaryEntity
 import com.budgetr.app.data.local.entity.SavingsGoalEntity
 import com.budgetr.app.data.local.entity.TransactionEntity
 import com.budgetr.app.data.model.AccountBalance
 import com.budgetr.app.data.model.BalanceRollover
 import com.budgetr.app.data.model.Debt
 import com.budgetr.app.data.model.Envelope
+import com.budgetr.app.data.model.PeriodSummary
 import com.budgetr.app.data.model.SavingsGoal
 import com.budgetr.app.data.model.Transaction
 import com.budgetr.app.data.model.TransactionCategory
 import com.budgetr.app.util.EnvelopeCalculator
+import com.budgetr.app.util.HistoryCalculator
+import com.budgetr.app.util.PeriodSummaryRow
 import com.budgetr.app.util.PayPeriodCalculator
 import com.budgetr.app.util.PreferencesManager
 import com.budgetr.app.util.SpendTags
@@ -51,6 +56,7 @@ import javax.inject.Inject
 
 private const val SAVINGS_GOALS_SHEET = "Savings Goals"
 private const val DEBTS_SHEET = "Debts"
+private const val HISTORY_SHEET = "History"
 
 class SheetsRepositoryImpl @Inject constructor(
     private val api: GoogleSheetsApi,
@@ -61,6 +67,7 @@ class SheetsRepositoryImpl @Inject constructor(
     private val savingsGoalDao: SavingsGoalDao,
     private val debtDao: DebtDao,
     private val envelopeDao: EnvelopeDao,
+    private val periodSummaryDao: PeriodSummaryDao,
     private val prefs: PreferencesManager
 ) : SheetsRepository {
 
@@ -495,12 +502,81 @@ class SheetsRepositoryImpl @Inject constructor(
             )
         }
 
+        // Save a summary of the ending period to the History tab, since its one-off costs are
+        // about to go. A failure here aborts like the carryover above, so nothing is lost.
+        if (spreadsheetId != null) {
+            recordPeriodSummary(
+                periodStart = lastProcessed,
+                nextPeriodStart = currentPeriodStart,
+                endBalance = balances.sumOf { it.remainingBalance }
+            )
+        }
+
         // Delete all one-off costs for the new pay period. Only reached if every account's
         // carryover above succeeded (or there was no spreadsheet to carry over).
         accounts.forEach { account -> deleteOneOffTransactions(account) }
         prefs.setLastPayPeriodStart(currentPeriodStart)
         return true
     }
+
+    // --- History ---
+
+    override fun getPeriodSummaries(): Flow<List<PeriodSummary>> =
+        periodSummaryDao.getAll().map { entities -> entities.map { it.toPeriodSummary() } }
+
+    override suspend fun refreshPeriodSummaries() {
+        val spreadsheetId = prefs.getSpreadsheetId() ?: return
+        if (resolveSheetIdByName(HISTORY_SHEET) == null) {
+            periodSummaryDao.deleteAll()
+            return
+        }
+        val rows = api.getValues(spreadsheetId, "$HISTORY_SHEET!A:G").values ?: emptyList()
+        periodSummaryDao.replaceAll(rows.drop(1).mapNotNull { PeriodSummaryRow.decode(it)?.toEntity() })
+    }
+
+    /** Appends one History row for the period [periodStart]..day before [nextPeriodStart].
+     *  Skipped if that period already has a row, so a retried rollover doesn't add it twice. */
+    private suspend fun recordPeriodSummary(periodStart: String, nextPeriodStart: String, endBalance: Double) {
+        val spreadsheetId = prefs.getSpreadsheetId() ?: return
+        val fmt = SimpleDateFormat("dd/MM/yyyy", Locale.UK)
+        val start = runCatching { fmt.parse(periodStart) }.getOrNull() ?: return
+        val nextStart = runCatching { fmt.parse(nextPeriodStart) }.getOrNull() ?: return
+
+        ensureSheetExists(HISTORY_SHEET, PeriodSummaryRow.HEADER)
+        val existingStarts = api.getValues(spreadsheetId, "$HISTORY_SHEET!A:A").values
+            ?.mapNotNull { it.firstOrNull()?.trim() }
+            .orEmpty()
+        if (periodStart in existingStarts) return
+
+        val summary = HistoryCalculator.summarise(
+            transactions = transactionDao.getAllSync().map { it.toTransaction() },
+            start = start,
+            end = HistoryCalculator.dayBefore(nextStart),
+            endBalance = endBalance
+        )
+        api.appendValues(spreadsheetId, "$HISTORY_SHEET!A:G", body = ValueRange(values = listOf(PeriodSummaryRow.encode(summary))))
+        periodSummaryDao.insertAll(listOf(summary.toEntity()))
+    }
+
+    private fun PeriodSummary.toEntity() = PeriodSummaryEntity(
+        periodStart = periodStart,
+        periodEnd = periodEnd,
+        income = income,
+        fixedCosts = fixedCosts,
+        oneOffCosts = oneOffCosts,
+        endBalance = endBalance,
+        tagTotals = PeriodSummaryRow.encodeTags(byTag)
+    )
+
+    private fun PeriodSummaryEntity.toPeriodSummary() = PeriodSummary(
+        periodStart = periodStart,
+        periodEnd = periodEnd,
+        income = income,
+        fixedCosts = fixedCosts,
+        oneOffCosts = oneOffCosts,
+        endBalance = endBalance,
+        byTag = PeriodSummaryRow.decodeTags(tagTotals)
+    )
 
     // --- Savings goals ---
 
