@@ -174,7 +174,6 @@ fun HomeScreen(
                         item {
                             SafeToSpendCard(
                                 safeToSpend = safeToSpend,
-                                totalAvailable = uiState.totalAvailable,
                                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
                             )
                         }
@@ -386,7 +385,7 @@ private fun PaydayPlanPromptCard(onPlan: () -> Unit, onSkip: () -> Unit, modifie
 }
 
 @Composable
-private fun SafeToSpendCard(safeToSpend: SafeToSpend, totalAvailable: Double, modifier: Modifier = Modifier) {
+private fun SafeToSpendCard(safeToSpend: SafeToSpend, modifier: Modifier = Modifier) {
     val days = safeToSpend.daysLeft
     val daysText = if (days == 1) "Payday tomorrow" else "$days days to payday"
     Card(
@@ -402,13 +401,17 @@ private fun SafeToSpendCard(safeToSpend: SafeToSpend, totalAvailable: Double, mo
             )
             Text(
                 text = if (safeToSpend.isOverspent) {
-                    "${(-totalAvailable).toCurrencyString()} over"
+                    "${(-safeToSpend.available).toCurrencyString()} over"
                 } else {
                     safeToSpend.perDay.toCurrencyString()
                 },
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
-                color = if (safeToSpend.isOverspent) ExpenseRed else IncomeGreen,
+                color = when {
+                    safeToSpend.isOverspent -> ExpenseRed
+                    safeToSpend.isOverBudgeted -> MaterialTheme.colorScheme.tertiary
+                    else -> IncomeGreen
+                },
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -421,6 +424,18 @@ private fun SafeToSpendCard(safeToSpend: SafeToSpend, totalAvailable: Double, mo
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
             )
+            if (!safeToSpend.isOverspent && safeToSpend.reserved > 0) {
+                Text(
+                    text = if (safeToSpend.isOverBudgeted) {
+                        "Your category budgets have ${safeToSpend.reserved.toCurrencyString()} left, but only " +
+                            "${safeToSpend.available.toCurrencyString()} is left overall. Lower a budget to free some up."
+                    } else {
+                        "${safeToSpend.reserved.toCurrencyString()} kept aside for your category budgets"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (safeToSpend.isOverBudgeted) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
+            }
         }
     }
 }

@@ -303,7 +303,7 @@ class HomeViewModel @Inject constructor(
 
             val allTransactions = repository.getAllTransactions()
 
-            combine(balancesAndRollovers, allTransactions) { (balances, rollovers), allTx ->
+            combine(balancesAndRollovers, allTransactions, budgetRepository.getEnvelopes()) { (balances, rollovers), allTx, envelopes ->
                 val today = Calendar.getInstance().apply {
                     set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
                     set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
@@ -360,8 +360,11 @@ class HomeViewModel @Inject constructor(
                     }
                     .sumOf { kotlin.math.abs(it.amount) }
                 val totalAvailable = adjustedBalances.sumOf { it.remainingBalance }
-                val daysLeft = PayPeriodCalculator.current(prefs.getPayDay(), today).daysUntilPayday(today)
-                val safeToSpend = SafeToSpendCalculator.calculate(totalAvailable, daysLeft)
+                val period = PayPeriodCalculator.current(prefs.getPayDay(), today)
+                val daysLeft = period.daysUntilPayday(today)
+                // Money still unspent in category budgets is kept for those categories
+                val reserved = EnvelopeCalculator.reserved(envelopes.map { EnvelopeCalculator.status(it, allTx, period, daysLeft) })
+                val safeToSpend = SafeToSpendCalculator.calculate(totalAvailable, daysLeft, reserved)
                 SummaryData(
                     adjustedBalances, totalAvailable, safeToSpend, income, outgoings, fixedCosts, oneOffCosts,
                     SpendTags.oneOffSpendByTag(allTx)

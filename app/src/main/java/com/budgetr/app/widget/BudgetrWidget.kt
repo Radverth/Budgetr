@@ -29,7 +29,10 @@ import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import com.budgetr.app.MainActivity
 import com.budgetr.app.data.local.entity.AccountBalanceEntity
+import com.budgetr.app.data.model.Envelope
+import com.budgetr.app.data.model.Transaction
 import com.budgetr.app.data.model.TransactionCategory
+import com.budgetr.app.util.EnvelopeCalculator
 import com.budgetr.app.util.PayPeriodCalculator
 import com.budgetr.app.util.SafeToSpend
 import com.budgetr.app.util.SafeToSpendCalculator
@@ -86,8 +89,29 @@ class BudgetrWidget : GlanceAppWidget() {
         }
 
         val safeToSpend = try {
-            val daysLeft = PayPeriodCalculator.current(entryPoint.preferencesManager().getPayDay()).daysUntilPayday()
-            SafeToSpendCalculator.calculate(adjustedBalances.sumOf { it.remainingBalance }, daysLeft)
+            val period = PayPeriodCalculator.current(entryPoint.preferencesManager().getPayDay())
+            val daysLeft = period.daysUntilPayday()
+            // Same set-aside for category budgets as the Home card
+            val transactions = entryPoint.transactionDao().getAllSync().map {
+                Transaction(
+                    rowIndex = it.rowIndex,
+                    date = it.date,
+                    info = it.info,
+                    amount = it.amount,
+                    category = TransactionCategory.fromString(it.category),
+                    account = it.account,
+                    tag = it.tag
+                )
+            }
+            val reserved = EnvelopeCalculator.reserved(
+                entryPoint.envelopeDao().getAllSync().map { entity ->
+                    EnvelopeCalculator.status(
+                        Envelope(entity.tag, entity.limitAmount, entity.rollover, entity.carriedOver),
+                        transactions, period, daysLeft
+                    )
+                }
+            )
+            SafeToSpendCalculator.calculate(adjustedBalances.sumOf { it.remainingBalance }, daysLeft, reserved)
         } catch (e: Exception) {
             null
         }
