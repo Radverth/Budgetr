@@ -40,6 +40,12 @@ interface GoogleSheetsApi {
         @Body body: ValueRange
     ): UpdateResponse
 
+    @POST("spreadsheets/{spreadsheetId}/values:batchUpdate")
+    suspend fun batchUpdateValues(
+        @Path("spreadsheetId") spreadsheetId: String,
+        @Body body: BatchUpdateValuesRequest
+    ): Unit
+
     @POST("spreadsheets/{spreadsheetId}:batchUpdate")
     suspend fun batchUpdate(
         @Path("spreadsheetId") spreadsheetId: String,
@@ -51,6 +57,12 @@ interface GoogleSheetsApi {
         @Body body: CreateSpreadsheetRequest
     ): CreatedSpreadsheet
 }
+
+@JsonClass(generateAdapter = true)
+data class BatchUpdateValuesRequest(
+    @Json(name = "data") val data: List<ValueRange>,
+    @Json(name = "valueInputOption") val valueInputOption: String = "RAW"
+)
 
 @JsonClass(generateAdapter = true)
 data class ValueRange(

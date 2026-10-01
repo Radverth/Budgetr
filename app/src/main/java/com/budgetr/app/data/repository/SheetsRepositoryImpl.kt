@@ -1,6 +1,7 @@
 package com.budgetr.app.data.repository
 
 import com.budgetr.app.data.api.AddSheetRequestBody
+import com.budgetr.app.data.api.BatchUpdateValuesRequest
 import com.budgetr.app.data.api.BatchUpdateRequest
 import com.budgetr.app.data.api.CreateSpreadsheetRequest
 import com.budgetr.app.data.api.DeleteDimensionRequest
@@ -200,6 +201,17 @@ class SheetsRepositoryImpl @Inject constructor(
         api.updateValues(spreadsheetId, range, body = ValueRange(values = row))
         ensureTagHeader(transaction)
         refreshTransactions(transaction.account)
+    }
+
+    override suspend fun assignSpendingCategory(transactions: List<Transaction>, tag: String?) {
+        val data = bulkSpendingCategoryValues(transactions, tag)
+        if (data.isEmpty()) return
+        val spreadsheetId = checkNotNull(prefs.getSpreadsheetId()) { "Connect a spreadsheet before assigning categories." }
+        api.batchUpdateValues(spreadsheetId, BatchUpdateValuesRequest(data))
+        transactions.map { it.account }.distinct().forEach { account ->
+            tagHeaderWritten += account
+            refreshTransactions(account)
+        }
     }
 
     /** Sheets made before tags existed have no header over column G. Label it the first time
