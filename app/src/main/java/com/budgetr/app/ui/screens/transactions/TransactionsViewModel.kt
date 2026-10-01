@@ -13,6 +13,7 @@ import com.budgetr.app.data.repository.BudgetRepository
 import com.budgetr.app.data.repository.SheetsRepository
 import com.budgetr.app.util.BudgetAlertNotifier
 import com.budgetr.app.util.BudgetCapCalculator
+import com.budgetr.app.util.PayPeriodCalculator
 import com.budgetr.app.util.PreferencesManager
 import com.budgetr.app.util.spendForCategory
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -202,12 +203,13 @@ class TransactionsViewModel @Inject constructor(
                     _uiState.update { it.copy(showAddSheet = false, transactionToEdit = null) }
                 } else {
                     val budget = budgetRepository.getCategoryBudgets().first().find { it.category == transaction.category }
-                    val spendBefore = budget?.let { spendForCategory(repository.getAllTransactions().first(), it.category) }
+                    val period = PayPeriodCalculator.current(prefs.getPayDay())
+                    val spendBefore = budget?.let { spendForCategory(repository.getAllTransactions().first(), it.category, period = period) }
 
                     repository.addTransaction(transaction)
 
                     if (budget != null && spendBefore != null && !BudgetCapCalculator.isOverLimit(spendBefore, budget.limit)) {
-                        val spendAfter = spendForCategory(repository.getAllTransactions().first(), budget.category)
+                        val spendAfter = spendForCategory(repository.getAllTransactions().first(), budget.category, period = period)
                         if (BudgetCapCalculator.isOverLimit(spendAfter, budget.limit)) {
                             BudgetAlertNotifier.notifyOverBudget(context, budget.category, spendAfter, budget.limit)
                         }

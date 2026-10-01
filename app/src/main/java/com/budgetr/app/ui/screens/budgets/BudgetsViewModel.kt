@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.budgetr.app.data.model.TransactionCategory
 import com.budgetr.app.data.repository.BudgetRepository
 import com.budgetr.app.data.repository.SheetsRepository
+import com.budgetr.app.util.PayPeriodCalculator
+import com.budgetr.app.util.PreferencesManager
 import com.budgetr.app.util.spendForCategory
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -13,6 +15,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.Date
 import javax.inject.Inject
 
 /** Categories a spending cap can meaningfully apply to — income/transfer categories are excluded. */
@@ -27,6 +30,9 @@ data class BudgetCapUiItem(
 data class BudgetsUiState(
     val isLoading: Boolean = true,
     val items: List<BudgetCapUiItem> = emptyList(),
+    /** Next payday, when caps reset, and how many days away it is. */
+    val resetDate: Date? = null,
+    val resetDays: Int = 0,
     val showDialog: Boolean = false,
     val editingCategory: TransactionCategory? = null,
     val limitInput: String = "",
@@ -37,7 +43,8 @@ data class BudgetsUiState(
 @HiltViewModel
 class BudgetsViewModel @Inject constructor(
     private val budgetRepository: BudgetRepository,
-    private val sheetsRepository: SheetsRepository
+    private val sheetsRepository: SheetsRepository,
+    private val prefs: PreferencesManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(BudgetsUiState())
@@ -49,16 +56,25 @@ class BudgetsViewModel @Inject constructor(
                 budgetRepository.getCategoryBudgets(),
                 sheetsRepository.getAllTransactions()
             ) { budgets, transactions ->
+                val period = PayPeriodCalculator.current(prefs.getPayDay())
                 val limitsByCategory = budgets.associate { it.category to it.limit }
-                CAPPABLE_CATEGORIES.map { category ->
+                val items = CAPPABLE_CATEGORIES.map { category ->
                     BudgetCapUiItem(
                         category = category,
                         limit = limitsByCategory[category],
-                        spend = spendForCategory(transactions, category)
+                        spend = spendForCategory(transactions, category, period = period)
                     )
                 }
-            }.collect { items ->
-                _uiState.update { it.copy(isLoading = false, items = items) }
+                items to period
+            }.collect { (items, period) ->
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        items = items,
+                        resetDate = period.nextPayday,
+                        resetDays = period.daysUntilPayday()
+                    )
+                }
             }
         }
     }

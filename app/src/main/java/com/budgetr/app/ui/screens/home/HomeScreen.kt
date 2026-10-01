@@ -217,6 +217,7 @@ fun HomeScreen(
                         item {
                             BudgetAlertsCard(
                                 alerts = uiState.budgetAlerts,
+                                resetDays = uiState.budgetResetDays,
                                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
                             )
                         }
@@ -729,7 +730,7 @@ private fun GlanceRow(
 }
 
 @Composable
-private fun BudgetAlertsCard(alerts: List<BudgetAlertUiItem>, modifier: Modifier = Modifier) {
+private fun BudgetAlertsCard(alerts: List<BudgetAlertUiItem>, resetDays: Int, modifier: Modifier = Modifier) {
     Card(
         modifier = modifier,
         colors = CardDefaults.cardColors(containerColor = ExpenseRed.copy(alpha = 0.12f)),
@@ -754,6 +755,11 @@ private fun BudgetAlertsCard(alerts: List<BudgetAlertUiItem>, modifier: Modifier
                     color = MaterialTheme.colorScheme.onSurface
                 )
             }
+            Text(
+                text = if (resetDays == 1) "Caps reset tomorrow (payday)" else "Caps reset on payday, in $resetDays days",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            )
         }
     }
 }

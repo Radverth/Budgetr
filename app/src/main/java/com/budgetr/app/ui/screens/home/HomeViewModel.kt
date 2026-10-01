@@ -74,6 +74,7 @@ data class HomeUiState(
     val debtCount: Int = 0,
     val totalDebt: Double = 0.0,
     val budgetAlerts: List<BudgetAlertUiItem> = emptyList(),
+    val budgetResetDays: Int = 0,
     val noSpendStreakDays: Int? = null,
     val spendingTrend: SpendingTrend? = null,
     val recurringReviews: List<RecurringReviewUiItem> = emptyList(),
@@ -82,6 +83,7 @@ data class HomeUiState(
 
 private data class SpendingControlsData(
     val alerts: List<BudgetAlertUiItem>,
+    val resetDays: Int,
     val streakDays: Int?,
     val trend: SpendingTrend?,
     val reviews: List<RecurringReviewUiItem>,
@@ -133,9 +135,10 @@ class HomeViewModel @Inject constructor(
                 linksAndGoals
             ) { allTx, budgets, reviews, (links, goals) ->
                 val currentMonth = Calendar.getInstance().get(Calendar.MONTH) + 1
+                val period = PayPeriodCalculator.current(prefs.getPayDay())
 
                 val alerts = budgets.mapNotNull { budget ->
-                    val spend = spendForCategory(allTx, budget.category, currentMonth)
+                    val spend = spendForCategory(allTx, budget.category, currentMonth, period)
                     val isOver = BudgetCapCalculator.isOverLimit(spend, budget.limit)
                     val isApproaching = BudgetCapCalculator.isApproachingLimit(spend, budget.limit)
                     if (isOver || isApproaching) BudgetAlertUiItem(budget.category, spend, budget.limit, isOver) else null
@@ -169,16 +172,17 @@ class HomeViewModel @Inject constructor(
                 val suggestions = links.mapNotNull { link ->
                     goalsByName[link.goalName] ?: return@mapNotNull null
                     val budget = budgetsByCategory[link.category] ?: return@mapNotNull null
-                    val spend = spendForCategory(allTx, link.category, currentMonth)
+                    val spend = spendForCategory(allTx, link.category, currentMonth, period)
                     val underspend = budget.limit - spend
                     if (underspend > 1.0) GoalSuggestionUiItem(link.goalName, link.category, underspend) else null
                 }
 
-                SpendingControlsData(alerts, streakDays, trend, dueReviews, suggestions)
+                SpendingControlsData(alerts, period.daysUntilPayday(), streakDays, trend, dueReviews, suggestions)
             }.collect { data ->
                 _uiState.update {
                     it.copy(
                         budgetAlerts = data.alerts,
+                        budgetResetDays = data.resetDays,
                         noSpendStreakDays = data.streakDays,
                         spendingTrend = data.trend,
                         recurringReviews = data.reviews,

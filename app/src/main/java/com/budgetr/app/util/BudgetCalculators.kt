@@ -12,14 +12,25 @@ private const val DAY_MILLIS = 24L * 60 * 60 * 1000
 private fun dateFormat() = SimpleDateFormat("dd/MM/yyyy", Locale.UK)
 
 /** Total spend for [category] this period, applying the same "restricted to active months"
- *  rule fixed costs use elsewhere (e.g. an annual renewal only counted in its billing month). */
+ *  rule fixed costs use elsewhere (e.g. an annual renewal only counted in its billing month).
+ *  Given a [period], other categories only count transactions dated inside it, so a cost dated
+ *  after payday doesn't eat into this period's cap. Undated or unreadable rows still count. */
 fun spendForCategory(
     transactions: List<Transaction>,
     category: TransactionCategory,
-    month: Int = Calendar.getInstance().get(Calendar.MONTH) + 1
-): Double = transactions
-    .filter { it.category == category && (it.activeMonths == null || it.activeMonths.contains(month)) }
-    .sumOf { kotlin.math.abs(it.amount) }
+    month: Int = Calendar.getInstance().get(Calendar.MONTH) + 1,
+    period: PayPeriod? = null
+): Double {
+    val fmt = dateFormat()
+    return transactions
+        .filter { it.category == category && (it.activeMonths == null || it.activeMonths.contains(month)) }
+        .filter { tx ->
+            if (period == null || tx.category == TransactionCategory.FIXED_COST) return@filter true
+            val date = runCatching { fmt.parse(tx.date) }.getOrNull() ?: return@filter true
+            !date.before(period.start) && date.before(period.nextPayday)
+        }
+        .sumOf { kotlin.math.abs(it.amount) }
+}
 
 /** Pure calculations behind the category budget caps shown on Home and the Budgets screen. */
 object BudgetCapCalculator {

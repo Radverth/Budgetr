@@ -46,6 +46,8 @@ import com.budgetr.app.ui.theme.ExpenseRed
 import com.budgetr.app.ui.theme.IncomeGreen
 import com.budgetr.app.util.BudgetCapCalculator
 import com.budgetr.app.util.toCurrencyString
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -99,11 +101,24 @@ fun BudgetsScreen(onNavigateBack: () -> Unit, viewModel: BudgetsViewModel = hilt
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
-                Text(
-                    text = "Set a cap for each category to get warned before you overspend this pay period.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                )
+                Column {
+                    Text(
+                        text = "Set a cap for each category to get warned before you overspend this pay period.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                    uiState.resetDate?.let { resetDate ->
+                        val dateText = SimpleDateFormat("EEE d MMM", Locale.UK).format(resetDate)
+                        val daysText = if (uiState.resetDays == 1) "tomorrow" else "in ${uiState.resetDays} days"
+                        Text(
+                            text = "Caps reset on payday, $dateText ($daysText)",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
+                }
             }
             items(uiState.items, key = { it.category.name }) { item ->
                 BudgetCapCard(item = item, onEdit = { viewModel.showEditDialog(item.category) })

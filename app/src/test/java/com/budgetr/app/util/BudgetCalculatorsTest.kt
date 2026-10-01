@@ -145,3 +145,37 @@ class RecurringCostReviewCalculatorTest {
         assertTrue(RecurringCostReviewCalculator.isDueForReview(firstSeen, dismissedUntil, now = now))
     }
 }
+
+class SpendForCategoryTest {
+
+    private fun tx(date: String, amount: Double, category: TransactionCategory = TransactionCategory.ONE_OFF_COST) =
+        Transaction(rowIndex = 0, date = date, info = "", amount = amount, category = category, account = "A")
+
+    private val period = PayPeriod(start = date("25/09/2026"), nextPayday = date("26/10/2026"))
+
+    @Test
+    fun `one-off costs outside the pay period are not counted`() {
+        val spend = spendForCategory(
+            listOf(tx("24/09/2026", -10.0), tx("25/09/2026", -20.0), tx("25/10/2026", -5.0), tx("26/10/2026", -40.0)),
+            TransactionCategory.ONE_OFF_COST,
+            period = period
+        )
+        assertEquals(25.0, spend, 0.001)
+    }
+
+    @Test
+    fun `unreadable dates still count`() {
+        val spend = spendForCategory(listOf(tx("", -10.0)), TransactionCategory.ONE_OFF_COST, period = period)
+        assertEquals(10.0, spend, 0.001)
+    }
+
+    @Test
+    fun `fixed costs ignore the period dates`() {
+        val spend = spendForCategory(
+            listOf(tx("01/01/2026", -50.0, TransactionCategory.FIXED_COST)),
+            TransactionCategory.FIXED_COST,
+            period = period
+        )
+        assertEquals(50.0, spend, 0.001)
+    }
+}
