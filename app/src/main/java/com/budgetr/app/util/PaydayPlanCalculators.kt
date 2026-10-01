@@ -49,6 +49,11 @@ object PaydayPlanCalculator {
         SavingsGoalCalculator.suggestedMonthlyContribution(goal.savedAmount, goal.targetAmount, months) ?: 0.0
     }
 
+    /** Reads a typed amount, allowing "£" and thousands commas ("£1,200"). Null if blank or
+     *  unreadable, so callers can tell "nothing entered" apart from £0. */
+    fun parseAmount(input: String): Double? =
+        input.trim().replace("£", "").replace(",", "").takeIf { it.isNotEmpty() }?.toDoubleOrNull()
+
     fun debtMinimums(debts: List<Debt>): Double = debts.filter { it.balance > 0 }.sumOf { it.minPayment }
 
     /** Existing budgets keep their limits. Categories with history but no budget are added

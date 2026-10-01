@@ -52,6 +52,14 @@ class PaydayPlanCalculatorTest {
     }
 
     @Test
+    fun `amounts allow pound signs and commas but blank is not zero`() {
+        assertEquals(1200.0, PaydayPlanCalculator.parseAmount(" £1,200 ")!!, 0.001)
+        assertEquals(0.0, PaydayPlanCalculator.parseAmount("0")!!, 0.001)
+        assertEquals(null, PaydayPlanCalculator.parseAmount(""))
+        assertEquals(null, PaydayPlanCalculator.parseAmount("abc"))
+    }
+
+    @Test
     fun `left to assign subtracts everything`() {
         val totals = PaydayPlanTotals(income = 2000.0, fixedCosts = 900.0, goals = 250.0, debts = 50.0, assigned = 600.0)
         assertEquals(800.0, totals.toAssign, 0.001)
