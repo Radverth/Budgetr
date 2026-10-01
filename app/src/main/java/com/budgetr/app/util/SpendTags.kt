@@ -23,22 +23,27 @@ object SpendTags {
     }
 
     /** Description (trimmed, lower case) → the tag last used for it, so the add form can
-     *  pre-fill "Tesco" as Groceries. Later rows in [transactions] win. */
+     *  pre-fill "Tesco" as Groceries. The newest row (highest sheet row) wins. */
     fun suggestionsByInfo(transactions: List<Transaction>): Map<String, String> = buildMap {
-        transactions.forEach { tx ->
+        // The cache returns newest first, so sort oldest first and let later rows overwrite
+        transactions.sortedBy { it.rowIndex }.forEach { tx ->
             val tag = normalise(tx.tag) ?: return@forEach
             val key = tx.info.trim().lowercase()
             if (key.isNotEmpty()) put(key, tag)
         }
     }
 
-    /** One-off spend grouped by tag, largest first. Untagged spend is grouped under a null tag. */
-    fun oneOffSpendByTag(transactions: List<Transaction>): List<TagSpend> = transactions
-        .filter { it.category == TransactionCategory.ONE_OFF_COST }
-        .groupBy { normalise(it.tag)?.let { tag -> canonical(tag) } }
-        .map { (tag, txs) -> TagSpend(tag, txs.sumOf { kotlin.math.abs(it.amount) }) }
+    /** One-off spend grouped by tag (ignoring case), largest first. Untagged spend is grouped
+     *  under a null tag. Given a [period], only rows dated inside it count. */
+    fun oneOffSpendByTag(transactions: List<Transaction>, period: PayPeriod? = null): List<TagSpend> = transactions
+        .filter { it.category == TransactionCategory.ONE_OFF_COST && isDatedInPeriod(it, period) }
+        .groupBy { normalise(it.tag)?.lowercase() }
+        .map { (key, txs) ->
+            val tag = key?.let { canonical(txs.firstNotNullOf { tx -> normalise(tx.tag) }) }
+            TagSpend(tag, txs.sumOf { kotlin.math.abs(it.amount) })
+        }
         .sortedByDescending { it.amount }
 
-    /** Matches [tag] to a default regardless of case, so "groceries" and "Groceries" group together. */
+    /** A default's own spelling if [tag] matches one regardless of case, else [tag] as given. */
     private fun canonical(tag: String): String = DEFAULTS.firstOrNull { it.equals(tag, ignoreCase = true) } ?: tag
 }

@@ -220,7 +220,12 @@ fun TransactionsScreen(
                     modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(uiState.knownTags) { tag ->
+                    // Keep the selected tag visible even once nothing uses it, so it can be cleared
+                    val tagChips = uiState.tagFilter
+                        ?.takeIf { selected -> uiState.knownTags.none { it.equals(selected, ignoreCase = true) } }
+                        ?.let { uiState.knownTags + it }
+                        ?: uiState.knownTags
+                    items(tagChips) { tag ->
                         FilterChip(
                             selected = uiState.tagFilter == tag,
                             onClick = { viewModel.setTagFilter(if (uiState.tagFilter == tag) null else tag) },
