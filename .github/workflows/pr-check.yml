@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - 'agent/**'
+      - main
 
 jobs:
   check:

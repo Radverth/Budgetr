@@ -82,6 +82,8 @@ class QuickAddActivity : ComponentActivity() {
                         savingsGoals = uiState.savingsGoals,
                         spendingPromptEnabled = uiState.spendingPromptEnabled,
                         spendingPromptThreshold = uiState.spendingPromptThreshold,
+                        knownTags = uiState.knownTags,
+                        tagSuggestions = uiState.tagSuggestions,
                         onSave = viewModel::saveTransaction,
                         onSaveTransfer = viewModel::saveTransfer,
                         onDismiss = { finish() },

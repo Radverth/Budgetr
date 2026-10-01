@@ -13,7 +13,10 @@ import com.budgetr.app.data.repository.BudgetRepository
 import com.budgetr.app.data.repository.SheetsRepository
 import com.budgetr.app.util.BudgetAlertNotifier
 import com.budgetr.app.util.BudgetCapCalculator
+import com.budgetr.app.util.EnvelopeCalculator
+import com.budgetr.app.util.PayPeriodCalculator
 import com.budgetr.app.util.PreferencesManager
+import com.budgetr.app.util.SpendTags
 import com.budgetr.app.util.spendForCategory
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -38,6 +41,10 @@ data class TransactionsUiState(
     val selectedAccount: String? = null,
     val transactions: List<Transaction> = emptyList(),
     val categoryFilter: TransactionCategory? = null,
+    /** Spending category filter, only applied while viewing one-off costs. */
+    val tagFilter: String? = null,
+    val knownTags: List<String> = SpendTags.DEFAULTS,
+    val tagSuggestions: Map<String, String> = emptyMap(),
     val searchQuery: String = "",
     val sortOrder: SortOrder = SortOrder.DATE_DESC,
     val error: String? = null,
@@ -76,6 +83,7 @@ class TransactionsViewModel @Inject constructor(
 
     private val selectedAccountFlow = MutableStateFlow(initialAccount)
     private val categoryFilterFlow = MutableStateFlow<TransactionCategory?>(null)
+    private val tagFilterFlow = MutableStateFlow<String?>(null)
     private val searchQueryFlow = MutableStateFlow("")
     private val sortOrderFlow = MutableStateFlow(SortOrder.DATE_DESC)
 
@@ -97,6 +105,14 @@ class TransactionsViewModel @Inject constructor(
         refresh()
 
         viewModelScope.launch {
+            repository.getAllTransactions().collect { all ->
+                _uiState.update {
+                    it.copy(knownTags = SpendTags.knownTags(all), tagSuggestions = SpendTags.suggestionsByInfo(all))
+                }
+            }
+        }
+
+        viewModelScope.launch {
             combine(repository.getDebts(), repository.getSavingsGoals()) { debts, goals -> debts to goals }
                 .collect { (debts, goals) ->
                     _uiState.update { it.copy(debts = debts, savingsGoals = goals) }
@@ -108,12 +124,13 @@ class TransactionsViewModel @Inject constructor(
                 if (account == null) {
                     flowOf(emptyList())
                 } else {
+                    val filters = combine(categoryFilterFlow, tagFilterFlow) { category, tag -> category to tag }
                     combine(
                         repository.getTransactions(account),
-                        categoryFilterFlow,
+                        filters,
                         searchQueryFlow,
                         sortOrderFlow
-                    ) { transactions, filter, query, sort ->
+                    ) { transactions, (filter, tagFilter), query, sort ->
                         val currentMonth = Calendar.getInstance().get(Calendar.MONTH) + 1
                         val dateFmt = SimpleDateFormat("dd/MM/yyyy", Locale.UK)
                         var result = transactions
@@ -124,6 +141,9 @@ class TransactionsViewModel @Inject constructor(
                                 tx.activeMonths.contains(currentMonth)
                             }
                         if (filter != null) result = result.filter { it.category == filter }
+                        if (filter == TransactionCategory.ONE_OFF_COST && tagFilter != null) {
+                            result = result.filter { it.tag.equals(tagFilter, ignoreCase = true) }
+                        }
                         if (query.isNotBlank()) {
                             result = result.filter {
                                 it.info.contains(query, ignoreCase = true) ||
@@ -154,6 +174,12 @@ class TransactionsViewModel @Inject constructor(
     fun setCategoryFilter(category: TransactionCategory?) {
         categoryFilterFlow.value = category
         _uiState.update { it.copy(categoryFilter = category) }
+        if (category != TransactionCategory.ONE_OFF_COST) setTagFilter(null)
+    }
+
+    fun setTagFilter(tag: String?) {
+        tagFilterFlow.value = tag
+        _uiState.update { it.copy(tagFilter = tag) }
     }
 
     fun setSearchQuery(query: String) {
@@ -202,15 +228,26 @@ class TransactionsViewModel @Inject constructor(
                     _uiState.update { it.copy(showAddSheet = false, transactionToEdit = null) }
                 } else {
                     val budget = budgetRepository.getCategoryBudgets().first().find { it.category == transaction.category }
-                    val spendBefore = budget?.let { spendForCategory(repository.getAllTransactions().first(), it.category) }
+                    val period = PayPeriodCalculator.current(prefs.getPayDay())
+                    val spendBefore = budget?.let { spendForCategory(repository.getAllTransactions().first(), it.category, period = period) }
+                    val envelope = transaction.tag?.let { tag ->
+                        budgetRepository.getEnvelopes().first().find { it.tag.equals(tag, ignoreCase = true) }
+                    }
+                    val envelopeWasOver = envelope?.let {
+                        EnvelopeCalculator.status(it, repository.getAllTransactions().first(), period, 1).isOver
+                    }
 
                     repository.addTransaction(transaction)
 
                     if (budget != null && spendBefore != null && !BudgetCapCalculator.isOverLimit(spendBefore, budget.limit)) {
-                        val spendAfter = spendForCategory(repository.getAllTransactions().first(), budget.category)
+                        val spendAfter = spendForCategory(repository.getAllTransactions().first(), budget.category, period = period)
                         if (BudgetCapCalculator.isOverLimit(spendAfter, budget.limit)) {
                             BudgetAlertNotifier.notifyOverBudget(context, budget.category, spendAfter, budget.limit)
                         }
+                    }
+                    if (envelope != null && envelopeWasOver == false) {
+                        val after = EnvelopeCalculator.status(envelope, repository.getAllTransactions().first(), period, 1)
+                        if (after.isOver) BudgetAlertNotifier.notifyEnvelopeOver(context, envelope.tag, after.spent, after.available)
                     }
                     linkAction?.let { applyLinkAction(it, kotlin.math.abs(transaction.amount)) }
                     _uiState.update { it.copy(addSaveCount = it.addSaveCount + 1) }

@@ -50,6 +50,7 @@ import com.budgetr.app.data.model.Transaction
 import com.budgetr.app.data.model.TransactionCategory
 import com.budgetr.app.ui.theme.ExpenseRed
 import com.budgetr.app.ui.theme.IncomeGreen
+import com.budgetr.app.util.SpendTags
 import com.budgetr.app.util.toCurrencyString
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -96,6 +97,8 @@ fun AddEditTransactionSheet(
     savingsGoals: List<SavingsGoal> = emptyList(),
     spendingPromptEnabled: Boolean = true,
     spendingPromptThreshold: Double = 20.0,
+    knownTags: List<String> = SpendTags.DEFAULTS,
+    tagSuggestions: Map<String, String> = emptyMap(),
     onSave: (Transaction, TransactionLinkAction?) -> Unit,
     onSaveTransfer: (source: Transaction, destination: Transaction) -> Unit,
     onDismiss: () -> Unit,
@@ -122,6 +125,9 @@ fun AddEditTransactionSheet(
     var activeMonths by remember {
         mutableStateOf<Set<Int>>(existingTransaction?.activeMonths?.toSet() ?: emptySet())
     }
+    var tag by remember { mutableStateOf(existingTransaction?.tag) }
+    // Once the user picks a tag themselves, stop auto-filling it from the description
+    var tagTouched by remember { mutableStateOf(existingTransaction != null) }
 
     var showDatePicker by remember { mutableStateOf(false) }
     var categoryExpanded by remember { mutableStateOf(false) }
@@ -166,6 +172,10 @@ fun AddEditTransactionSheet(
         }
     }
 
+    LaunchedEffect(info) {
+        if (!tagTouched) tag = tagSuggestions[info.trim().lowercase()]
+    }
+
     LaunchedEffect(applyPayDate) {
         if (!isEdit && category == TransactionCategory.TRANSFER) {
             date = if (applyPayDate) getPayDate(payDay) else today
@@ -183,6 +193,8 @@ fun AddEditTransactionSheet(
             amount = ""
             transferToAccount = null
             applyPayDate = false
+            tag = null
+            tagTouched = false
             savedBanner = true
             date = when (category) {
                 TransactionCategory.FIXED_COST, TransactionCategory.SALARY -> getPayDate(payDay)
@@ -422,6 +434,18 @@ fun AddEditTransactionSheet(
                 }
             }
 
+            // Spending category — only for one-off costs
+            AnimatedVisibility(visible = category == TransactionCategory.ONE_OFF_COST) {
+                SpendTagPicker(
+                    knownTags = knownTags,
+                    selected = tag,
+                    onSelect = {
+                        tag = it
+                        tagTouched = true
+                    }
+                )
+            }
+
             // Month restriction — only shown for Fixed Cost
             AnimatedVisibility(visible = category == TransactionCategory.FIXED_COST) {
                 ActiveMonthsPicker(
@@ -519,7 +543,8 @@ fun AddEditTransactionSheet(
                             amount = signedAmount,
                             category = category,
                             account = selectedAccount,
-                            activeMonths = resolvedActiveMonths
+                            activeMonths = resolvedActiveMonths,
+                            tag = if (category == TransactionCategory.ONE_OFF_COST) SpendTags.normalise(tag) else null
                         ),
                         if (showLinkPicker) selectedLinkOption.action else null
                     )
@@ -582,6 +607,71 @@ private fun SpendingReflectionDialog(amount: Double, onSaveAnyway: () -> Unit, o
             }
         }
     )
+}
+
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
+@Composable
+private fun SpendTagPicker(
+    knownTags: List<String>,
+    selected: String?,
+    onSelect: (String?) -> Unit
+) {
+    var showNewTagDialog by remember { mutableStateOf(false) }
+    // A tag typed in this session isn't in knownTags until it's saved, so keep it visible
+    val tags = if (selected != null && knownTags.none { it.equals(selected, ignoreCase = true) }) {
+        knownTags + selected
+    } else knownTags
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Spending category (optional)", style = MaterialTheme.typography.bodyMedium)
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            tags.forEach { tag ->
+                val isSelected = tag.equals(selected, ignoreCase = true)
+                FilterChip(
+                    selected = isSelected,
+                    onClick = { onSelect(if (isSelected) null else tag) },
+                    label = { Text(tag, style = MaterialTheme.typography.labelMedium) }
+                )
+            }
+            FilterChip(
+                selected = false,
+                onClick = { showNewTagDialog = true },
+                label = { Text("+ New", style = MaterialTheme.typography.labelMedium) }
+            )
+        }
+    }
+
+    if (showNewTagDialog) {
+        var newTag by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { showNewTagDialog = false },
+            title = { Text("New spending category") },
+            text = {
+                OutlinedTextField(
+                    value = newTag,
+                    onValueChange = { newTag = it.take(24) },
+                    label = { Text("Name, e.g. Pets") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onSelect(SpendTags.normalise(newTag))
+                        showNewTagDialog = false
+                    },
+                    enabled = SpendTags.normalise(newTag) != null
+                ) { Text("Add") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showNewTagDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
 }
 
 private val MONTH_NAMES = listOf("Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec")

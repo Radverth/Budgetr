@@ -95,6 +95,24 @@ class SafeToSpendCalculatorTest {
 
     @Test
     fun `negative balance is overspent`() {
-        assertTrue(SafeToSpendCalculator.calculate(available = -20.0, daysLeft = 5).isOverspent)
+        val result = SafeToSpendCalculator.calculate(available = -20.0, daysLeft = 5)
+        assertTrue(result.isOverspent)
+        assertEquals(-4.0, result.perDay, 0.001)
+    }
+
+    @Test
+    fun `money left in category budgets is set aside`() {
+        val result = SafeToSpendCalculator.calculate(available = 300.0, daysLeft = 10, reserved = 100.0)
+        assertEquals(20.0, result.perDay, 0.001)
+        assertEquals(100.0, result.reserved, 0.001)
+        assertFalse(result.isOverBudgeted)
+    }
+
+    @Test
+    fun `budgets needing more than is left means nothing else to spend`() {
+        val result = SafeToSpendCalculator.calculate(available = 50.0, daysLeft = 10, reserved = 80.0)
+        assertEquals(0.0, result.perDay, 0.001)
+        assertTrue(result.isOverBudgeted)
+        assertFalse(result.isOverspent)
     }
 }

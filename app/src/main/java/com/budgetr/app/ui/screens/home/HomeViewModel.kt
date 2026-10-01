@@ -9,6 +9,7 @@ import com.budgetr.app.data.repository.BudgetRepository
 import com.budgetr.app.data.repository.SheetsRepository
 import com.budgetr.app.util.AuthManager
 import com.budgetr.app.util.BudgetCapCalculator
+import com.budgetr.app.util.EnvelopeCalculator
 import com.budgetr.app.util.NoSpendStreakCalculator
 import com.budgetr.app.util.PayPeriodCalculator
 import com.budgetr.app.util.PreferencesManager
@@ -16,7 +17,9 @@ import com.budgetr.app.util.RecurringCostReviewCalculator
 import com.budgetr.app.util.SafeToSpend
 import com.budgetr.app.util.SafeToSpendCalculator
 import com.budgetr.app.util.SavingsGoalCalculator
+import com.budgetr.app.util.SpendTags
 import com.budgetr.app.util.SpendingTrend
+import com.budgetr.app.util.TagSpend
 import com.budgetr.app.util.SpendingTrendCalculator
 import com.budgetr.app.util.UpdateChecker
 import com.budgetr.app.util.spendForCategory
@@ -34,7 +37,8 @@ import java.util.Locale
 import javax.inject.Inject
 
 data class BudgetAlertUiItem(
-    val category: TransactionCategory,
+    /** Category name, e.g. "One Off Cost" or a spending category like "Groceries". */
+    val label: String,
     val spend: Double,
     val limit: Double,
     val isOver: Boolean
@@ -61,8 +65,11 @@ data class HomeUiState(
     val totalOutgoings: Double = 0.0,
     val totalFixedCosts: Double = 0.0,
     val totalOneOffCosts: Double = 0.0,
+    val oneOffByTag: List<TagSpend> = emptyList(),
     val totalAvailable: Double = 0.0,
     val safeToSpend: SafeToSpend? = null,
+    /** A new pay period started and its payday plan hasn't been done or skipped yet. */
+    val paydayPlanPending: Boolean = false,
     val error: String? = null,
     val successMessage: String? = null,
     val userName: String? = null,
@@ -74,6 +81,7 @@ data class HomeUiState(
     val debtCount: Int = 0,
     val totalDebt: Double = 0.0,
     val budgetAlerts: List<BudgetAlertUiItem> = emptyList(),
+    val budgetResetDays: Int = 0,
     val noSpendStreakDays: Int? = null,
     val spendingTrend: SpendingTrend? = null,
     val recurringReviews: List<RecurringReviewUiItem> = emptyList(),
@@ -82,6 +90,7 @@ data class HomeUiState(
 
 private data class SpendingControlsData(
     val alerts: List<BudgetAlertUiItem>,
+    val resetDays: Int,
     val streakDays: Int?,
     val trend: SpendingTrend?,
     val reviews: List<RecurringReviewUiItem>,
@@ -95,7 +104,8 @@ private data class SummaryData(
     val income: Double,
     val outgoings: Double,
     val fixedCosts: Double,
-    val oneOffCosts: Double
+    val oneOffCosts: Double,
+    val oneOffByTag: List<TagSpend>
 )
 
 @HiltViewModel
@@ -126,20 +136,34 @@ class HomeViewModel @Inject constructor(
                 repository.getSavingsGoals()
             ) { links, goals -> links to goals }
 
+            val budgetsAndEnvelopes = combine(
+                budgetRepository.getCategoryBudgets(),
+                budgetRepository.getEnvelopes()
+            ) { budgets, envelopes -> budgets to envelopes }
+
             combine(
                 repository.getAllTransactions(),
-                budgetRepository.getCategoryBudgets(),
+                budgetsAndEnvelopes,
                 budgetRepository.getRecurringCostReviews(),
                 linksAndGoals
-            ) { allTx, budgets, reviews, (links, goals) ->
+            ) { allTx, (budgets, envelopes), reviews, (links, goals) ->
                 val currentMonth = Calendar.getInstance().get(Calendar.MONTH) + 1
+                val period = PayPeriodCalculator.current(prefs.getPayDay())
 
-                val alerts = budgets.mapNotNull { budget ->
-                    val spend = spendForCategory(allTx, budget.category, currentMonth)
+                val capAlerts = budgets.mapNotNull { budget ->
+                    val spend = spendForCategory(allTx, budget.category, currentMonth, period)
                     val isOver = BudgetCapCalculator.isOverLimit(spend, budget.limit)
                     val isApproaching = BudgetCapCalculator.isApproachingLimit(spend, budget.limit)
-                    if (isOver || isApproaching) BudgetAlertUiItem(budget.category, spend, budget.limit, isOver) else null
-                }.sortedByDescending { it.isOver }
+                    if (isOver || isApproaching) BudgetAlertUiItem(budget.category.displayName, spend, budget.limit, isOver) else null
+                }
+                val daysLeft = period.daysUntilPayday()
+                val envelopeAlerts = envelopes.mapNotNull { envelope ->
+                    val status = EnvelopeCalculator.status(envelope, allTx, period, daysLeft)
+                    if (status.isOver || status.isApproaching) {
+                        BudgetAlertUiItem(envelope.tag, status.spent, status.available, status.isOver)
+                    } else null
+                }
+                val alerts = (capAlerts + envelopeAlerts).sortedByDescending { it.isOver }
 
                 val oneOffTx = allTx.filter { it.category == TransactionCategory.ONE_OFF_COST }
                 val periodStart = prefs.getLastPayPeriodStart()?.let {
@@ -169,16 +193,17 @@ class HomeViewModel @Inject constructor(
                 val suggestions = links.mapNotNull { link ->
                     goalsByName[link.goalName] ?: return@mapNotNull null
                     val budget = budgetsByCategory[link.category] ?: return@mapNotNull null
-                    val spend = spendForCategory(allTx, link.category, currentMonth)
+                    val spend = spendForCategory(allTx, link.category, currentMonth, period)
                     val underspend = budget.limit - spend
                     if (underspend > 1.0) GoalSuggestionUiItem(link.goalName, link.category, underspend) else null
                 }
 
-                SpendingControlsData(alerts, streakDays, trend, dueReviews, suggestions)
+                SpendingControlsData(alerts, period.daysUntilPayday(), streakDays, trend, dueReviews, suggestions)
             }.collect { data ->
                 _uiState.update {
                     it.copy(
                         budgetAlerts = data.alerts,
+                        budgetResetDays = data.resetDays,
                         noSpendStreakDays = data.streakDays,
                         spendingTrend = data.trend,
                         recurringReviews = data.reviews,
@@ -223,7 +248,13 @@ class HomeViewModel @Inject constructor(
             try {
                 val wasReset = repository.checkAndProcessNewPayPeriod()
                 if (wasReset) {
-                    _uiState.update { it.copy(successMessage = "New pay period started — balances rolled over and one-off costs cleared") }
+                    prefs.setPaydayPlanPending(true)
+                    _uiState.update {
+                        it.copy(
+                            successMessage = "New pay period started — balances rolled over and one-off costs cleared",
+                            paydayPlanPending = true
+                        )
+                    }
                 }
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = "Couldn't start the new pay period (${e.message ?: "unknown error"}). It will retry next time you open the app.") }
@@ -272,7 +303,7 @@ class HomeViewModel @Inject constructor(
 
             val allTransactions = repository.getAllTransactions()
 
-            combine(balancesAndRollovers, allTransactions) { (balances, rollovers), allTx ->
+            combine(balancesAndRollovers, allTransactions, budgetRepository.getEnvelopes()) { (balances, rollovers), allTx, envelopes ->
                 val today = Calendar.getInstance().apply {
                     set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
                     set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
@@ -329,9 +360,15 @@ class HomeViewModel @Inject constructor(
                     }
                     .sumOf { kotlin.math.abs(it.amount) }
                 val totalAvailable = adjustedBalances.sumOf { it.remainingBalance }
-                val daysLeft = PayPeriodCalculator.current(prefs.getPayDay(), today).daysUntilPayday(today)
-                val safeToSpend = SafeToSpendCalculator.calculate(totalAvailable, daysLeft)
-                SummaryData(adjustedBalances, totalAvailable, safeToSpend, income, outgoings, fixedCosts, oneOffCosts)
+                val period = PayPeriodCalculator.current(prefs.getPayDay(), today)
+                val daysLeft = period.daysUntilPayday(today)
+                // Money still unspent in category budgets is kept for those categories
+                val reserved = EnvelopeCalculator.reserved(envelopes.map { EnvelopeCalculator.status(it, allTx, period, daysLeft) })
+                val safeToSpend = SafeToSpendCalculator.calculate(totalAvailable, daysLeft, reserved)
+                SummaryData(
+                    adjustedBalances, totalAvailable, safeToSpend, income, outgoings, fixedCosts, oneOffCosts,
+                    SpendTags.oneOffSpendByTag(allTx)
+                )
             }.collect { data ->
                 _uiState.update {
                     it.copy(
@@ -340,6 +377,7 @@ class HomeViewModel @Inject constructor(
                         totalOutgoings = data.outgoings,
                         totalFixedCosts = data.fixedCosts,
                         totalOneOffCosts = data.oneOffCosts,
+                        oneOffByTag = data.oneOffByTag,
                         totalAvailable = data.totalAvailable,
                         safeToSpend = data.safeToSpend
                     )
@@ -363,6 +401,14 @@ class HomeViewModel @Inject constructor(
                 _uiState.update { it.copy(isRefreshing = false, isLoading = false) }
             }
         }
+    }
+
+    /** Re-reads the flag, since the plan screen clears it when the plan is saved. */
+    fun syncPaydayPlanPending() = _uiState.update { it.copy(paydayPlanPending = prefs.isPaydayPlanPending()) }
+
+    fun skipPaydayPlan() {
+        prefs.setPaydayPlanPending(false)
+        _uiState.update { it.copy(paydayPlanPending = false) }
     }
 
     fun clearError() = _uiState.update { it.copy(error = null) }

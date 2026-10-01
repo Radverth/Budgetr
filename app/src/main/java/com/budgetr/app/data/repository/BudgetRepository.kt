@@ -1,6 +1,7 @@
 package com.budgetr.app.data.repository
 
 import com.budgetr.app.data.model.CategoryBudget
+import com.budgetr.app.data.model.Envelope
 import com.budgetr.app.data.model.GoalCategoryLink
 import com.budgetr.app.data.model.RecurringCostReview
 import com.budgetr.app.data.model.Transaction
@@ -23,4 +24,10 @@ interface BudgetRepository {
     fun getGoalCategoryLinks(): Flow<List<GoalCategoryLink>>
     suspend fun setGoalCategoryLink(goalName: String, category: TransactionCategory)
     suspend fun clearGoalCategoryLink(goalName: String)
+
+    fun getEnvelopes(): Flow<List<Envelope>>
+    /** Creates or updates the envelope for [tag], keeping any money already carried over.
+     *  With [renameFrom], the envelope of that name is renamed to [tag] and keeps its carry. */
+    suspend fun setEnvelope(tag: String, limit: Double, rollover: Boolean, renameFrom: String? = null)
+    suspend fun deleteEnvelope(tag: String)
 }

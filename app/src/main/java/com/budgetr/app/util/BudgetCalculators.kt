@@ -12,14 +12,28 @@ private const val DAY_MILLIS = 24L * 60 * 60 * 1000
 private fun dateFormat() = SimpleDateFormat("dd/MM/yyyy", Locale.UK)
 
 /** Total spend for [category] this period, applying the same "restricted to active months"
- *  rule fixed costs use elsewhere (e.g. an annual renewal only counted in its billing month). */
+ *  rule fixed costs use elsewhere (e.g. an annual renewal only counted in its billing month).
+ *  Given a [period], other categories only count transactions dated inside it, so a cost dated
+ *  after payday doesn't eat into this period's cap. Undated or unreadable rows still count. */
 fun spendForCategory(
     transactions: List<Transaction>,
     category: TransactionCategory,
-    month: Int = Calendar.getInstance().get(Calendar.MONTH) + 1
-): Double = transactions
-    .filter { it.category == category && (it.activeMonths == null || it.activeMonths.contains(month)) }
-    .sumOf { kotlin.math.abs(it.amount) }
+    month: Int = Calendar.getInstance().get(Calendar.MONTH) + 1,
+    period: PayPeriod? = null
+): Double {
+    return transactions
+        .filter { it.category == category && (it.activeMonths == null || it.activeMonths.contains(month)) }
+        .filter { tx -> tx.category == TransactionCategory.FIXED_COST || isDatedInPeriod(tx, period) }
+        .sumOf { kotlin.math.abs(it.amount) }
+}
+
+/** True if [tx] is dated inside [period], or there's no period to check. Undated or
+ *  unreadable rows count as inside, so nothing silently drops out of a total. */
+fun isDatedInPeriod(tx: Transaction, period: PayPeriod?): Boolean {
+    if (period == null) return true
+    val date = runCatching { dateFormat().parse(tx.date) }.getOrNull() ?: return true
+    return !date.before(period.start) && date.before(period.nextPayday)
+}
 
 /** Pure calculations behind the category budget caps shown on Home and the Budgets screen. */
 object BudgetCapCalculator {

@@ -68,6 +68,7 @@ import com.budgetr.app.ui.theme.IncomeGreen
 import com.budgetr.app.ui.theme.heroGradient
 import com.budgetr.app.util.SafeToSpend
 import com.budgetr.app.util.SpendingTrend
+import com.budgetr.app.util.TagSpend
 import com.budgetr.app.util.toCurrencyString
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -75,6 +76,8 @@ import com.budgetr.app.util.toCurrencyString
 fun HomeScreen(
     onNavigateToAddTransaction: () -> Unit,
     onNavigateToBudgets: () -> Unit,
+    onNavigateToInsights: () -> Unit,
+    onNavigateToPaydayPlan: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -87,6 +90,9 @@ fun HomeScreen(
             viewModel.clearError()
         }
     }
+
+    // Home leaves composition while the plan screen is open, so this re-runs on return
+    LaunchedEffect(Unit) { viewModel.syncPaydayPlanPending() }
 
     LaunchedEffect(uiState.successMessage) {
         uiState.successMessage?.let {
@@ -153,12 +159,21 @@ fun HomeScreen(
                         )
                     }
 
+                    if (uiState.paydayPlanPending) {
+                        item {
+                            PaydayPlanPromptCard(
+                                onPlan = onNavigateToPaydayPlan,
+                                onSkip = viewModel::skipPaydayPlan,
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                            )
+                        }
+                    }
+
                     val safeToSpend = uiState.safeToSpend
                     if (safeToSpend != null && uiState.accountBalances.isNotEmpty()) {
                         item {
                             SafeToSpendCard(
                                 safeToSpend = safeToSpend,
-                                totalAvailable = uiState.totalAvailable,
                                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
                             )
                         }
@@ -206,6 +221,7 @@ fun HomeScreen(
                                 totalIncome = uiState.totalIncome,
                                 totalFixedCosts = uiState.totalFixedCosts,
                                 totalOneOffCosts = uiState.totalOneOffCosts,
+                                oneOffByTag = uiState.oneOffByTag,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(horizontal = 16.dp)
@@ -217,14 +233,24 @@ fun HomeScreen(
                         item {
                             BudgetAlertsCard(
                                 alerts = uiState.budgetAlerts,
+                                resetDays = uiState.budgetResetDays,
                                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
                             )
                         }
                     }
 
                     item {
-                        BudgetsEntryCard(
+                        NavEntryCard(
+                            label = "Manage budgets",
                             onClick = onNavigateToBudgets,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                        )
+                    }
+
+                    item {
+                        NavEntryCard(
+                            label = "Spending history",
+                            onClick = onNavigateToInsights,
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
                         )
                     }
@@ -333,7 +359,33 @@ private fun HomeHeader(userName: String?, totalAvailable: Double, topPadding: Dp
 }
 
 @Composable
-private fun SafeToSpendCard(safeToSpend: SafeToSpend, totalAvailable: Double, modifier: Modifier = Modifier) {
+private fun PaydayPlanPromptCard(onPlan: () -> Unit, onSkip: () -> Unit, modifier: Modifier = Modifier) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                text = "It's payday: plan your money",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+            Text(
+                text = "Cover bills, goals and debts, then give the rest to your spending categories.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onPlan) { Text("Plan now") }
+                TextButton(onClick = onSkip) { Text("Not now") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SafeToSpendCard(safeToSpend: SafeToSpend, modifier: Modifier = Modifier) {
     val days = safeToSpend.daysLeft
     val daysText = if (days == 1) "Payday tomorrow" else "$days days to payday"
     Card(
@@ -349,13 +401,17 @@ private fun SafeToSpendCard(safeToSpend: SafeToSpend, totalAvailable: Double, mo
             )
             Text(
                 text = if (safeToSpend.isOverspent) {
-                    "${(-totalAvailable).toCurrencyString()} over"
+                    "${(-safeToSpend.available).toCurrencyString()} over"
                 } else {
                     safeToSpend.perDay.toCurrencyString()
                 },
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
-                color = if (safeToSpend.isOverspent) ExpenseRed else IncomeGreen,
+                color = when {
+                    safeToSpend.isOverspent -> ExpenseRed
+                    safeToSpend.isOverBudgeted -> MaterialTheme.colorScheme.tertiary
+                    else -> IncomeGreen
+                },
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -368,6 +424,18 @@ private fun SafeToSpendCard(safeToSpend: SafeToSpend, totalAvailable: Double, mo
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
             )
+            if (!safeToSpend.isOverspent && safeToSpend.reserved > 0) {
+                Text(
+                    text = if (safeToSpend.isOverBudgeted) {
+                        "Your category budgets have ${safeToSpend.reserved.toCurrencyString()} left, but only " +
+                            "${safeToSpend.available.toCurrencyString()} is left overall. Lower a budget to free some up."
+                    } else {
+                        "${safeToSpend.reserved.toCurrencyString()} kept aside for your category budgets"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (safeToSpend.isOverBudgeted) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
+            }
         }
     }
 }
@@ -408,6 +476,7 @@ private fun SpendingBreakdownCard(
     totalIncome: Double,
     totalFixedCosts: Double,
     totalOneOffCosts: Double,
+    oneOffByTag: List<TagSpend>,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -449,6 +518,58 @@ private fun SpendingBreakdownCard(
                         label = "Remaining",
                         amount = remaining,
                         color = IncomeGreen
+                    )
+                }
+            }
+            // Only worth showing once something has been tagged
+            if (oneOffByTag.any { it.tag != null }) {
+                Spacer(Modifier.height(20.dp))
+                OneOffByTagBars(oneOffByTag)
+            }
+        }
+    }
+}
+
+/** One-off spend per spending category as simple horizontal bars, largest first. */
+@Composable
+private fun OneOffByTagBars(byTag: List<TagSpend>) {
+    val maxAmount = byTag.maxOf { it.amount }.coerceAtLeast(0.01)
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(
+            text = "One-off costs by category",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+        )
+        byTag.forEach { item ->
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(
+                        text = item.tag ?: "Untagged",
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        text = item.amount.toCurrencyString(),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth((item.amount / maxAmount).toFloat().coerceIn(0f, 1f))
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(if (item.tag == null) ExpenseRed.copy(alpha = 0.4f) else ExpenseRed)
                     )
                 }
             }
@@ -729,7 +850,7 @@ private fun GlanceRow(
 }
 
 @Composable
-private fun BudgetAlertsCard(alerts: List<BudgetAlertUiItem>, modifier: Modifier = Modifier) {
+private fun BudgetAlertsCard(alerts: List<BudgetAlertUiItem>, resetDays: Int, modifier: Modifier = Modifier) {
     Card(
         modifier = modifier,
         colors = CardDefaults.cardColors(containerColor = ExpenseRed.copy(alpha = 0.12f)),
@@ -744,9 +865,9 @@ private fun BudgetAlertsCard(alerts: List<BudgetAlertUiItem>, modifier: Modifier
             )
             alerts.forEach { alert ->
                 val message = if (alert.isOver) {
-                    "${alert.category.displayName}: ${alert.spend.toCurrencyString()} — over your ${alert.limit.toCurrencyString()} cap"
+                    "${alert.label}: ${alert.spend.toCurrencyString()} — over your ${alert.limit.toCurrencyString()} cap"
                 } else {
-                    "${alert.category.displayName}: ${alert.spend.toCurrencyString()} — nearing your ${alert.limit.toCurrencyString()} cap"
+                    "${alert.label}: ${alert.spend.toCurrencyString()} — nearing your ${alert.limit.toCurrencyString()} cap"
                 }
                 Text(
                     text = message,
@@ -754,12 +875,17 @@ private fun BudgetAlertsCard(alerts: List<BudgetAlertUiItem>, modifier: Modifier
                     color = MaterialTheme.colorScheme.onSurface
                 )
             }
+            Text(
+                text = if (resetDays == 1) "Caps reset tomorrow (payday)" else "Caps reset on payday, in $resetDays days",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            )
         }
     }
 }
 
 @Composable
-private fun BudgetsEntryCard(onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun NavEntryCard(label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Card(
         modifier = modifier,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
@@ -772,12 +898,12 @@ private fun BudgetsEntryCard(onClick: () -> Unit, modifier: Modifier = Modifier)
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Manage budgets",
+                text = label,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold
             )
             IconButton(onClick = onClick) {
-                Icon(Icons.Default.ChevronRight, contentDescription = "Manage budgets")
+                Icon(Icons.Default.ChevronRight, contentDescription = label)
             }
         }
     }

@@ -17,13 +17,21 @@ import com.budgetr.app.data.model.TransactionCategory
 
 const val BUDGET_ALERT_CHANNEL_ID = "budget_alerts"
 private const val NOTIFICATION_ID_BASE = 3000
+private const val ENVELOPE_NOTIFICATION_ID_BASE = 100_000
 
 /** Posts a notification the moment a saved transaction pushes a capped category over its
  *  limit. Fired directly at save time (see TransactionsViewModel) rather than on a schedule,
  *  since the crossing is only knowable right after the write that caused it. */
 object BudgetAlertNotifier {
 
-    fun notifyOverBudget(context: Context, category: TransactionCategory, spend: Double, limit: Double) {
+    fun notifyOverBudget(context: Context, category: TransactionCategory, spend: Double, limit: Double) =
+        notifyOverBudget(context, category.displayName, NOTIFICATION_ID_BASE + category.ordinal, spend, limit)
+
+    /** Same alert for a spending category budget, e.g. "Groceries". */
+    fun notifyEnvelopeOver(context: Context, tag: String, spend: Double, limit: Double) =
+        notifyOverBudget(context, tag, ENVELOPE_NOTIFICATION_ID_BASE + (tag.lowercase().hashCode() and 0xFFFF), spend, limit)
+
+    private fun notifyOverBudget(context: Context, label: String, notificationId: Int, spend: Double, limit: Double) {
         ensureChannel(context)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
@@ -41,14 +49,14 @@ object BudgetAlertNotifier {
         )
         val notification = NotificationCompat.Builder(context, BUDGET_ALERT_CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("${category.displayName} budget exceeded")
+            .setContentTitle("$label budget exceeded")
             .setContentText("You've spent ${spend.toCurrencyString()} of your ${limit.toCurrencyString()} cap this pay period.")
             .setContentIntent(contentIntent)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .build()
 
-        NotificationManagerCompat.from(context).notify(NOTIFICATION_ID_BASE + category.ordinal, notification)
+        NotificationManagerCompat.from(context).notify(notificationId, notification)
     }
 
     private fun ensureChannel(context: Context) {

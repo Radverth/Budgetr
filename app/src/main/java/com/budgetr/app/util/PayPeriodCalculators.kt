@@ -55,20 +55,40 @@ object PayPeriodCalculator {
     }
 }
 
-data class SafeToSpend(val perDay: Double, val thisWeek: Double, val daysLeft: Int) {
-    val isOverspent: Boolean get() = perDay < 0
+data class SafeToSpend(
+    val perDay: Double,
+    val thisWeek: Double,
+    val daysLeft: Int,
+    /** Money left this period before anything is set aside. */
+    val available: Double = 0.0,
+    /** Money still unspent in category budgets, kept aside for those categories. */
+    val reserved: Double = 0.0
+) {
+    /** Spent more than there was this period. */
+    val isOverspent: Boolean get() = available < 0
+    /** Still in credit, but category budgets need more than is left. */
+    val isOverBudgeted: Boolean get() = !isOverspent && available - reserved < 0
 }
 
 /** Pure calculation behind Home's "safe to spend" card: spreads what's left this pay period
- *  evenly over the days until payday. */
+ *  evenly over the days until payday, after setting aside what category budgets still need. */
 object SafeToSpendCalculator {
 
     /** [available] is money left for the rest of the period. Fixed costs are already taken
      *  off, because they're dated at the start of each period. */
-    fun calculate(available: Double, daysLeft: Int): SafeToSpend {
+    fun calculate(available: Double, daysLeft: Int, reserved: Double = 0.0): SafeToSpend {
         val days = daysLeft.coerceAtLeast(1)
-        val perDay = available / days
-        return SafeToSpend(perDay = perDay, thisWeek = perDay * minOf(7, days), daysLeft = days)
+        val kept = reserved.coerceAtLeast(0.0)
+        // Overspent: show the shortfall per day. Otherwise never below £0 a day, even when
+        // budgets need more than is left.
+        val perDay = if (available < 0) available / days else (available - kept).coerceAtLeast(0.0) / days
+        return SafeToSpend(
+            perDay = perDay,
+            thisWeek = perDay * minOf(7, days),
+            daysLeft = days,
+            available = available,
+            reserved = kept
+        )
     }
 }
 

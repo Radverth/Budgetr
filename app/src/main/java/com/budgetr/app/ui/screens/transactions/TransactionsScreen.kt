@@ -91,6 +91,8 @@ fun TransactionsScreen(
             savingsGoals = uiState.savingsGoals,
             spendingPromptEnabled = uiState.spendingPromptEnabled,
             spendingPromptThreshold = uiState.spendingPromptThreshold,
+            knownTags = uiState.knownTags,
+            tagSuggestions = uiState.tagSuggestions,
             onSave = viewModel::saveTransaction,
             onSaveTransfer = viewModel::saveTransfer,
             onDismiss = viewModel::dismissSheet
@@ -212,6 +214,27 @@ fun TransactionsScreen(
                 }
             }
 
+            // Spending category filters — only while viewing one-off costs
+            if (uiState.categoryFilter == TransactionCategory.ONE_OFF_COST) {
+                LazyRow(
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Keep the selected tag visible even once nothing uses it, so it can be cleared
+                    val tagChips = uiState.tagFilter
+                        ?.takeIf { selected -> uiState.knownTags.none { it.equals(selected, ignoreCase = true) } }
+                        ?.let { uiState.knownTags + it }
+                        ?: uiState.knownTags
+                    items(tagChips) { tag ->
+                        FilterChip(
+                            selected = uiState.tagFilter == tag,
+                            onClick = { viewModel.setTagFilter(if (uiState.tagFilter == tag) null else tag) },
+                            label = { Text(tag) }
+                        )
+                    }
+                }
+            }
+
             val pullRefreshState = rememberPullToRefreshState()
             if (pullRefreshState.isRefreshing) {
                 LaunchedEffect(true) { viewModel.refresh() }
@@ -231,6 +254,7 @@ fun TransactionsScreen(
                             text = when {
                                 uiState.accounts.isEmpty() -> "No accounts yet.\nAdd one from the Accounts tab."
                                 uiState.searchQuery.isNotBlank() -> "No matching transactions."
+                                uiState.tagFilter != null -> "No one-off costs tagged ${uiState.tagFilter}."
                                 else -> "No transactions found.\nPull down to refresh."
                             },
                             style = MaterialTheme.typography.bodyLarge,
@@ -324,7 +348,7 @@ private fun TransactionItem(
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
                     )
                     Text(
-                        text = transaction.category.displayName,
+                        text = transaction.tag ?: transaction.category.displayName,
                         style = MaterialTheme.typography.bodySmall,
                         color = amountColor.copy(alpha = 0.8f),
                         maxLines = 1,
