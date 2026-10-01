@@ -10,8 +10,11 @@ import com.budgetr.app.data.repository.SheetsRepository
 import com.budgetr.app.util.AuthManager
 import com.budgetr.app.util.BudgetCapCalculator
 import com.budgetr.app.util.NoSpendStreakCalculator
+import com.budgetr.app.util.PayPeriodCalculator
 import com.budgetr.app.util.PreferencesManager
 import com.budgetr.app.util.RecurringCostReviewCalculator
+import com.budgetr.app.util.SafeToSpend
+import com.budgetr.app.util.SafeToSpendCalculator
 import com.budgetr.app.util.SavingsGoalCalculator
 import com.budgetr.app.util.SpendingTrend
 import com.budgetr.app.util.SpendingTrendCalculator
@@ -59,6 +62,7 @@ data class HomeUiState(
     val totalFixedCosts: Double = 0.0,
     val totalOneOffCosts: Double = 0.0,
     val totalAvailable: Double = 0.0,
+    val safeToSpend: SafeToSpend? = null,
     val error: String? = null,
     val successMessage: String? = null,
     val userName: String? = null,
@@ -87,6 +91,7 @@ private data class SpendingControlsData(
 private data class SummaryData(
     val balances: List<AccountBalance>,
     val totalAvailable: Double,
+    val safeToSpend: SafeToSpend,
     val income: Double,
     val outgoings: Double,
     val fixedCosts: Double,
@@ -324,7 +329,9 @@ class HomeViewModel @Inject constructor(
                     }
                     .sumOf { kotlin.math.abs(it.amount) }
                 val totalAvailable = adjustedBalances.sumOf { it.remainingBalance }
-                SummaryData(adjustedBalances, totalAvailable, income, outgoings, fixedCosts, oneOffCosts)
+                val daysLeft = PayPeriodCalculator.current(prefs.getPayDay(), today).daysUntilPayday(today)
+                val safeToSpend = SafeToSpendCalculator.calculate(totalAvailable, daysLeft)
+                SummaryData(adjustedBalances, totalAvailable, safeToSpend, income, outgoings, fixedCosts, oneOffCosts)
             }.collect { data ->
                 _uiState.update {
                     it.copy(
@@ -333,7 +340,8 @@ class HomeViewModel @Inject constructor(
                         totalOutgoings = data.outgoings,
                         totalFixedCosts = data.fixedCosts,
                         totalOneOffCosts = data.oneOffCosts,
-                        totalAvailable = data.totalAvailable
+                        totalAvailable = data.totalAvailable,
+                        safeToSpend = data.safeToSpend
                     )
                 }
             }

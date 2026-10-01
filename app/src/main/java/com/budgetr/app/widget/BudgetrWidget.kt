@@ -30,6 +30,9 @@ import androidx.glance.unit.ColorProvider
 import com.budgetr.app.MainActivity
 import com.budgetr.app.data.local.entity.AccountBalanceEntity
 import com.budgetr.app.data.model.TransactionCategory
+import com.budgetr.app.util.PayPeriodCalculator
+import com.budgetr.app.util.SafeToSpend
+import com.budgetr.app.util.SafeToSpendCalculator
 import dagger.hilt.android.EntryPointAccessors
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
@@ -82,14 +85,21 @@ class BudgetrWidget : GlanceAppWidget() {
             balances
         }
 
+        val safeToSpend = try {
+            val daysLeft = PayPeriodCalculator.current(entryPoint.preferencesManager().getPayDay()).daysUntilPayday()
+            SafeToSpendCalculator.calculate(adjustedBalances.sumOf { it.remainingBalance }, daysLeft)
+        } catch (e: Exception) {
+            null
+        }
+
         provideContent {
-            WidgetContent(context = context, balances = adjustedBalances)
+            WidgetContent(context = context, balances = adjustedBalances, safeToSpend = safeToSpend)
         }
     }
 }
 
 @Composable
-private fun WidgetContent(context: Context, balances: List<AccountBalanceEntity>) {
+private fun WidgetContent(context: Context, balances: List<AccountBalanceEntity>, safeToSpend: SafeToSpend?) {
     val bgColor = Color(0xFF121212)
     val positiveColor = Color(0xFF69F0AE)
     val negativeColor = Color(0xFFFF5252)
@@ -131,6 +141,22 @@ private fun WidgetContent(context: Context, balances: List<AccountBalanceEntity>
                     color = ColorProvider(if (total >= 0) positiveColor else negativeColor),
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold
+                )
+            )
+        }
+
+        if (safeToSpend != null && balances.isNotEmpty()) {
+            val days = safeToSpend.daysLeft
+            Text(
+                text = if (safeToSpend.isOverspent) {
+                    "Overspent · $days ${if (days == 1) "day" else "days"} to payday"
+                } else {
+                    "${formatCurrency(safeToSpend.perDay)}/day safe to spend · $days ${if (days == 1) "day" else "days"} to payday"
+                },
+                modifier = GlanceModifier.fillMaxWidth().clickable(openApp),
+                style = TextStyle(
+                    color = ColorProvider(if (safeToSpend.isOverspent) negativeColor else subtleWhite),
+                    fontSize = 11.sp
                 )
             )
         }
