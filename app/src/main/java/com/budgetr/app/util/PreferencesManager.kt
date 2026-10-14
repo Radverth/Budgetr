@@ -29,6 +29,10 @@ class PreferencesManager @Inject constructor(
         private const val KEY_DAILY_POT_AMOUNT = "daily_pot_amount"
         private const val KEY_DAILY_COUNT_BUDGETED = "daily_count_budgeted"
         private const val KEY_DAILY_ON_HOME = "daily_on_home"
+        private const val KEY_DISMISSED_ATTENTION = "dismissed_attention"
+        private const val KEY_HOME_SHOW_PERIOD = "home_show_period"
+        private const val KEY_HOME_SHOW_GOALS = "home_show_goals"
+        private const val KEY_HOME_SHOW_ACCOUNTS = "home_show_accounts"
     }
 
     fun getAccessToken(): String? = prefs.getString(KEY_ACCESS_TOKEN, null)
@@ -101,6 +105,28 @@ class PreferencesManager @Inject constructor(
     /** Show the daily spend target on Home (and the widget) instead of Safe to spend. */
     fun isDailyTargetOnHome(): Boolean = prefs.getBoolean(KEY_DAILY_ON_HOME, true)
     fun setDailyTargetOnHome(show: Boolean) = prefs.edit().putBoolean(KEY_DAILY_ON_HOME, show).apply()
+
+    /** "Needs attention" rows dismissed in the pay period starting [periodStart]. */
+    fun getDismissedAttention(periodStart: String): Set<String> =
+        prefs.getStringSet(KEY_DISMISSED_ATTENTION, emptySet()).orEmpty()
+            .filter { it.startsWith("$periodStart|") }
+            .map { it.removePrefix("$periodStart|") }
+            .toSet()
+
+    /** Remembers [key] as dismissed for this period and forgets older periods' dismissals. */
+    fun addDismissedAttention(periodStart: String, key: String) {
+        val kept = prefs.getStringSet(KEY_DISMISSED_ATTENTION, emptySet()).orEmpty()
+            .filter { it.startsWith("$periodStart|") }
+            .toSet()
+        prefs.edit().putStringSet(KEY_DISMISSED_ATTENTION, kept + "$periodStart|$key").apply()
+    }
+
+    fun isHomeShowingPeriod(): Boolean = prefs.getBoolean(KEY_HOME_SHOW_PERIOD, true)
+    fun setHomeShowingPeriod(show: Boolean) = prefs.edit().putBoolean(KEY_HOME_SHOW_PERIOD, show).apply()
+    fun isHomeShowingGoals(): Boolean = prefs.getBoolean(KEY_HOME_SHOW_GOALS, true)
+    fun setHomeShowingGoals(show: Boolean) = prefs.edit().putBoolean(KEY_HOME_SHOW_GOALS, show).apply()
+    fun isHomeShowingAccounts(): Boolean = prefs.getBoolean(KEY_HOME_SHOW_ACCOUNTS, true)
+    fun setHomeShowingAccounts(show: Boolean) = prefs.edit().putBoolean(KEY_HOME_SHOW_ACCOUNTS, show).apply()
 
     fun clearAll() = prefs.edit().clear().apply()
 }

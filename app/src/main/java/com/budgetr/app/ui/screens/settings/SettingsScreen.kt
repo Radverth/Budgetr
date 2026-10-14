@@ -399,6 +399,27 @@ fun SettingsScreen(
                 )
             }
 
+            SectionLabel("Home Screen")
+
+            SettingsSwitchRow(
+                title = "This pay period",
+                subtitle = "In, out and left, top categories and habits",
+                checked = uiState.homeShowPeriod,
+                onCheckedChange = viewModel::setHomeShowPeriod
+            )
+            SettingsSwitchRow(
+                title = "Goals and debts",
+                subtitle = "Progress at a glance",
+                checked = uiState.homeShowGoals,
+                onCheckedChange = viewModel::setHomeShowGoals
+            )
+            SettingsSwitchRow(
+                title = "Accounts",
+                subtitle = "Balance of each account",
+                checked = uiState.homeShowAccounts,
+                onCheckedChange = viewModel::setHomeShowAccounts
+            )
+
             SectionLabel("Daily Spend Target")
 
             SettingsSwitchRow(

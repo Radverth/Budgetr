@@ -72,8 +72,6 @@ import com.budgetr.app.ui.screens.daily.DailyTargetCard
 import com.budgetr.app.ui.screens.daily.DailyTransferDialog
 import com.budgetr.app.ui.screens.daily.TransferKind
 import com.budgetr.app.util.SafeToSpend
-import com.budgetr.app.util.SpendingTrend
-import com.budgetr.app.util.TagSpend
 import com.budgetr.app.util.toCurrencyString
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -179,16 +177,6 @@ fun HomeScreen(
                         )
                     }
 
-                    if (uiState.paydayPlanPending) {
-                        item {
-                            PaydayPlanPromptCard(
-                                onPlan = onNavigateToPaydayPlan,
-                                onSkip = viewModel::skipPaydayPlan,
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
-                            )
-                        }
-                    }
-
                     val dailyTarget = uiState.dailyTarget
                     val safeToSpend = uiState.safeToSpend
                     if (uiState.showDailyTarget && dailyTarget != null) {
@@ -209,29 +197,45 @@ fun HomeScreen(
                         }
                     }
 
-                    item {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            SummaryStatCard(
-                                label = "Income",
-                                amount = uiState.totalIncome,
-                                color = IncomeGreen,
-                                modifier = Modifier.weight(1f)
-                            )
-                            SummaryStatCard(
-                                label = "Outgoings",
-                                amount = uiState.totalOutgoings,
-                                color = ExpenseRed,
-                                modifier = Modifier.weight(1f)
+                    val attention = attentionItems(
+                        paydayPlanPending = uiState.paydayPlanPending,
+                        alerts = uiState.budgetAlerts,
+                        resetDays = uiState.budgetResetDays,
+                        suggestions = uiState.goalSuggestions,
+                        reviews = uiState.recurringReviews,
+                        dismissed = uiState.dismissedAttention
+                    )
+                    if (attention.isNotEmpty()) {
+                        item {
+                            NeedsAttentionCard(
+                                items = attention,
+                                onPlanPayday = onNavigateToPaydayPlan,
+                                onViewBudgets = onNavigateToBudgets,
+                                onAddToGoal = viewModel::addUnderspendToGoal,
+                                onRemindLater = viewModel::dismissRecurringReview,
+                                onDismiss = viewModel::dismissAttention,
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
                             )
                         }
                     }
 
-                    if (uiState.goalsCount > 0 || uiState.debtCount > 0) {
+                    if (uiState.showPeriodSection) {
+                        item {
+                            ThisPeriodCard(
+                                income = uiState.totalIncome,
+                                fixedCosts = uiState.totalFixedCosts,
+                                oneOffCosts = uiState.totalOneOffCosts,
+                                byTag = uiState.oneOffByTag,
+                                streakDays = uiState.noSpendStreakDays,
+                                trend = uiState.spendingTrend,
+                                onSeeHistory = onNavigateToInsights,
+                                onBudgets = onNavigateToBudgets,
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                            )
+                        }
+                    }
+
+                    if (uiState.showGoalsSection && (uiState.goalsCount > 0 || uiState.debtCount > 0)) {
                         item {
                             GoalsGlanceCard(
                                 goalsCount = uiState.goalsCount,
@@ -245,77 +249,7 @@ fun HomeScreen(
                         }
                     }
 
-                    if (uiState.totalIncome > 0 || uiState.totalOutgoings > 0) {
-                        item {
-                            SpendingBreakdownCard(
-                                totalIncome = uiState.totalIncome,
-                                totalFixedCosts = uiState.totalFixedCosts,
-                                totalOneOffCosts = uiState.totalOneOffCosts,
-                                oneOffByTag = uiState.oneOffByTag,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp)
-                            )
-                        }
-                    }
-
-                    if (uiState.budgetAlerts.isNotEmpty()) {
-                        item {
-                            BudgetAlertsCard(
-                                alerts = uiState.budgetAlerts,
-                                resetDays = uiState.budgetResetDays,
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
-                            )
-                        }
-                    }
-
-                    item {
-                        NavEntryCard(
-                            label = "Manage budgets",
-                            onClick = onNavigateToBudgets,
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
-                        )
-                    }
-
-                    item {
-                        NavEntryCard(
-                            label = "Spending history",
-                            onClick = onNavigateToInsights,
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
-                        )
-                    }
-
-                    if (uiState.noSpendStreakDays != null || uiState.spendingTrend != null) {
-                        item {
-                            SpendingHabitsCard(
-                                streakDays = uiState.noSpendStreakDays,
-                                trend = uiState.spendingTrend,
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
-                            )
-                        }
-                    }
-
-                    if (uiState.recurringReviews.isNotEmpty()) {
-                        item {
-                            RecurringReviewCard(
-                                reviews = uiState.recurringReviews,
-                                onDismiss = viewModel::dismissRecurringReview,
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
-                            )
-                        }
-                    }
-
-                    if (uiState.goalSuggestions.isNotEmpty()) {
-                        item {
-                            GoalSuggestionsCard(
-                                suggestions = uiState.goalSuggestions,
-                                onAdd = viewModel::addUnderspendToGoal,
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
-                            )
-                        }
-                    }
-
-                    if (uiState.accountBalances.isNotEmpty()) {
+                    if (uiState.showAccountsSection && uiState.accountBalances.isNotEmpty()) {
                         item {
                             AccountBalancesChartCard(
                                 balances = uiState.accountBalances,
@@ -389,32 +323,6 @@ private fun HomeHeader(userName: String?, totalAvailable: Double, topPadding: Dp
 }
 
 @Composable
-private fun PaydayPlanPromptCard(onPlan: () -> Unit, onSkip: () -> Unit, modifier: Modifier = Modifier) {
-    Card(
-        modifier = modifier,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-    ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(
-                text = "It's payday: plan your money",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
-            )
-            Text(
-                text = "Cover bills, goals and debts, then give the rest to your spending categories.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onPlan) { Text("Plan now") }
-                TextButton(onClick = onSkip) { Text("Not now") }
-            }
-        }
-    }
-}
-
-@Composable
 private fun SafeToSpendCard(safeToSpend: SafeToSpend, modifier: Modifier = Modifier) {
     val days = safeToSpend.daysLeft
     val daysText = if (days == 1) "Payday tomorrow" else "$days days to payday"
@@ -466,250 +374,6 @@ private fun SafeToSpendCard(safeToSpend: SafeToSpend, modifier: Modifier = Modif
                     color = if (safeToSpend.isOverBudgeted) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
             }
-        }
-    }
-}
-
-@Composable
-private fun SummaryStatCard(
-    label: String,
-    amount: Double,
-    color: Color,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        modifier = modifier,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                maxLines = 1
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = amount.toCurrencyString(),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = color,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-    }
-}
-
-@Composable
-private fun SpendingBreakdownCard(
-    totalIncome: Double,
-    totalFixedCosts: Double,
-    totalOneOffCosts: Double,
-    oneOffByTag: List<TagSpend>,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        modifier = modifier,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            Text(
-                text = "Spending Breakdown",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            Spacer(Modifier.height(16.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                SpendingDonutChart(
-                    totalIncome = totalIncome,
-                    totalFixedCosts = totalFixedCosts,
-                    totalOneOffCosts = totalOneOffCosts,
-                    modifier = Modifier.size(140.dp)
-                )
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    ChartLegendItem(
-                        label = "Fixed Costs",
-                        amount = totalFixedCosts,
-                        color = FixedCostOrange
-                    )
-                    ChartLegendItem(
-                        label = "One-off Costs",
-                        amount = totalOneOffCosts,
-                        color = ExpenseRed
-                    )
-                    val remaining = totalIncome - totalFixedCosts - totalOneOffCosts
-                    ChartLegendItem(
-                        label = "Remaining",
-                        amount = remaining,
-                        color = IncomeGreen
-                    )
-                }
-            }
-            // Only worth showing once something has been tagged
-            if (oneOffByTag.any { it.tag != null }) {
-                Spacer(Modifier.height(20.dp))
-                OneOffByTagBars(oneOffByTag)
-            }
-        }
-    }
-}
-
-/** One-off spend per spending category as simple horizontal bars, largest first. */
-@Composable
-private fun OneOffByTagBars(byTag: List<TagSpend>) {
-    val maxAmount = byTag.maxOf { it.amount }.coerceAtLeast(0.01)
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(
-            text = "One-off costs by category",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-        )
-        byTag.forEach { item ->
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(
-                        text = item.tag ?: "Untagged",
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Text(
-                        text = item.amount.toCurrencyString(),
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1
-                    )
-                }
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(6.dp)
-                        .clip(RoundedCornerShape(3.dp))
-                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth((item.amount / maxAmount).toFloat().coerceIn(0f, 1f))
-                            .height(6.dp)
-                            .clip(RoundedCornerShape(3.dp))
-                            .background(if (item.tag == null) ExpenseRed.copy(alpha = 0.4f) else ExpenseRed)
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SpendingDonutChart(
-    totalIncome: Double,
-    totalFixedCosts: Double,
-    totalOneOffCosts: Double,
-    modifier: Modifier = Modifier
-) {
-    val animatedProgress = remember { Animatable(0f) }
-    LaunchedEffect(totalIncome, totalFixedCosts, totalOneOffCosts) {
-        animatedProgress.snapTo(0f)
-        animatedProgress.animateTo(1f, animationSpec = tween(1000))
-    }
-    val progress = animatedProgress.value
-
-    val total = maxOf(totalIncome, totalFixedCosts + totalOneOffCosts, 0.01)
-    val fixedSweep = (totalFixedCosts / total * 360f * progress).toFloat()
-    val oneOffSweep = (totalOneOffCosts / total * 360f * progress).toFloat()
-    val remainingSweep = ((total - totalFixedCosts - totalOneOffCosts).coerceAtLeast(0.0) / total * 360f * progress).toFloat()
-
-    val trackColor = Color.Gray.copy(alpha = 0.15f)
-
-    Canvas(modifier = modifier) {
-        val strokeWidth = 28.dp.toPx()
-        val diameter = size.minDimension - strokeWidth
-        val topLeft = Offset((size.width - diameter) / 2f, (size.height - diameter) / 2f)
-        val arcSize = Size(diameter, diameter)
-        val style = Stroke(width = strokeWidth, cap = StrokeCap.Butt)
-
-        drawArc(
-            color = trackColor,
-            startAngle = -90f,
-            sweepAngle = 360f,
-            useCenter = false,
-            style = Stroke(width = strokeWidth),
-            topLeft = topLeft,
-            size = arcSize
-        )
-
-        var currentAngle = -90f
-
-        if (fixedSweep > 0f) {
-            drawArc(
-                color = FixedCostOrange,
-                startAngle = currentAngle,
-                sweepAngle = fixedSweep,
-                useCenter = false,
-                style = style,
-                topLeft = topLeft,
-                size = arcSize
-            )
-            currentAngle += fixedSweep
-        }
-        if (oneOffSweep > 0f) {
-            drawArc(
-                color = ExpenseRed,
-                startAngle = currentAngle,
-                sweepAngle = oneOffSweep,
-                useCenter = false,
-                style = style,
-                topLeft = topLeft,
-                size = arcSize
-            )
-            currentAngle += oneOffSweep
-        }
-        if (remainingSweep > 0.1f) {
-            drawArc(
-                color = IncomeGreen,
-                startAngle = currentAngle,
-                sweepAngle = remainingSweep,
-                useCenter = false,
-                style = style,
-                topLeft = topLeft,
-                size = arcSize
-            )
-        }
-    }
-}
-
-@Composable
-private fun ChartLegendItem(label: String, amount: Double, color: Color) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(10.dp)
-                .background(color, shape = CircleShape)
-        )
-        Column {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                maxLines = 1
-            )
-            Text(
-                text = amount.toCurrencyString(),
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
         }
     }
 }
@@ -879,206 +543,3 @@ private fun GlanceRow(
     }
 }
 
-@Composable
-private fun BudgetAlertsCard(alerts: List<BudgetAlertUiItem>, resetDays: Int, modifier: Modifier = Modifier) {
-    Card(
-        modifier = modifier,
-        colors = CardDefaults.cardColors(containerColor = ExpenseRed.copy(alpha = 0.12f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(
-                text = "Budget alerts",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = ExpenseRed
-            )
-            alerts.forEach { alert ->
-                val message = if (alert.isOver) {
-                    "${alert.label}: ${alert.spend.toCurrencyString()} — over your ${alert.limit.toCurrencyString()} cap"
-                } else {
-                    "${alert.label}: ${alert.spend.toCurrencyString()} — nearing your ${alert.limit.toCurrencyString()} cap"
-                }
-                Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-            Text(
-                text = if (resetDays == 1) "Caps reset tomorrow (payday)" else "Caps reset on payday, in $resetDays days",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-            )
-        }
-    }
-}
-
-@Composable
-private fun NavEntryCard(label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Card(
-        modifier = modifier,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            IconButton(onClick = onClick) {
-                Icon(Icons.Default.ChevronRight, contentDescription = label)
-            }
-        }
-    }
-}
-
-@Composable
-private fun SpendingHabitsCard(streakDays: Int?, trend: SpendingTrend?, modifier: Modifier = Modifier) {
-    Card(
-        modifier = modifier,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(
-                text = "Spending habits",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            if (streakDays != null) {
-                HabitRow(
-                    emoji = "🔥",
-                    title = if (streakDays == 1) "1 day no-spend streak" else "$streakDays day no-spend streak",
-                    detail = "on one-off costs"
-                )
-            }
-            if (trend != null) {
-                val change = trend.percentChange
-                val detail = when {
-                    change == null -> "vs last week"
-                    change > 0 -> "up ${change.toInt()}% vs last week"
-                    change < 0 -> "down ${-change.toInt()}% vs last week"
-                    else -> "same as last week"
-                }
-                HabitRow(
-                    emoji = "📊",
-                    title = "This week: ${trend.thisWeek.toCurrencyString()}",
-                    detail = detail
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun HabitRow(emoji: String, title: String, detail: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.Top
-    ) {
-        Text(text = emoji, style = MaterialTheme.typography.bodyLarge)
-        Column {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = detail,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-            )
-        }
-    }
-}
-
-@Composable
-private fun RecurringReviewCard(
-    reviews: List<RecurringReviewUiItem>,
-    onDismiss: (RecurringReviewUiItem) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        modifier = modifier,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(
-                text = "Review your subscriptions",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            reviews.forEach { review ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = review.info,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = "${review.amount.toCurrencyString()} · unchanged for ${review.ageDays / 30} months",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                        )
-                    }
-                    TextButton(onClick = { onDismiss(review) }) { Text("Remind later") }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun GoalSuggestionsCard(
-    suggestions: List<GoalSuggestionUiItem>,
-    onAdd: (GoalSuggestionUiItem) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        modifier = modifier,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
-    ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(
-                text = "You're under budget",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onTertiaryContainer
-            )
-            suggestions.forEach { suggestion ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "${suggestion.underspendAmount.toCurrencyString()} left in ${suggestion.category.displayName} → \"${suggestion.goalName}\"",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onTertiaryContainer,
-                        modifier = Modifier.weight(1f),
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    TextButton(onClick = { onAdd(suggestion) }) { Text("Add") }
-                }
-            }
-        }
-    }
-}

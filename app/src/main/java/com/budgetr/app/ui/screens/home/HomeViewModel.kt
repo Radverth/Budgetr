@@ -73,6 +73,11 @@ data class HomeUiState(
     val dailyTarget: DailyTargetState? = null,
     /** Daily spend target instead of Safe to spend (Settings). */
     val showDailyTarget: Boolean = true,
+    /** "Needs attention" rows dismissed for this pay period. */
+    val dismissedAttention: Set<String> = emptySet(),
+    val showPeriodSection: Boolean = true,
+    val showGoalsSection: Boolean = true,
+    val showAccountsSection: Boolean = true,
     /** A new pay period started and its payday plan hasn't been done or skipped yet. */
     val paydayPlanPending: Boolean = false,
     val error: String? = null,
@@ -433,9 +438,33 @@ class HomeViewModel @Inject constructor(
     }
 
     /** Re-reads the flag, since the plan screen clears it when the plan is saved. */
+    /** Re-reads settings that other screens can change while Home is in the back stack. */
     fun syncPaydayPlanPending() = _uiState.update {
-        it.copy(paydayPlanPending = prefs.isPaydayPlanPending(), showDailyTarget = prefs.isDailyTargetOnHome())
+        it.copy(
+            paydayPlanPending = prefs.isPaydayPlanPending(),
+            showDailyTarget = prefs.isDailyTargetOnHome(),
+            dismissedAttention = prefs.getDismissedAttention(currentPeriodStart()),
+            showPeriodSection = prefs.isHomeShowingPeriod(),
+            showGoalsSection = prefs.isHomeShowingGoals(),
+            showAccountsSection = prefs.isHomeShowingAccounts()
+        )
     }
+
+    /** Hides a "Needs attention" row for the rest of the pay period. */
+    fun dismissAttention(item: AttentionItem) {
+        when (item) {
+            AttentionItem.PaydayPlan -> skipPaydayPlan()
+            is AttentionItem.SubscriptionReview -> dismissRecurringReview(item.review)
+            else -> {
+                val periodStart = currentPeriodStart()
+                prefs.addDismissedAttention(periodStart, item.key)
+                _uiState.update { it.copy(dismissedAttention = prefs.getDismissedAttention(periodStart)) }
+            }
+        }
+    }
+
+    private fun currentPeriodStart(): String =
+        SimpleDateFormat("dd/MM/yyyy", Locale.UK).format(PayPeriodCalculator.current(prefs.getPayDay()).start)
 
     fun skipPaydayPlan() {
         prefs.setPaydayPlanPending(false)
