@@ -45,7 +45,10 @@ data class SettingsUiState(
     val dailyPotIsManual: Boolean = false,
     val dailyBase: Double? = null,
     val showDailyPotDialog: Boolean = false,
-    val dailyPotInput: String = ""
+    val dailyPotInput: String = "",
+    val homeShowPeriod: Boolean = true,
+    val homeShowGoals: Boolean = true,
+    val homeShowAccounts: Boolean = true
 )
 
 @HiltViewModel
@@ -70,7 +73,10 @@ class SettingsViewModel @Inject constructor(
             spendingPromptEnabled = prefs.isSpendingPromptEnabled(),
             spendingPromptThreshold = prefs.getSpendingPromptThreshold(),
             dailyTargetOnHome = prefs.isDailyTargetOnHome(),
-            dailyCountBudgeted = prefs.isDailyTargetCountingBudgeted()
+            dailyCountBudgeted = prefs.isDailyTargetCountingBudgeted(),
+            homeShowPeriod = prefs.isHomeShowingPeriod(),
+            homeShowGoals = prefs.isHomeShowingGoals(),
+            homeShowAccounts = prefs.isHomeShowingAccounts()
         )
     )
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
@@ -81,6 +87,21 @@ class SettingsViewModel @Inject constructor(
                 _uiState.update { it.copy(dailyPot = state.pot, dailyPotIsManual = state.potIsManual, dailyBase = state.target.base) }
             }
         }
+    }
+
+    fun setHomeShowPeriod(show: Boolean) {
+        prefs.setHomeShowingPeriod(show)
+        _uiState.update { it.copy(homeShowPeriod = show) }
+    }
+
+    fun setHomeShowGoals(show: Boolean) {
+        prefs.setHomeShowingGoals(show)
+        _uiState.update { it.copy(homeShowGoals = show) }
+    }
+
+    fun setHomeShowAccounts(show: Boolean) {
+        prefs.setHomeShowingAccounts(show)
+        _uiState.update { it.copy(homeShowAccounts = show) }
     }
 
     fun setDailyTargetOnHome(show: Boolean) {
