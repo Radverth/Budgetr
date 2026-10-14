@@ -165,7 +165,7 @@ private fun TransferRow(transfer: DailyTransfer, onUndo: () -> Unit) {
 /** One day: what it had, what was spent, and a thin bar of spent against target. Future days
  *  show what they'd start with if nothing more is spent before them. */
 @Composable
-private fun DayRow(day: DailyTargetDay, base: Double, isToday: Boolean, isFuture: Boolean) {
+internal fun DayRow(day: DailyTargetDay, base: Double, isToday: Boolean, isFuture: Boolean) {
     val over = !isFuture && day.left < 0
     Card(
         modifier = Modifier.fillMaxWidth(),

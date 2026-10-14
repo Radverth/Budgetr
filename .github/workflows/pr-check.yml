@@ -29,3 +29,11 @@ jobs:
 
       - name: Compile and lint debug build
         run: ./gradlew lintDebug testDebugUnitTest assembleDebug --stacktrace
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: app/build/outputs/roborazzi/
+          if-no-files-found: warn

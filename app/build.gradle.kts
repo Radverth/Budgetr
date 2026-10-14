@@ -59,6 +59,17 @@ android {
     composeOptions {
         kotlinCompilerExtensionVersion = libs.versions.composeCompiler.get()
     }
+
+    testOptions {
+        unitTests {
+            // Robolectric screenshot tests need the app's resources (themes, fonts, strings)
+            isIncludeAndroidResources = true
+            all {
+                // Roborazzi only writes PNGs when recording; CI uploads them for phone-size checks
+                it.systemProperty("roborazzi.test.record", "true")
+            }
+        }
+    }
 }
 
 dependencies {
@@ -115,4 +126,12 @@ dependencies {
 
     // Testing
     testImplementation(libs.junit)
+
+    // Screenshot tests
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.ui.test.junit4)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.roborazzi)
+    testImplementation(libs.roborazzi.compose)
+    debugImplementation(libs.androidx.ui.test.manifest)
 }

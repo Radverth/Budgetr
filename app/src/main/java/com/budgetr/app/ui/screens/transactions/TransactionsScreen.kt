@@ -378,7 +378,7 @@ fun TransactionsScreen(
 }
 
 @Composable
-private fun TransactionItem(
+internal fun TransactionItem(
     transaction: Transaction,
     onEdit: () -> Unit,
     onDelete: () -> Unit,

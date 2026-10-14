@@ -23,6 +23,10 @@ accompanistPermissions = "0.34.0"
 coil = "2.6.0"
 glance = "1.0.0"
 junit = "4.13.2"
+# Screenshot tests (Robolectric renders Compose on the JVM; Roborazzi saves PNGs).
+# Pinned to releases built with Kotlin 1.9, matching this project.
+robolectric = "4.12.1"
+roborazzi = "1.13.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -75,6 +79,10 @@ glance-appwidget = { group = "androidx.glance", name = "glance-appwidget", versi
 
 # Testing
 junit = { group = "junit", name = "junit", version.ref = "junit" }
+robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
+roborazzi = { group = "io.github.takahirom.roborazzi", name = "roborazzi", version.ref = "roborazzi" }
+roborazzi-compose = { group = "io.github.takahirom.roborazzi", name = "roborazzi-compose", version.ref = "roborazzi" }
+androidx-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
