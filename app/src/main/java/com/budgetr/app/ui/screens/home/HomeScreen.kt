@@ -279,7 +279,7 @@ fun HomeScreen(
 }
 
 @Composable
-private fun HomeHeader(userName: String?, totalAvailable: Double, topPadding: Dp, onOpenSettings: () -> Unit) {
+internal fun HomeHeader(userName: String?, totalAvailable: Double, topPadding: Dp, onOpenSettings: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()

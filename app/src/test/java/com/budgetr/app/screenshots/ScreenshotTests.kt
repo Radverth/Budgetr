@@ -19,6 +19,8 @@ import com.budgetr.app.data.model.Envelope
 import com.budgetr.app.data.model.Transaction
 import com.budgetr.app.data.model.TransactionCategory
 import com.budgetr.app.data.repository.DailyTargetState
+import com.budgetr.app.ui.screens.budgethub.BudgetHubContent
+import com.budgetr.app.ui.screens.budgethub.BudgetHubUiState
 import com.budgetr.app.ui.screens.budgets.EnvelopeCard
 import com.budgetr.app.ui.screens.daily.DailyTargetCard
 import com.budgetr.app.ui.screens.daily.DailyTransferDialog
@@ -27,6 +29,7 @@ import com.budgetr.app.ui.screens.daily.TransferKind
 import com.budgetr.app.ui.screens.home.AttentionItem
 import com.budgetr.app.ui.screens.home.BudgetAlertUiItem
 import com.budgetr.app.ui.screens.home.GoalSuggestionUiItem
+import com.budgetr.app.ui.screens.home.HomeHeader
 import com.budgetr.app.ui.screens.home.NeedsAttentionCard
 import com.budgetr.app.ui.screens.home.RecurringReviewUiItem
 import com.budgetr.app.ui.screens.home.ThisPeriodCard
@@ -177,6 +180,39 @@ abstract class ScreenshotTests(private val prefix: String) {
             onRemindLater = {}, onDismiss = {}, modifier = Modifier.fillMaxWidth()
         )
         periodCard()
+    }
+
+    @Test
+    fun budgetHub() {
+        compose.setContent {
+            BudgetrTheme {
+                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                    BudgetHubContent(
+                        state = BudgetHubUiState(
+                            daily = dailyState(spentToday = 4.2),
+                            budgetCount = 3,
+                            budgetsOver = 1,
+                            nextPayday = period.nextPayday,
+                            historyPeriods = 4
+                        ),
+                        onOpenBudgets = {}, onOpenDailyTarget = {}, onOpenPaydayPlan = {}, onOpenHistory = {}, onTransfer = {}
+                    )
+                }
+            }
+        }
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/${prefix}_10_budget_hub.png")
+    }
+
+    @Test
+    fun homeHeader() {
+        compose.setContent {
+            BudgetrTheme {
+                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                    Column { HomeHeader(userName = "Tom", totalAvailable = 557.65, topPadding = 24.dp, onOpenSettings = {}) }
+                }
+            }
+        }
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/${prefix}_11_home_header.png")
     }
 
     /** Dialogs open in their own window, which never reports idle under Robolectric 4.12
