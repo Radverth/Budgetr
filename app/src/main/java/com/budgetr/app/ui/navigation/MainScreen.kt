@@ -10,8 +10,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.Savings
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -31,6 +31,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.budgetr.app.ui.screens.balances.AccountBalancesScreen
+import com.budgetr.app.ui.screens.budgethub.BudgetHubScreen
 import com.budgetr.app.ui.screens.budgets.BudgetsScreen
 import com.budgetr.app.ui.screens.goals.GoalsScreen
 import com.budgetr.app.ui.screens.daily.DailyTargetScreen
@@ -43,15 +44,20 @@ import com.budgetr.app.ui.screens.transactions.TransactionsScreen
 private data class BottomNavItem(
     val route: String,
     val label: String,
-    val icon: ImageVector
+    val icon: ImageVector,
+    /** Other routes that belong to this tab, so it stays highlighted on them. */
+    val alsoSelectedFor: Set<String> = emptySet()
 )
 
 private val bottomNavItems = listOf(
     BottomNavItem(NavRoutes.HOME, "Home", Icons.Default.Home),
+    BottomNavItem(NavRoutes.TRANSACTIONS, "Transactions", Icons.Default.List, setOf("transactions_tab/{tabName}")),
+    BottomNavItem(
+        NavRoutes.BUDGET_HUB, "Budget", Icons.Default.PieChart,
+        setOf(NavRoutes.BUDGETS, NavRoutes.DAILY_TARGET, NavRoutes.PAYDAY_PLAN, NavRoutes.INSIGHTS)
+    ),
     BottomNavItem(NavRoutes.ACCOUNT_BALANCES, "Accounts", Icons.Default.AccountBalance),
-    BottomNavItem(NavRoutes.TRANSACTIONS, "Transactions", Icons.Default.List),
-    BottomNavItem(NavRoutes.GOALS, "Goals", Icons.Default.Savings),
-    BottomNavItem(NavRoutes.SETTINGS, "Settings", Icons.Default.Settings)
+    BottomNavItem(NavRoutes.GOALS, "Goals", Icons.Default.Savings)
 )
 
 @Composable
@@ -64,14 +70,9 @@ fun MainScreen(onSignOut: () -> Unit) {
         bottomBar = {
             NavigationBar {
                 bottomNavItems.forEach { item ->
-                    // Treat "transactions_tab/{tabName}" as part of the Transactions tab
-                    val isSelected = if (item.route == NavRoutes.TRANSACTIONS) {
-                        currentDestination?.hierarchy?.any {
-                            it.route == NavRoutes.TRANSACTIONS || it.route == "transactions_tab/{tabName}"
-                        } == true
-                    } else {
-                        currentDestination?.hierarchy?.any { it.route == item.route } == true
-                    }
+                    val isSelected = currentDestination?.hierarchy?.any {
+                        it.route == item.route || it.route in item.alsoSelectedFor
+                    } == true
                     NavigationBarItem(
                         selected = isSelected,
                         onClick = {
@@ -138,7 +139,20 @@ fun MainScreen(onSignOut: () -> Unit) {
                         navController.navigate(NavRoutes.DAILY_TARGET) {
                             launchSingleTop = true
                         }
+                    },
+                    onNavigateToSettings = {
+                        navController.navigate(NavRoutes.SETTINGS) {
+                            launchSingleTop = true
+                        }
                     }
+                )
+            }
+            composable(NavRoutes.BUDGET_HUB) {
+                BudgetHubScreen(
+                    onOpenBudgets = { navController.navigate(NavRoutes.BUDGETS) { launchSingleTop = true } },
+                    onOpenDailyTarget = { navController.navigate(NavRoutes.DAILY_TARGET) { launchSingleTop = true } },
+                    onOpenPaydayPlan = { navController.navigate(NavRoutes.PAYDAY_PLAN) { launchSingleTop = true } },
+                    onOpenHistory = { navController.navigate(NavRoutes.INSIGHTS) { launchSingleTop = true } }
                 )
             }
             composable(NavRoutes.DAILY_TARGET) {
@@ -187,7 +201,7 @@ fun MainScreen(onSignOut: () -> Unit) {
                 GoalsScreen()
             }
             composable(NavRoutes.SETTINGS) {
-                SettingsScreen(onSignOut = onSignOut)
+                SettingsScreen(onSignOut = onSignOut, onNavigateBack = { navController.popBackStack() })
             }
         }
     }

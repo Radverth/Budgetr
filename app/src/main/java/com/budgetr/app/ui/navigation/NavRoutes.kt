@@ -11,6 +11,9 @@ object NavRoutes {
     const val TRANSACTIONS = "transactions"
     const val ACCOUNT_BALANCES = "account_balances"
     const val GOALS = "goals"
+    const val BUDGET_HUB = "budget"
+
+    // Reached from the gear on Home
     const val SETTINGS = "settings"
 
     // Reachable from Home, not a bottom nav tab

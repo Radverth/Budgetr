@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -82,6 +83,7 @@ fun HomeScreen(
     onNavigateToInsights: () -> Unit,
     onNavigateToPaydayPlan: () -> Unit,
     onNavigateToDailyTarget: () -> Unit,
+    onNavigateToSettings: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -173,7 +175,8 @@ fun HomeScreen(
                         HomeHeader(
                             userName = uiState.userName,
                             totalAvailable = uiState.totalAvailable,
-                            topPadding = paddingValues.calculateTopPadding()
+                            topPadding = paddingValues.calculateTopPadding(),
+                            onOpenSettings = onNavigateToSettings
                         )
                     }
 
@@ -276,7 +279,7 @@ fun HomeScreen(
 }
 
 @Composable
-private fun HomeHeader(userName: String?, totalAvailable: Double, topPadding: Dp) {
+internal fun HomeHeader(userName: String?, totalAvailable: Double, topPadding: Dp, onOpenSettings: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -286,11 +289,18 @@ private fun HomeHeader(userName: String?, totalAvailable: Double, topPadding: Dp
         Column(
             modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = topPadding + 16.dp, bottom = 28.dp)
         ) {
-            Text(
-                text = "Budgetr",
-                style = MaterialTheme.typography.labelLarge,
-                color = Color.White.copy(alpha = 0.7f)
-            )
+            // Settings lives here now that the bottom bar is for everyday tabs
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "Budgetr",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Color.White.copy(alpha = 0.7f),
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(onClick = onOpenSettings) {
+                    Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color.White)
+                }
+            }
             if (userName != null) {
                 Spacer(Modifier.height(4.dp))
                 Text(
