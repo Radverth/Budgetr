@@ -1,5 +1,26 @@
 package com.budgetr.app.ui.screens.transactions
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Label
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DateRangePicker
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.rememberDateRangePickerState
+import androidx.compose.material3.rememberSwipeToDismissBoxState
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -82,7 +103,39 @@ fun TransactionsScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     var sortMenuExpanded by remember { mutableStateOf(false) }
 
+    var showDateRangePicker by remember { mutableStateOf(false) }
+
     BackHandler(enabled = uiState.isSelecting) { viewModel.cancelSelection() }
+
+    LaunchedEffect(uiState.undoable) {
+        val deleted = uiState.undoable ?: return@LaunchedEffect
+        val result = snackbarHostState.showSnackbar(
+            message = "Deleted \"${deleted.info}\"",
+            actionLabel = "Undo",
+            duration = SnackbarDuration.Long
+        )
+        if (result == SnackbarResult.ActionPerformed) viewModel.undoDelete(deleted)
+        viewModel.clearUndo()
+    }
+
+    if (showDateRangePicker) {
+        val pickerState = rememberDateRangePickerState()
+        DatePickerDialog(
+            onDismissRequest = { showDateRangePicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.setDateRange(pickerState.selectedStartDateMillis, pickerState.selectedEndDateMillis)
+                        showDateRangePicker = false
+                    },
+                    enabled = pickerState.selectedStartDateMillis != null
+                ) { Text("Show") }
+            },
+            dismissButton = { TextButton(onClick = { showDateRangePicker = false }) { Text("Cancel") } }
+        ) {
+            DateRangePicker(state = pickerState, modifier = Modifier.weight(1f))
+        }
+    }
 
     LaunchedEffect(uiState.message) {
         uiState.message?.let {
@@ -136,11 +189,11 @@ fun TransactionsScreen(
         }
     }
 
-    val selectedAccount = uiState.selectedAccount
-    if (uiState.showAddSheet && selectedAccount != null) {
+    val addAccount = uiState.transactionToEdit?.account ?: uiState.accountForAdding
+    if (uiState.showAddSheet && addAccount != null) {
         AddEditTransactionSheet(
             existingTransaction = uiState.transactionToEdit,
-            currentAccount = selectedAccount,
+            currentAccount = addAccount,
             accounts = uiState.accounts,
             addSaveCount = uiState.addSaveCount,
             payDay = uiState.payDay,
@@ -156,30 +209,17 @@ fun TransactionsScreen(
         )
     }
 
-    uiState.transactionToDelete?.let { tx ->
-        AlertDialog(
-            onDismissRequest = viewModel::dismissDelete,
-            title = { Text("Delete Transaction") },
-            text = { Text("Are you sure you want to delete \"${tx.info}\"?") },
-            confirmButton = {
-                TextButton(onClick = viewModel::deleteTransaction) {
-                    Text("Delete", color = ExpenseRed)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = viewModel::dismissDelete) { Text("Cancel") }
-            }
-        )
-    }
-
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Transactions") },
                 actions = {
                     // Add transaction button
-                    IconButton(onClick = viewModel::showAddSheet, enabled = uiState.selectedAccount != null && !uiState.isSelecting) {
+                    IconButton(onClick = viewModel::showAddSheet, enabled = uiState.accountForAdding != null && !uiState.isSelecting) {
                         Icon(Icons.Default.Add, contentDescription = "Add transaction", tint = MaterialTheme.colorScheme.primary)
+                    }
+                    IconButton(onClick = { showDateRangePicker = true }) {
+                        Icon(Icons.Default.DateRange, contentDescription = "Filter by dates")
                     }
                     // Sort button
                     Box {
@@ -219,9 +259,14 @@ fun TransactionsScreen(
             // Account tabs — scrollable so tabs never get squeezed as accounts are added or renamed
             if (uiState.accounts.isNotEmpty()) {
                 ScrollableTabRow(
-                    selectedTabIndex = uiState.accounts.indexOf(uiState.selectedAccount).coerceAtLeast(0),
+                    selectedTabIndex = if (uiState.isAllAccounts) 0 else uiState.accounts.indexOf(uiState.selectedAccount).coerceAtLeast(0) + 1,
                     edgePadding = 16.dp
                 ) {
+                    Tab(
+                        selected = uiState.isAllAccounts,
+                        onClick = { viewModel.selectAccount(ALL_ACCOUNTS) },
+                        text = { Text("All") }
+                    )
                     uiState.accounts.forEach { account ->
                         Tab(
                             selected = uiState.selectedAccount == account,
@@ -245,9 +290,7 @@ fun TransactionsScreen(
                         TextButton(onClick = viewModel::cancelSelection, enabled = !uiState.isAssigningCategory) { Text("Cancel") }
                     }
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        val selectableCount = uiState.transactions.count {
-                            it.category == TransactionCategory.ONE_OFF_COST && it.rowIndex > 1
-                        }
+                        val selectableCount = uiState.visibleTransactions.count { it.isCategorisable }
                         TextButton(onClick = viewModel::selectAllShown, enabled = !uiState.isRefreshing && !uiState.isAssigningCategory && selectableCount > 0) {
                             Text(if (selectableCount > 0 && uiState.selectedRows.size == selectableCount) "Deselect all" else "Select all shown")
                         }
@@ -256,12 +299,6 @@ fun TransactionsScreen(
                         }
                     }
                 }
-            } else {
-                TextButton(
-                    onClick = viewModel::startSelection,
-                    enabled = uiState.selectedAccount != null && !uiState.isRefreshing,
-                    modifier = Modifier.padding(horizontal = 8.dp)
-                ) { Text("Bulk assign spending categories") }
             }
 
             // Search bar
@@ -275,6 +312,24 @@ fun TransactionsScreen(
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 singleLine = true
             )
+
+            if (uiState.searchQuery.isNotBlank() && !uiState.isAllAccounts) {
+                TextButton(
+                    onClick = { viewModel.selectAccount(ALL_ACCOUNTS) },
+                    modifier = Modifier.padding(horizontal = 8.dp)
+                ) { Text("Search all accounts") }
+            }
+
+            uiState.dateRange?.let { (start, end) ->
+                val fmt = SimpleDateFormat("d MMM", Locale.UK)
+                FilterChip(
+                    selected = true,
+                    onClick = { viewModel.setDateRange(null, null) },
+                    label = { Text("${fmt.format(Date(start))} – ${fmt.format(Date(end))}") },
+                    trailingIcon = { Icon(Icons.Default.Close, contentDescription = "Clear dates", modifier = Modifier.size(16.dp)) },
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+            }
 
             // Category filters
             LazyRow(
@@ -331,13 +386,15 @@ fun TransactionsScreen(
                     .fillMaxSize()
                     .nestedScroll(pullRefreshState.nestedScrollConnection)
             ) {
-                if (uiState.transactions.isEmpty() && !uiState.isRefreshing) {
+                val shown = uiState.visibleTransactions
+                if (shown.isEmpty() && !uiState.isRefreshing) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(
                             text = when {
                                 uiState.accounts.isEmpty() -> "No accounts yet.\nAdd one from the Accounts tab."
                                 uiState.searchQuery.isNotBlank() -> "No matching transactions."
                                 uiState.tagFilter != null -> "No one-off costs tagged ${uiState.tagFilter}."
+                                uiState.dateRange != null -> "Nothing between those dates."
                                 else -> "No transactions found.\nPull down to refresh."
                             },
                             style = MaterialTheme.typography.bodyLarge,
@@ -345,24 +402,55 @@ fun TransactionsScreen(
                         )
                     }
                 } else {
+                    // Day headers only make sense when the list is in date order
+                    val byDay = uiState.sortOrder == SortOrder.DATE_DESC || uiState.sortOrder == SortOrder.DATE_ASC
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                         contentPadding = PaddingValues(bottom = 24.dp)
                     ) {
-                        items(
-                            items = uiState.transactions,
-                            key = { "${it.account}-${it.rowIndex}" }
-                        ) { transaction ->
-                            TransactionItem(
-                                transaction = transaction,
-                                onEdit = { viewModel.showEditSheet(transaction) },
-                                onDelete = { viewModel.confirmDelete(transaction) },
-                                selectionMode = uiState.isSelecting,
-                                selected = transaction.rowIndex in uiState.selectedRows,
-                                selectionEnabled = !uiState.isRefreshing && !uiState.isAssigningCategory,
-                                onToggleSelection = { viewModel.toggleSelection(transaction) }
-                            )
+                        if (!uiState.isSelecting) {
+                            item(key = "hint") {
+                                Text(
+                                    text = "Tap to edit · swipe ← to delete, → to set a category · long-press to select",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+                        val groups = if (byDay) shown.groupBy { it.date }.toList() else listOf("" to shown)
+                        groups.forEach { (date, dayTransactions) ->
+                            if (byDay) {
+                                item(key = "day-$date") { DayHeader(date = date, totals = uiState.dayTotals[date]) }
+                            }
+                            items(items = dayTransactions, key = { "${it.account}-${it.rowIndex}" }) { transaction ->
+                                SwipeableTransactionRow(
+                                    transaction = transaction,
+                                    swipeEnabled = !uiState.isSelecting && !uiState.isAssigningCategory,
+                                    onDelete = { viewModel.deleteWithUndo(transaction) },
+                                    onSetCategory = { viewModel.categoriseOne(transaction) }
+                                ) {
+                                    TransactionItem(
+                                        transaction = transaction,
+                                        onClick = {
+                                            if (uiState.isSelecting) viewModel.toggleSelection(transaction)
+                                            else viewModel.showEditSheet(transaction)
+                                        },
+                                        onLongClick = { viewModel.startSelectionWith(transaction) },
+                                        onDelete = { viewModel.deleteWithUndo(transaction) },
+                                        onSetCategory = if (transaction.isCategorisable) {
+                                            { viewModel.categoriseOne(transaction) }
+                                        } else null,
+                                        showAccount = uiState.isAllAccounts,
+                                        showDate = !byDay,
+                                        selectionMode = uiState.isSelecting,
+                                        selected = transaction.key in uiState.selectedRows,
+                                        selectionEnabled = !uiState.isRefreshing && !uiState.isAssigningCategory,
+                                        onToggleSelection = { viewModel.toggleSelection(transaction) }
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -379,11 +467,106 @@ fun TransactionsScreen(
     }
 }
 
+/** "Wed 14 Oct" (or Today / Yesterday), with that day's one-off spend against its daily
+ *  target when the daily spend target covers the day. */
+@Composable
+internal fun DayHeader(date: String, totals: DayTotals?) {
+    val parse = SimpleDateFormat("dd/MM/yyyy", Locale.UK)
+    val parsed = runCatching { parse.parse(date) }.getOrNull()
+    val label = parsed?.let { d ->
+        val today = parse.format(Date())
+        val yesterday = parse.format(Date(System.currentTimeMillis() - 24L * 60 * 60 * 1000))
+        when (date) {
+            today -> "Today"
+            yesterday -> "Yesterday"
+            else -> SimpleDateFormat("EEE d MMM", Locale.UK).format(d)
+        }
+    } ?: date
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+            modifier = Modifier.weight(1f)
+        )
+        if (totals != null && (totals.spent > 0 || totals.target > 0)) {
+            val over = totals.spent > totals.target + 0.005
+            Text(
+                text = "${totals.spent.toCurrencyString()} of ${totals.target.toCurrencyString()}",
+                style = MaterialTheme.typography.labelMedium,
+                color = if (over) ExpenseRed else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            )
+        }
+    }
+}
+
+/** Swipe left to delete, right to set a spending category (one-off costs only). The row springs
+ *  back either way; a delete hides it at once and the snackbar offers Undo. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SwipeableTransactionRow(
+    transaction: Transaction,
+    swipeEnabled: Boolean,
+    onDelete: () -> Unit,
+    onSetCategory: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    val canCategorise = transaction.isCategorisable
+    val state = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            when (value) {
+                SwipeToDismissBoxValue.EndToStart -> onDelete()
+                SwipeToDismissBoxValue.StartToEnd -> if (canCategorise) onSetCategory()
+                SwipeToDismissBoxValue.Settled -> Unit
+            }
+            false
+        }
+    )
+    SwipeToDismissBox(
+        state = state,
+        enableDismissFromStartToEnd = swipeEnabled && canCategorise,
+        enableDismissFromEndToStart = swipeEnabled,
+        backgroundContent = {
+            val toDelete = state.dismissDirection == SwipeToDismissBoxValue.EndToStart
+            val toCategory = state.dismissDirection == SwipeToDismissBoxValue.StartToEnd
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp, vertical = 2.dp)
+                    .clip(MaterialTheme.shapes.medium)
+                    .background(
+                        when {
+                            toDelete -> ExpenseRed
+                            toCategory -> MaterialTheme.colorScheme.primary
+                            else -> Color.Transparent
+                        }
+                    )
+                    .padding(horizontal = 20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = if (toDelete) Arrangement.End else Arrangement.Start
+            ) {
+                if (toDelete) Icon(Icons.Default.Delete, contentDescription = null, tint = Color.White)
+                if (toCategory) Icon(Icons.Default.Label, contentDescription = null, tint = Color.White)
+            }
+        }
+    ) { content() }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun TransactionItem(
     transaction: Transaction,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit = {},
+    onDelete: () -> Unit = {},
+    onSetCategory: (() -> Unit)? = null,
+    showAccount: Boolean = false,
+    /** Off under a day header, which already shows the date. */
+    showDate: Boolean = true,
     selectionMode: Boolean = false,
     selected: Boolean = false,
     selectionEnabled: Boolean = true,
@@ -399,24 +582,32 @@ internal fun TransactionItem(
     }
 
     Card(
-        modifier = androidx.compose.ui.Modifier
+        modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 2.dp),
+            .padding(horizontal = 16.dp, vertical = 2.dp)
+            .clip(CardDefaults.shape)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick, onLongClickLabel = "Select")
+            // Swipes aren't usable with a screen reader, so offer the same actions here
+            .semantics {
+                customActions = buildList {
+                    add(CustomAccessibilityAction("Delete") { onDelete(); true })
+                    onSetCategory?.let { add(CustomAccessibilityAction("Set spending category") { it(); true }) }
+                }
+            },
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Row(
-            modifier = androidx.compose.ui.Modifier
+            modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+                .padding(start = 16.dp, end = if (selectionMode) 4.dp else 16.dp, top = 12.dp, bottom = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            // Description and amount share the top line; date and category get the full second
-            // line, so the category isn't squeezed out by the amount on narrow phones
-            Column(modifier = androidx.compose.ui.Modifier.weight(1f)) {
+            // Description and amount share the top line; date, category and (on the All tab)
+            // account get the full second line, so nothing is squeezed on narrow phones
+            Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = transaction.info,
@@ -424,7 +615,7 @@ internal fun TransactionItem(
                         fontWeight = FontWeight.Medium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = androidx.compose.ui.Modifier.weight(1f)
+                        modifier = Modifier.weight(1f)
                     )
                     Text(
                         text = transaction.amount.toCurrencyString(),
@@ -433,67 +624,29 @@ internal fun TransactionItem(
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         softWrap = false,
-                        modifier = androidx.compose.ui.Modifier.padding(start = 8.dp)
+                        modifier = Modifier.padding(start = 8.dp)
                     )
                 }
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = transaction.date,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                        maxLines = 1,
-                        softWrap = false
-                    )
-                    Text(
-                        text = "•",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-                    )
-                    Text(
-                        text = transaction.tag ?: transaction.category.displayName,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = amountColor.copy(alpha = 0.8f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
+                Text(
+                    text = buildList {
+                        if (showDate) add(transaction.date)
+                        add(transaction.tag ?: transaction.category.displayName)
+                        if (showAccount) add(transaction.account)
+                    }.joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
-
-            Spacer(modifier = androidx.compose.ui.Modifier.width(4.dp))
 
             if (selectionMode) {
                 Checkbox(
                     checked = selected,
                     onCheckedChange = { onToggleSelection() },
-                    enabled = selectionEnabled && transaction.category == TransactionCategory.ONE_OFF_COST && transaction.rowIndex > 1,
+                    enabled = selectionEnabled && transaction.isCategorisable,
                     modifier = Modifier.semantics { contentDescription = "Select ${transaction.info}, ${transaction.date}" }
                 )
-            } else Row {
-                IconButton(
-                    onClick = onEdit,
-                    modifier = androidx.compose.ui.Modifier.size(40.dp)
-                ) {
-                    Icon(
-                        Icons.Default.Edit,
-                        contentDescription = "Edit",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = androidx.compose.ui.Modifier.size(20.dp)
-                    )
-                }
-                IconButton(
-                    onClick = onDelete,
-                    modifier = androidx.compose.ui.Modifier.size(40.dp)
-                ) {
-                    Icon(
-                        Icons.Default.Delete,
-                        contentDescription = "Delete",
-                        tint = ExpenseRed,
-                        modifier = androidx.compose.ui.Modifier.size(20.dp)
-                    )
-                }
             }
         }
     }

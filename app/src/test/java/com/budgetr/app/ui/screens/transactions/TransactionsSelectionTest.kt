@@ -10,7 +10,7 @@ class TransactionsSelectionTest {
     private val first = Transaction(2, "01/10/2026", "Shop", -12.0, TransactionCategory.ONE_OFF_COST, "Current")
     private val second = first.copy(rowIndex = 3, info = "Bus", amount = -3.0)
     private val state = TransactionsUiState(selectedAccount = "Current", transactions = listOf(first, second),
-        isSelecting = true, selectedRows = setOf(2, 3))
+        isSelecting = true, selectedRows = setOf(RowKey("Current", 2), RowKey("Current", 3)))
 
     @Test fun `selection never moves to a different transaction occupying the same sheet row`() {
         val refreshed = state.withTransactions(listOf(second.copy(rowIndex = 2)))
@@ -18,12 +18,12 @@ class TransactionsSelectionTest {
     }
 
     @Test fun `sorting keeps the selected transactions`() {
-        assertEquals(setOf(2, 3), state.withTransactions(listOf(second, first)).selectedRows)
+        assertEquals(setOf(RowKey("Current", 2), RowKey("Current", 3)), state.withTransactions(listOf(second, first)).selectedRows)
     }
 
     @Test fun `removed or changed rows leave selection but unchanged rows remain`() {
-        assertEquals(setOf(2), state.withTransactions(listOf(first, second.copy(amount = -9.0))).selectedRows)
-        assertEquals(setOf(2), state.withTransactions(listOf(first)).selectedRows)
+        assertEquals(setOf(RowKey("Current", 2)), state.withTransactions(listOf(first, second.copy(amount = -9.0))).selectedRows)
+        assertEquals(setOf(RowKey("Current", 2)), state.withTransactions(listOf(first)).selectedRows)
     }
 
     @Test fun `selecting current account preserves cached rows before an offline refresh`() {
@@ -35,5 +35,22 @@ class TransactionsSelectionTest {
         assertTrue(changed.transactions.isEmpty())
         assertTrue(changed.selectedRows.isEmpty())
         assertEquals(false, changed.isSelecting)
+    }
+
+    @Test fun `same row number in another account is a different selection`() {
+        val other = first.copy(account = "Savings")
+        val all = state.copy(selectedAccount = ALL_ACCOUNTS, transactions = listOf(first, other), selectedRows = setOf(first.key))
+        assertEquals(setOf(RowKey("Current", 2)), all.withTransactions(listOf(first, other)).selectedRows)
+    }
+
+    @Test fun `a pending delete is hidden until it has really gone`() {
+        val deleting = state.copy(pendingDeletes = setOf(first))
+        assertEquals(listOf(second), deleting.visibleTransactions)
+        assertTrue(deleting.withTransactions(listOf(second)).pendingDeletes.isEmpty())
+    }
+
+    @Test fun `All tab adds to the first account`() {
+        val all = state.copy(selectedAccount = ALL_ACCOUNTS, accounts = listOf("Current", "Savings"))
+        assertEquals("Current", all.accountForAdding)
     }
 }
