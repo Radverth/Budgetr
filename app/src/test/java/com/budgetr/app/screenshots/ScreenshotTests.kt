@@ -10,6 +10,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.assertDoesNotExist
+import androidx.compose.ui.test.assertIsDisplayed
+import org.junit.Assert.assertEquals
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.isDialog
@@ -103,6 +110,26 @@ abstract class ScreenshotTests(private val prefix: String) {
             }
         }
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/${prefix}_$name.png")
+    }
+
+    @Test
+    fun typingFiltersSuggestionsAndPickingKeepsTheAmount() {
+        val description = mutableStateOf("")
+        var picked: Transaction? = null
+        val coffee = spend("14/10/2026", 3.00, "Coffee", "Eating out")
+        compose.setContent {
+            BudgetrTheme {
+                QuickAddFields("12.50", {}, description.value, { description.value = it },
+                    listOf(coffee, spend("13/10/2026", 40.00, "Tesco")),
+                    { picked = it; description.value = it.info }, FocusRequester())
+            }
+        }
+        compose.onNodeWithText("Description").performTextInput("Coff")
+        compose.onNodeWithText("Tesco").assertDoesNotExist()
+        compose.onNodeWithText("Coffee").performClick()
+        assertEquals(coffee, picked)
+        assertEquals("Coffee", description.value)
+        compose.onNodeWithText("12.50").assertIsDisplayed()
     }
 
     @Test
