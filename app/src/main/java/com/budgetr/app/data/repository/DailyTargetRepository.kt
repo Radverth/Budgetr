@@ -81,6 +81,21 @@ class DailyTargetRepository @Inject constructor(
         }
     }
 
+    /** Borrows [amount] into today (positive) or pays it forward (negative), spread over the
+     *  rest of the period, or against [targetDay] when given. */
+    suspend fun addTransfer(state: DailyTargetState, amount: Double, targetDay: Date?) {
+        budgetRepository.addDailyTransfer(
+            DailyTransfer(
+                periodStart = state.periodStart,
+                createdOn = format(state.target.today.date),
+                amount = amount,
+                targetDay = targetDay?.let { format(it) }
+            )
+        )
+    }
+
+    suspend fun undoTransfer(id: Long) = budgetRepository.deleteDailyTransfer(id)
+
     /** Forget the fixed pot so it's worked out again from current income and fixed costs. */
     fun recalculatePot() = prefs.setDailyPot(null, 0.0)
 

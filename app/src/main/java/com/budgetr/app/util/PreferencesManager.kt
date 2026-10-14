@@ -28,6 +28,7 @@ class PreferencesManager @Inject constructor(
         private const val KEY_DAILY_POT_PERIOD = "daily_pot_period"
         private const val KEY_DAILY_POT_AMOUNT = "daily_pot_amount"
         private const val KEY_DAILY_COUNT_BUDGETED = "daily_count_budgeted"
+        private const val KEY_DAILY_ON_HOME = "daily_on_home"
     }
 
     fun getAccessToken(): String? = prefs.getString(KEY_ACCESS_TOKEN, null)
@@ -96,6 +97,10 @@ class PreferencesManager @Inject constructor(
     /** Whether spending in categories with their own budget also counts against the daily target. */
     fun isDailyTargetCountingBudgeted(): Boolean = prefs.getBoolean(KEY_DAILY_COUNT_BUDGETED, true)
     fun setDailyTargetCountingBudgeted(count: Boolean) = prefs.edit().putBoolean(KEY_DAILY_COUNT_BUDGETED, count).apply()
+
+    /** Show the daily spend target on Home (and the widget) instead of Safe to spend. */
+    fun isDailyTargetOnHome(): Boolean = prefs.getBoolean(KEY_DAILY_ON_HOME, true)
+    fun setDailyTargetOnHome(show: Boolean) = prefs.edit().putBoolean(KEY_DAILY_ON_HOME, show).apply()
 
     fun clearAll() = prefs.edit().clear().apply()
 }

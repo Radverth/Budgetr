@@ -6,6 +6,8 @@ import com.budgetr.app.BuildConfig
 import com.budgetr.app.data.model.AccountBalance
 import com.budgetr.app.data.model.TransactionCategory
 import com.budgetr.app.data.repository.BudgetRepository
+import com.budgetr.app.data.repository.DailyTargetRepository
+import com.budgetr.app.data.repository.DailyTargetState
 import com.budgetr.app.data.repository.SheetsRepository
 import com.budgetr.app.util.AuthManager
 import com.budgetr.app.util.BudgetCapCalculator
@@ -68,6 +70,9 @@ data class HomeUiState(
     val oneOffByTag: List<TagSpend> = emptyList(),
     val totalAvailable: Double = 0.0,
     val safeToSpend: SafeToSpend? = null,
+    val dailyTarget: DailyTargetState? = null,
+    /** Daily spend target instead of Safe to spend (Settings). */
+    val showDailyTarget: Boolean = true,
     /** A new pay period started and its payday plan hasn't been done or skipped yet. */
     val paydayPlanPending: Boolean = false,
     val error: String? = null,
@@ -114,7 +119,8 @@ class HomeViewModel @Inject constructor(
     private val budgetRepository: BudgetRepository,
     private val authManager: AuthManager,
     private val updateChecker: UpdateChecker,
-    private val prefs: PreferencesManager
+    private val prefs: PreferencesManager,
+    private val dailyTargetRepository: DailyTargetRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState(userName = authManager.getUserName()))
@@ -124,9 +130,32 @@ class HomeViewModel @Inject constructor(
         observeData()
         observeGoalsAndDebts()
         observeSpendingControls()
+        observeDailyTarget()
         checkPayPeriod()
         refresh()
         checkForUpdate()
+    }
+
+    private fun observeDailyTarget() {
+        viewModelScope.launch {
+            dailyTargetRepository.observe().collect { state ->
+                _uiState.update { it.copy(dailyTarget = state, showDailyTarget = prefs.isDailyTargetOnHome()) }
+            }
+        }
+    }
+
+    fun addDailyTransfer(amount: Double, targetDay: java.util.Date?) {
+        val state = _uiState.value.dailyTarget ?: return
+        viewModelScope.launch {
+            try {
+                dailyTargetRepository.addTransfer(state, amount, targetDay)
+                _uiState.update {
+                    it.copy(successMessage = if (amount > 0) "Borrowed from later days" else "Paid forward to later days")
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = e.message) }
+            }
+        }
     }
 
     private fun observeSpendingControls() {
@@ -404,7 +433,9 @@ class HomeViewModel @Inject constructor(
     }
 
     /** Re-reads the flag, since the plan screen clears it when the plan is saved. */
-    fun syncPaydayPlanPending() = _uiState.update { it.copy(paydayPlanPending = prefs.isPaydayPlanPending()) }
+    fun syncPaydayPlanPending() = _uiState.update {
+        it.copy(paydayPlanPending = prefs.isPaydayPlanPending(), showDailyTarget = prefs.isDailyTargetOnHome())
+    }
 
     fun skipPaydayPlan() {
         prefs.setPaydayPlanPending(false)
