@@ -7,8 +7,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -33,6 +35,7 @@ import com.budgetr.app.ui.screens.home.HomeHeader
 import com.budgetr.app.ui.screens.home.NeedsAttentionCard
 import com.budgetr.app.ui.screens.home.RecurringReviewUiItem
 import com.budgetr.app.ui.screens.home.ThisPeriodCard
+import com.budgetr.app.ui.screens.transactions.QuickAddFields
 import com.budgetr.app.ui.screens.transactions.DayHeader
 import com.budgetr.app.ui.screens.transactions.DayTotals
 import com.budgetr.app.ui.screens.transactions.TransactionItem
@@ -100,6 +103,19 @@ abstract class ScreenshotTests(private val prefix: String) {
             }
         }
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/${prefix}_$name.png")
+    }
+
+    @Test
+    fun quickAddFields() = shot("09_quick_add") {
+        Text("Add Transaction", style = MaterialTheme.typography.titleLarge)
+        QuickAddFields(
+            amount = "12.50", onAmountChange = {}, description = "", onDescriptionChange = {},
+            suggestions = listOf("Tesco", "Coffee", "Bus", "A very long description from the weekly supermarket shop").map {
+                spend("14/10/2026", 12.50, it, "Groceries")
+            },
+            onSuggestion = {}, amountFocus = FocusRequester()
+        )
+        Text("Account: Monzo", style = MaterialTheme.typography.bodyMedium)
     }
 
     @Test
