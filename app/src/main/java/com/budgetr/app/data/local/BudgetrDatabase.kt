@@ -7,6 +7,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.budgetr.app.data.local.dao.AccountBalanceDao
 import com.budgetr.app.data.local.dao.BalanceRolloverDao
 import com.budgetr.app.data.local.dao.CategoryBudgetDao
+import com.budgetr.app.data.local.dao.DailyTransferDao
 import com.budgetr.app.data.local.dao.DebtDao
 import com.budgetr.app.data.local.dao.EnvelopeDao
 import com.budgetr.app.data.local.dao.GoalCategoryLinkDao
@@ -17,6 +18,7 @@ import com.budgetr.app.data.local.dao.TransactionDao
 import com.budgetr.app.data.local.entity.AccountBalanceEntity
 import com.budgetr.app.data.local.entity.BalanceRolloverEntity
 import com.budgetr.app.data.local.entity.CategoryBudgetEntity
+import com.budgetr.app.data.local.entity.DailyTransferEntity
 import com.budgetr.app.data.local.entity.DebtEntity
 import com.budgetr.app.data.local.entity.EnvelopeEntity
 import com.budgetr.app.data.local.entity.GoalCategoryLinkEntity
@@ -36,9 +38,10 @@ import com.budgetr.app.data.local.entity.TransactionEntity
         RecurringCostReviewEntity::class,
         GoalCategoryLinkEntity::class,
         EnvelopeEntity::class,
-        PeriodSummaryEntity::class
+        PeriodSummaryEntity::class,
+        DailyTransferEntity::class
     ],
-    version = 9,
+    version = 10,
     exportSchema = false
 )
 abstract class BudgetrDatabase : RoomDatabase() {
@@ -52,6 +55,7 @@ abstract class BudgetrDatabase : RoomDatabase() {
     abstract fun goalCategoryLinkDao(): GoalCategoryLinkDao
     abstract fun envelopeDao(): EnvelopeDao
     abstract fun periodSummaryDao(): PeriodSummaryDao
+    abstract fun dailyTransferDao(): DailyTransferDao
 
     companion object {
         /** Adds the optional spending category to cached transactions. */
@@ -78,6 +82,16 @@ abstract class BudgetrDatabase : RoomDatabase() {
                     "CREATE TABLE IF NOT EXISTS `period_summaries` (`periodStart` TEXT NOT NULL, `periodEnd` TEXT NOT NULL, " +
                         "`income` REAL NOT NULL, `fixedCosts` REAL NOT NULL, `oneOffCosts` REAL NOT NULL, " +
                         "`endBalance` REAL NOT NULL, `tagTotals` TEXT NOT NULL, PRIMARY KEY(`periodStart`))"
+                )
+            }
+        }
+
+        /** Adds borrow / pay-forward moves for the daily spend target. */
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `daily_transfers` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`periodStart` TEXT NOT NULL, `createdOn` TEXT NOT NULL, `amount` REAL NOT NULL, `targetDay` TEXT)"
                 )
             }
         }
