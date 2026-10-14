@@ -146,8 +146,8 @@ internal fun BudgetHubContent(
                     HubRow(
                         icon = Icons.Default.Today,
                         title = "Daily spend target",
-                        subtitle = state.daily?.let { "Base ${it.target.base.toCurrencyString()} a day · day by day, borrow and pay forward" }
-                            ?: "Day by day, borrow and pay forward",
+                        subtitle = state.daily?.let { "${it.target.base.toCurrencyString()} a day · borrow or pay forward" }
+                            ?: "Borrow or pay forward between days",
                         onClick = onOpenDailyTarget
                     )
                     HubDivider()
@@ -156,7 +156,7 @@ internal fun BudgetHubContent(
                         title = "Payday plan",
                         subtitle = when {
                             state.paydayPlanPending -> "Ready to plan this payday"
-                            paydayText != null -> "Next payday $paydayText · re-plan any time"
+                            paydayText != null -> "Next payday $paydayText"
                             else -> "Give every pound a job"
                         },
                         subtitleColor = if (state.paydayPlanPending) MaterialTheme.colorScheme.primary else null,
