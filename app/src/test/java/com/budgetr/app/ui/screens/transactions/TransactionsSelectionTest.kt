@@ -53,4 +53,11 @@ class TransactionsSelectionTest {
         val all = state.copy(selectedAccount = ALL_ACCOUNTS, accounts = listOf("Current", "Savings"))
         assertEquals("Current", all.accountForAdding)
     }
+    @Test fun `removed account falls back to an available account when adding`() {
+        assertEquals("Savings", state.copy(accounts = listOf("Savings")).accountForAdding)
+    }
+
+    @Test fun `no accounts cannot start an add`() {
+        assertEquals(null, state.copy(accounts = emptyList()).accountForAdding)
+    }
 }
