@@ -60,4 +60,10 @@ class TransactionsSelectionTest {
     @Test fun `no accounts cannot start an add`() {
         assertEquals(null, state.copy(accounts = emptyList()).accountForAdding)
     }
+    @Test fun `last saved account is used on both account and All tabs`() {
+        val remembered = state.copy(accounts = listOf("Current", "Savings"), lastAddAccount = "Savings")
+        assertEquals("Savings", remembered.accountForAdding)
+        assertEquals("Savings", remembered.copy(selectedAccount = ALL_ACCOUNTS).accountForAdding)
+        assertEquals("Current", remembered.copy(accounts = listOf("Current")).accountForAdding)
+    }
 }

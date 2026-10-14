@@ -17,6 +17,7 @@ import com.budgetr.app.util.BudgetCapCalculator
 import com.budgetr.app.util.EnvelopeCalculator
 import com.budgetr.app.util.PayPeriodCalculator
 import com.budgetr.app.util.PreferencesManager
+import com.budgetr.app.util.QuickAddSuggestions
 import com.budgetr.app.util.SpendTags
 import com.budgetr.app.util.spendForCategory
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -58,6 +59,8 @@ data class TransactionsUiState(
     val message: String? = null,
     val accounts: List<String> = emptyList(),
     val selectedAccount: String? = null,
+    val lastAddAccount: String? = null,
+    val descriptionSuggestions: List<Transaction> = emptyList(),
     val transactions: List<Transaction> = emptyList(),
     val categoryFilter: TransactionCategory? = null,
     /** Spending category filter, only applied while viewing one-off costs. */
@@ -110,8 +113,10 @@ data class TransactionsUiState(
     /** Rows to show: everything except deletes still on their way to the Sheet. */
     val visibleTransactions: List<Transaction> get() = transactions.filter { it !in pendingDeletes }
 
-    /** Account new transactions go into: the open tab, or the first account on the All tab. */
-    val accountForAdding: String? get() = if (isAllAccounts) accounts.firstOrNull() else selectedAccount
+    /** Prefer the last saved account, falling back safely if an account was removed. */
+    val accountForAdding: String? get() = lastAddAccount?.takeIf { it in accounts }
+        ?: selectedAccount?.takeIf { it in accounts }
+        ?: accounts.firstOrNull()
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -130,6 +135,7 @@ class TransactionsViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(
         TransactionsUiState(
             selectedAccount = initialAccount,
+            lastAddAccount = prefs.getLastAddAccount(),
             payDay = prefs.getPayDay(),
             spendingPromptEnabled = prefs.isSpendingPromptEnabled(),
             spendingPromptThreshold = prefs.getSpendingPromptThreshold()
@@ -162,9 +168,12 @@ class TransactionsViewModel @Inject constructor(
         refresh()
 
         viewModelScope.launch {
-            repository.getAllTransactions().collect { all ->
+            combine(repository.getAllTransactions(), repository.getAccountBalances()) { all, balances ->
+                all to balances.map { it.account }
+            }.collect { (all, accounts) ->
                 _uiState.update {
-                    it.copy(knownTags = SpendTags.knownTags(all), tagSuggestions = SpendTags.suggestionsByInfo(all))
+                    it.copy(knownTags = SpendTags.knownTags(all), tagSuggestions = SpendTags.suggestionsByInfo(all),
+                        descriptionSuggestions = QuickAddSuggestions.from(all, accounts))
                 }
             }
         }
@@ -381,7 +390,9 @@ class TransactionsViewModel @Inject constructor(
 
     private fun transactionCount(n: Int) = if (n == 1) "1 transaction" else "$n transactions"
 
-    fun showAddSheet() = _uiState.update { it.copy(showAddSheet = true, transactionToEdit = null) }
+    fun showAddSheet() = _uiState.update {
+        it.copy(showAddSheet = true, transactionToEdit = null, lastAddAccount = prefs.getLastAddAccount())
+    }
     fun showEditSheet(transaction: Transaction) = _uiState.update { it.copy(transactionToEdit = transaction, showAddSheet = true) }
     fun dismissSheet() = _uiState.update { it.copy(showAddSheet = false, transactionToEdit = null) }
 
@@ -438,6 +449,8 @@ class TransactionsViewModel @Inject constructor(
                     }
 
                     repository.addTransaction(transaction)
+                    prefs.setLastAddAccount(transaction.account)
+                    _uiState.update { it.copy(lastAddAccount = transaction.account) }
 
                     if (budget != null && spendBefore != null && !BudgetCapCalculator.isOverLimit(spendBefore, budget.limit)) {
                         val spendAfter = spendForCategory(repository.getAllTransactions().first(), budget.category, period = period)
@@ -480,7 +493,8 @@ class TransactionsViewModel @Inject constructor(
             try {
                 repository.addTransaction(source)
                 repository.addTransaction(destination)
-                _uiState.update { it.copy(addSaveCount = it.addSaveCount + 1) }
+                prefs.setLastAddAccount(source.account)
+                _uiState.update { it.copy(addSaveCount = it.addSaveCount + 1, lastAddAccount = source.account) }
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = e.message) }
             }
