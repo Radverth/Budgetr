@@ -27,6 +27,7 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
         </activity>
 
         <!-- Transparent overlay activity launched from the home screen widget -->
@@ -35,6 +36,17 @@
             android:exported="false"
             android:theme="@style/Theme.Budgetr.QuickAdd"
             android:windowSoftInputMode="adjustResize" />
+
+        <service
+            android:name=".widget.AddExpenseTileService"
+            android:exported="true"
+            android:label="@string/add_expense"
+            android:icon="@drawable/ic_add_expense"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
 
         <!-- Home screen widget -->
         <receiver

@@ -38,4 +38,5 @@
     <string name="filter">Filter</string>
     <string name="all">All</string>
     <string name="widget_description">Shows your total available balance and quick-add transaction shortcuts.</string>
+    <string name="add_expense">Add expense</string>
 </resources>
