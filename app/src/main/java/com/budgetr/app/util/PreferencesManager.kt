@@ -24,6 +24,10 @@ class PreferencesManager @Inject constructor(
         private const val KEY_PAYDAY_PLAN_PENDING = "payday_plan_pending"
         private const val KEY_PLAN_INCLUDE_GOALS = "plan_include_goals"
         private const val KEY_PLAN_INCLUDE_DEBTS = "plan_include_debts"
+        private const val KEY_DAILY_POT_OVERRIDE = "daily_pot_override"
+        private const val KEY_DAILY_POT_PERIOD = "daily_pot_period"
+        private const val KEY_DAILY_POT_AMOUNT = "daily_pot_amount"
+        private const val KEY_DAILY_COUNT_BUDGETED = "daily_count_budgeted"
     }
 
     fun getAccessToken(): String? = prefs.getString(KEY_ACCESS_TOKEN, null)
@@ -76,6 +80,22 @@ class PreferencesManager @Inject constructor(
 
     fun isPlanIncludeDebts(): Boolean = prefs.getBoolean(KEY_PLAN_INCLUDE_DEBTS, true)
     fun setPlanIncludeDebts(include: Boolean) = prefs.edit().putBoolean(KEY_PLAN_INCLUDE_DEBTS, include).apply()
+
+    /** Money for non-fixed spending this pay period, typed in by hand. Null means work it out. */
+    fun getDailyPotOverride(): Double? = prefs.getString(KEY_DAILY_POT_OVERRIDE, null)?.toDoubleOrNull()
+    fun setDailyPotOverride(amount: Double?) = prefs.edit().putString(KEY_DAILY_POT_OVERRIDE, amount?.toString()).apply()
+
+    /** The worked-out pot, fixed for the pay period starting [getDailyPotPeriod] (dd/MM/yyyy). */
+    fun getDailyPotPeriod(): String? = prefs.getString(KEY_DAILY_POT_PERIOD, null)
+    fun getDailyPotAmount(): Double = prefs.getString(KEY_DAILY_POT_AMOUNT, null)?.toDoubleOrNull() ?: 0.0
+    fun setDailyPot(periodStart: String?, amount: Double) = prefs.edit()
+        .putString(KEY_DAILY_POT_PERIOD, periodStart)
+        .putString(KEY_DAILY_POT_AMOUNT, amount.toString())
+        .apply()
+
+    /** Whether spending in categories with their own budget also counts against the daily target. */
+    fun isDailyTargetCountingBudgeted(): Boolean = prefs.getBoolean(KEY_DAILY_COUNT_BUDGETED, true)
+    fun setDailyTargetCountingBudgeted(count: Boolean) = prefs.edit().putBoolean(KEY_DAILY_COUNT_BUDGETED, count).apply()
 
     fun clearAll() = prefs.edit().clear().apply()
 }
