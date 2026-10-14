@@ -1,5 +1,6 @@
 package com.budgetr.app.widget
 
+import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.Intent
 import android.os.Build
@@ -7,6 +8,9 @@ import android.service.quicksettings.TileService
 
 /** Optional tile: the user adds it from Android's Quick Settings editor. */
 class AddExpenseTileService : TileService() {
+    // The PendingIntent overload only exists on API 34+. The Intent call below is
+    // restricted to older Android versions, where it is the supported API.
+    @SuppressLint("StartActivityAndCollapseDeprecated")
     override fun onClick() {
         super.onClick()
         unlockAndRun {
