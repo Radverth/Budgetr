@@ -10,6 +10,7 @@ import com.budgetr.app.data.model.SortOrder
 import com.budgetr.app.data.model.Transaction
 import com.budgetr.app.data.model.TransactionCategory
 import com.budgetr.app.data.repository.BudgetRepository
+import com.budgetr.app.data.repository.DailyTargetRepository
 import com.budgetr.app.data.repository.SheetsRepository
 import com.budgetr.app.util.BudgetAlertNotifier
 import com.budgetr.app.util.BudgetCapCalculator
@@ -36,10 +37,21 @@ import java.util.Calendar
 import java.util.Locale
 import javax.inject.Inject
 
+/** Pseudo-account for the "All" tab, which lists and searches every account at once. */
+const val ALL_ACCOUNTS = "\u0000all"
+
+/** A sheet row in a given account; row numbers alone repeat across accounts. */
+data class RowKey(val account: String, val rowIndex: Int)
+
+val Transaction.key: RowKey get() = RowKey(account, rowIndex)
+
+/** Spent and target for one day of the daily spend target, for the list's day headers. */
+data class DayTotals(val spent: Double, val target: Double)
+
 data class TransactionsUiState(
     val isRefreshing: Boolean = false,
     val isSelecting: Boolean = false,
-    val selectedRows: Set<Int> = emptySet(),
+    val selectedRows: Set<RowKey> = emptySet(),
     val showBulkCategoryDialog: Boolean = false,
     val isAssigningCategory: Boolean = false,
     val bulkCategoryError: String? = null,
@@ -55,7 +67,14 @@ data class TransactionsUiState(
     val searchQuery: String = "",
     val sortOrder: SortOrder = SortOrder.DATE_DESC,
     val error: String? = null,
-    val transactionToDelete: Transaction? = null,
+    /** Deleted but not yet gone from the list; hidden straight away so the swipe feels instant. */
+    val pendingDeletes: Set<Transaction> = emptySet(),
+    /** Just deleted; the list shows an Undo snackbar for it. */
+    val undoable: Transaction? = null,
+    /** Inclusive start and end of the date filter, as epoch millis. */
+    val dateRange: Pair<Long, Long>? = null,
+    /** dd/MM/yyyy → that day's spend and target, when the daily spend target covers it. */
+    val dayTotals: Map<String, DayTotals> = emptyMap(),
     val transactionToEdit: Transaction? = null,
     val showAddSheet: Boolean = false,
     val addSaveCount: Int = 0,
@@ -68,13 +87,16 @@ data class TransactionsUiState(
     /** Keeps a selected row only while the exact same transaction is still in it. Deleting a
      *  row shifts the ones below up, so a row number alone could point at a different cost. */
     internal fun withTransactions(filtered: List<Transaction>): TransactionsUiState {
-        val selectedBefore = transactions.filter { it.account == selectedAccount && it.rowIndex in selectedRows }
-            .associateBy { it.rowIndex }
+        val selectedBefore = transactions.filter { it.key in selectedRows }.associateBy { it.key }
         val stillSelected = filtered.filter {
-            it.account == selectedAccount && it.category == TransactionCategory.ONE_OFF_COST &&
-                selectedBefore[it.rowIndex] == it
-        }.map { it.rowIndex }.toSet()
-        return copy(transactions = filtered, selectedRows = stillSelected)
+            it.category == TransactionCategory.ONE_OFF_COST && selectedBefore[it.key] == it
+        }.map { it.key }.toSet()
+        return copy(
+            transactions = filtered,
+            selectedRows = stillSelected,
+            // Once a deleted row has really gone, stop hiding it by hand
+            pendingDeletes = pendingDeletes.filter { it in filtered }.toSet()
+        )
     }
 
     /** Re-picking the current account keeps its cached rows (useful offline); a different
@@ -82,6 +104,14 @@ data class TransactionsUiState(
     internal fun withAccount(account: String): TransactionsUiState =
         if (account == selectedAccount) this
         else copy(selectedAccount = account, transactions = emptyList(), selectedRows = emptySet(), isSelecting = false)
+
+    val isAllAccounts: Boolean get() = selectedAccount == ALL_ACCOUNTS
+
+    /** Rows to show: everything except deletes still on their way to the Sheet. */
+    val visibleTransactions: List<Transaction> get() = transactions.filter { it !in pendingDeletes }
+
+    /** Account new transactions go into: the open tab, or the first account on the All tab. */
+    val accountForAdding: String? get() = if (isAllAccounts) accounts.firstOrNull() else selectedAccount
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -90,6 +120,7 @@ class TransactionsViewModel @Inject constructor(
     private val repository: SheetsRepository,
     private val budgetRepository: BudgetRepository,
     private val prefs: PreferencesManager,
+    private val dailyTargetRepository: DailyTargetRepository,
     @ApplicationContext private val context: Context,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
@@ -111,6 +142,7 @@ class TransactionsViewModel @Inject constructor(
     private val tagFilterFlow = MutableStateFlow<String?>(null)
     private val searchQueryFlow = MutableStateFlow("")
     private val sortOrderFlow = MutableStateFlow(SortOrder.DATE_DESC)
+    private val dateRangeFlow = MutableStateFlow<Pair<Long, Long>?>(null)
 
     init {
         // Accounts are dynamic (user-managed), so there's no fixed default. Once the real
@@ -121,7 +153,7 @@ class TransactionsViewModel @Inject constructor(
                 val names = balances.map { it.account }
                 _uiState.update { it.copy(accounts = names) }
                 val current = selectedAccountFlow.value
-                if (names.isNotEmpty() && (current == null || current !in names)) {
+                if (names.isNotEmpty() && (current == null || (current !in names && current != ALL_ACCOUNTS))) {
                     selectAccount(names.first())
                 }
             }
@@ -138,6 +170,14 @@ class TransactionsViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
+            val fmt = SimpleDateFormat("dd/MM/yyyy", Locale.UK)
+            dailyTargetRepository.observe().collect { state ->
+                val totals = state.target.days.associate { fmt.format(it.date) to DayTotals(it.spent, it.target) }
+                _uiState.update { it.copy(dayTotals = totals) }
+            }
+        }
+
+        viewModelScope.launch {
             combine(repository.getDebts(), repository.getSavingsGoals()) { debts, goals -> debts to goals }
                 .collect { (debts, goals) ->
                     _uiState.update { it.copy(debts = debts, savingsGoals = goals) }
@@ -149,13 +189,16 @@ class TransactionsViewModel @Inject constructor(
                 if (account == null) {
                     flowOf(emptyList())
                 } else {
-                    val filters = combine(categoryFilterFlow, tagFilterFlow) { category, tag -> category to tag }
+                    val filters = combine(categoryFilterFlow, tagFilterFlow, dateRangeFlow) { category, tag, range ->
+                        Triple(category, tag, range)
+                    }
+                    val source = if (account == ALL_ACCOUNTS) repository.getAllTransactions() else repository.getTransactions(account)
                     combine(
-                        repository.getTransactions(account),
+                        source,
                         filters,
                         searchQueryFlow,
                         sortOrderFlow
-                    ) { transactions, (filter, tagFilter), query, sort ->
+                    ) { transactions, (filter, tagFilter, range), query, sort ->
                         val currentMonth = Calendar.getInstance().get(Calendar.MONTH) + 1
                         val dateFmt = SimpleDateFormat("dd/MM/yyyy", Locale.UK)
                         var result = transactions
@@ -168,6 +211,9 @@ class TransactionsViewModel @Inject constructor(
                         if (filter != null) result = result.filter { it.category == filter }
                         if (filter == TransactionCategory.ONE_OFF_COST && tagFilter != null) {
                             result = result.filter { it.tag.equals(tagFilter, ignoreCase = true) }
+                        }
+                        if (range != null) {
+                            result = result.filter { tx -> dateFmt.parseToEpoch(tx.date) in range.first..range.second }
                         }
                         if (query.isNotBlank()) {
                             result = result.filter {
@@ -210,6 +256,25 @@ class TransactionsViewModel @Inject constructor(
         _uiState.update { it.copy(tagFilter = tag, selectedRows = emptySet()) }
     }
 
+    /** Inclusive [start]..[end] (epoch millis, any time of day); null clears the filter. */
+    fun setDateRange(start: Long?, end: Long?) {
+        val range = if (start == null) null else {
+            val endOfDay = java.util.Calendar.getInstance().apply {
+                timeInMillis = end ?: start
+                set(java.util.Calendar.HOUR_OF_DAY, 23); set(java.util.Calendar.MINUTE, 59)
+                set(java.util.Calendar.SECOND, 59); set(java.util.Calendar.MILLISECOND, 999)
+            }.timeInMillis
+            val startOfDay = java.util.Calendar.getInstance().apply {
+                timeInMillis = start
+                set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0)
+                set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
+            }.timeInMillis
+            startOfDay to endOfDay
+        }
+        dateRangeFlow.value = range
+        _uiState.update { it.copy(dateRange = range, selectedRows = emptySet()) }
+    }
+
     fun setSearchQuery(query: String) {
         if (_uiState.value.isAssigningCategory) return
         searchQueryFlow.value = query
@@ -227,7 +292,7 @@ class TransactionsViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isRefreshing = true, error = null) }
             try {
-                repository.refreshTransactions(account)
+                if (account == ALL_ACCOUNTS) repository.refreshAllTransactions() else repository.refreshTransactions(account)
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = e.message) }
             } finally {
@@ -236,10 +301,17 @@ class TransactionsViewModel @Inject constructor(
         }
     }
 
-    fun startSelection() {
+    /** Long-press: start selecting, with [transaction] ticked if it can have a category. */
+    fun startSelectionWith(transaction: Transaction) {
         if (_uiState.value.isRefreshing || _uiState.value.isAssigningCategory) return
-        setCategoryFilter(TransactionCategory.ONE_OFF_COST)
-        _uiState.update { it.copy(isSelecting = true, selectedRows = emptySet()) }
+        val first = if (transaction.isCategorisable) setOf(transaction.key) else emptySet()
+        _uiState.update { it.copy(isSelecting = true, selectedRows = first) }
+    }
+
+    /** Swipe right: set the category of just this one transaction. */
+    fun categoriseOne(transaction: Transaction) {
+        if (!transaction.isCategorisable || _uiState.value.isAssigningCategory) return
+        _uiState.update { it.copy(selectedRows = setOf(transaction.key), showBulkCategoryDialog = true, bulkCategoryError = null) }
     }
 
     fun cancelSelection() {
@@ -249,21 +321,17 @@ class TransactionsViewModel @Inject constructor(
 
     fun toggleSelection(transaction: Transaction) {
         val state = _uiState.value
-        if (!state.isSelecting || state.isAssigningCategory || state.isRefreshing ||
-            transaction.account != state.selectedAccount || transaction.category != TransactionCategory.ONE_OFF_COST ||
-            transaction.rowIndex <= 1) return
+        if (!state.isSelecting || state.isAssigningCategory || state.isRefreshing || !transaction.isCategorisable) return
         _uiState.update {
-            it.copy(selectedRows = if (transaction.rowIndex in it.selectedRows) it.selectedRows - transaction.rowIndex
-                else it.selectedRows + transaction.rowIndex)
+            it.copy(selectedRows = if (transaction.key in it.selectedRows) it.selectedRows - transaction.key
+                else it.selectedRows + transaction.key)
         }
     }
 
     fun selectAllShown() {
         val state = _uiState.value
         if (!state.isSelecting || state.isAssigningCategory || state.isRefreshing) return
-        val rows = state.transactions.filter {
-            it.account == state.selectedAccount && it.category == TransactionCategory.ONE_OFF_COST && it.rowIndex > 1
-        }.map { it.rowIndex }.toSet()
+        val rows = state.visibleTransactions.filter { it.isCategorisable }.map { it.key }.toSet()
         _uiState.update { it.copy(selectedRows = if (it.selectedRows == rows) emptySet() else rows) }
     }
 
@@ -274,16 +342,20 @@ class TransactionsViewModel @Inject constructor(
 
     fun dismissBulkCategoryDialog() {
         if (_uiState.value.isAssigningCategory) return
-        _uiState.update { it.copy(showBulkCategoryDialog = false, bulkCategoryError = null) }
+        // A swipe-right on one row isn't a selection the user made, so don't leave it ticked
+        _uiState.update {
+            it.copy(
+                showBulkCategoryDialog = false,
+                bulkCategoryError = null,
+                selectedRows = if (it.isSelecting) it.selectedRows else emptySet()
+            )
+        }
     }
 
     fun assignSpendingCategory(tag: String?) {
         val state = _uiState.value
         if (state.isAssigningCategory || state.isRefreshing) return
-        val selected = state.transactions.filter {
-            it.account == state.selectedAccount && it.rowIndex in state.selectedRows &&
-                it.category == TransactionCategory.ONE_OFF_COST
-        }
+        val selected = state.transactions.filter { it.key in state.selectedRows && it.isCategorisable }
         if (selected.isEmpty()) return
         _uiState.update { it.copy(isAssigningCategory = true, bulkCategoryError = null) }
         viewModelScope.launch {
@@ -313,8 +385,33 @@ class TransactionsViewModel @Inject constructor(
     fun showEditSheet(transaction: Transaction) = _uiState.update { it.copy(transactionToEdit = transaction, showAddSheet = true) }
     fun dismissSheet() = _uiState.update { it.copy(showAddSheet = false, transactionToEdit = null) }
 
-    fun confirmDelete(transaction: Transaction) = _uiState.update { it.copy(transactionToDelete = transaction) }
-    fun dismissDelete() = _uiState.update { it.copy(transactionToDelete = null) }
+    /** Swipe left: delete straight away and offer Undo, which adds it back. */
+    fun deleteWithUndo(transaction: Transaction) {
+        _uiState.update { it.copy(pendingDeletes = it.pendingDeletes + transaction) }
+        viewModelScope.launch {
+            try {
+                repository.deleteTransaction(transaction)
+                _uiState.update { it.copy(undoable = transaction) }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(pendingDeletes = it.pendingDeletes - transaction, error = e.message) }
+            }
+        }
+    }
+
+    /** Puts a deleted transaction back. It's added at the end of its account's sheet, with the
+     *  same date, amount, category and spending category. */
+    fun undoDelete(transaction: Transaction) {
+        viewModelScope.launch {
+            try {
+                repository.addTransaction(transaction.copy(rowIndex = 0))
+                _uiState.update { it.copy(message = "Restored \"${transaction.info}\"") }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = e.message) }
+            }
+        }
+    }
+
+    fun clearUndo() = _uiState.update { it.copy(undoable = null) }
 
     fun saveTransaction(transaction: Transaction, linkAction: TransactionLinkAction? = null) {
         viewModelScope.launch {
@@ -390,20 +487,11 @@ class TransactionsViewModel @Inject constructor(
         }
     }
 
-    fun deleteTransaction() {
-        val transaction = _uiState.value.transactionToDelete ?: return
-        viewModelScope.launch {
-            try {
-                repository.deleteTransaction(transaction)
-                _uiState.update { it.copy(transactionToDelete = null) }
-            } catch (e: Exception) {
-                _uiState.update { it.copy(transactionToDelete = null, error = e.message) }
-            }
-        }
-    }
-
     fun clearError() = _uiState.update { it.copy(error = null) }
 }
 
 private fun SimpleDateFormat.parseToEpoch(date: String): Long =
     runCatching { parse(date)?.time }.getOrNull() ?: 0L
+
+/** Only saved one-off costs can have a spending category. */
+val Transaction.isCategorisable: Boolean get() = category == TransactionCategory.ONE_OFF_COST && rowIndex > 1
