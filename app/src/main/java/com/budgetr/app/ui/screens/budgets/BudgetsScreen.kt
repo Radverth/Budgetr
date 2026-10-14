@@ -256,7 +256,7 @@ private fun SectionHeader(text: String) {
 }
 
 @Composable
-private fun EnvelopeCard(status: EnvelopeStatus, onEdit: () -> Unit) {
+internal fun EnvelopeCard(status: EnvelopeStatus, onEdit: () -> Unit) {
     val barColor = when {
         status.isOver -> ExpenseRed
         status.isApproaching -> MaterialTheme.colorScheme.tertiary
