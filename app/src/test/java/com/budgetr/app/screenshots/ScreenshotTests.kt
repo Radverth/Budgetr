@@ -10,6 +10,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.unit.dp
@@ -28,9 +29,7 @@ import com.budgetr.app.ui.theme.BudgetrTheme
 import com.budgetr.app.util.DailyTargetCalculator
 import com.budgetr.app.util.EnvelopeStatus
 import com.budgetr.app.util.PayPeriod
-import com.github.takahirom.roborazzi.ExperimentalRoborazziApi
 import com.github.takahirom.roborazzi.captureRoboImage
-import com.github.takahirom.roborazzi.captureScreenRoboImage
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -129,18 +128,15 @@ abstract class ScreenshotTests(private val prefix: String) {
         TransactionItem(transaction = spend("13/10/2026", 9.5, "Bus"), onEdit = {}, onDelete = {}, selectionMode = true, selected = true)
     }
 
-    /** Dialogs open in their own window, so this captures the whole screen. */
-    @OptIn(ExperimentalRoborazziApi::class)
+    /** Dialogs open in their own window, so this captures the dialog node itself. */
     @Test
     fun borrowDialog() {
-        compose.mainClock.autoAdvance = false
         compose.setContent {
             BudgetrTheme {
                 DailyTransferDialog(state = dailyState(spentToday = 4.2), kind = TransferKind.BORROW, onConfirm = { _, _ -> }, onDismiss = {})
             }
         }
-        compose.mainClock.advanceTimeBy(1_000)
-        captureScreenRoboImage("build/outputs/roborazzi/${prefix}_06_borrow_dialog.png")
+        compose.onNode(isDialog()).captureRoboImage("build/outputs/roborazzi/${prefix}_06_borrow_dialog.png")
     }
 }
 
