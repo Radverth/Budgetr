@@ -24,11 +24,19 @@ import com.budgetr.app.ui.screens.daily.DailyTargetCard
 import com.budgetr.app.ui.screens.daily.DailyTransferDialog
 import com.budgetr.app.ui.screens.daily.DayRow
 import com.budgetr.app.ui.screens.daily.TransferKind
+import com.budgetr.app.ui.screens.home.AttentionItem
+import com.budgetr.app.ui.screens.home.BudgetAlertUiItem
+import com.budgetr.app.ui.screens.home.GoalSuggestionUiItem
+import com.budgetr.app.ui.screens.home.NeedsAttentionCard
+import com.budgetr.app.ui.screens.home.RecurringReviewUiItem
+import com.budgetr.app.ui.screens.home.ThisPeriodCard
 import com.budgetr.app.ui.screens.transactions.TransactionItem
 import com.budgetr.app.ui.theme.BudgetrTheme
 import com.budgetr.app.util.DailyTargetCalculator
 import com.budgetr.app.util.EnvelopeStatus
 import com.budgetr.app.util.PayPeriod
+import com.budgetr.app.util.SpendingTrend
+import com.budgetr.app.util.TagSpend
 import com.github.takahirom.roborazzi.captureRoboImage
 import org.junit.Ignore
 import org.junit.Rule
@@ -127,6 +135,48 @@ abstract class ScreenshotTests(private val prefix: String) {
             onEdit = {}, onDelete = {}
         )
         TransactionItem(transaction = spend("13/10/2026", 9.5, "Bus"), onEdit = {}, onDelete = {}, selectionMode = true, selected = true)
+    }
+
+    private val attention = listOf(
+        AttentionItem.PaydayPlan,
+        AttentionItem.BudgetAlert(BudgetAlertUiItem("Eating out", 72.0, 60.0, isOver = true), resetDays = 12),
+        AttentionItem.GoalSuggestion(GoalSuggestionUiItem("Holiday", TransactionCategory.ONE_OFF_COST, 42.0)),
+        AttentionItem.SubscriptionReview(RecurringReviewUiItem("Monzo", "Netflix", 10.99, ageDays = 210))
+    )
+
+    @Composable
+    private fun periodCard() = ThisPeriodCard(
+        income = 2150.0,
+        fixedCosts = 1180.0,
+        oneOffCosts = 412.35,
+        byTag = listOf(TagSpend("Groceries", 168.2), TagSpend("Eating out", 72.0), TagSpend(null, 61.0), TagSpend("Transport", 54.5)),
+        streakDays = 2,
+        trend = SpendingTrend(thisWeek = 61.4, lastWeek = 88.0),
+        onSeeHistory = {},
+        onBudgets = {},
+        modifier = Modifier.fillMaxWidth()
+    )
+
+    @Test
+    fun needsAttention() = shot("07_needs_attention") {
+        NeedsAttentionCard(
+            items = attention, onPlanPayday = {}, onViewBudgets = {}, onAddToGoal = {},
+            onRemindLater = {}, onDismiss = {}, modifier = Modifier.fillMaxWidth()
+        )
+    }
+
+    @Test
+    fun thisPeriod() = shot("08_this_period") { periodCard() }
+
+    /** Roughly what Home shows above the fold, minus the header. */
+    @Test
+    fun homeTop() = shot("09_home_top") {
+        DailyTargetCard(state = dailyState(spentToday = 4.2), onOpen = {}, onTransfer = {}, modifier = Modifier.fillMaxWidth())
+        NeedsAttentionCard(
+            items = attention.take(2), onPlanPayday = {}, onViewBudgets = {}, onAddToGoal = {},
+            onRemindLater = {}, onDismiss = {}, modifier = Modifier.fillMaxWidth()
+        )
+        periodCard()
     }
 
     /** Dialogs open in their own window, which never reports idle under Robolectric 4.12
