@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -66,7 +67,9 @@ abstract class ScreenshotTests(private val prefix: String) {
         val target = DailyTargetCalculator.calculate(
             period = period,
             pot = 465.0,
-            transactions = listOf(spend("13/10/2026", 9.5), spend("14/10/2026", spentToday)),
+            transactions = (25..30).map { spend("%02d/09/2026".format(it), 13.0) } +
+                (1..12).map { spend("%02d/10/2026".format(it), 14.5) } +
+                listOf(spend("13/10/2026", 9.5), spend("14/10/2026", spentToday)),
             transfers = transfers,
             today = day("14/10/2026")
         )
@@ -88,12 +91,12 @@ abstract class ScreenshotTests(private val prefix: String) {
 
     @Test
     fun dailyTargetCard() = shot("01_daily_target_card") {
-        DailyTargetCard(state = dailyState(spentToday = 4.2), onOpen = {}, onTransfer = {})
+        DailyTargetCard(state = dailyState(spentToday = 4.2), onOpen = {}, onTransfer = {}, modifier = Modifier.fillMaxWidth())
     }
 
     @Test
     fun dailyTargetCardOver() = shot("02_daily_target_card_over") {
-        DailyTargetCard(state = dailyState(spentToday = 48.0), onOpen = {}, onTransfer = {})
+        DailyTargetCard(state = dailyState(spentToday = 48.0), onOpen = {}, onTransfer = {}, modifier = Modifier.fillMaxWidth())
     }
 
     @Test
@@ -130,12 +133,13 @@ abstract class ScreenshotTests(private val prefix: String) {
     @OptIn(ExperimentalRoborazziApi::class)
     @Test
     fun borrowDialog() {
+        compose.mainClock.autoAdvance = false
         compose.setContent {
             BudgetrTheme {
                 DailyTransferDialog(state = dailyState(spentToday = 4.2), kind = TransferKind.BORROW, onConfirm = { _, _ -> }, onDismiss = {})
             }
         }
-        compose.waitForIdle()
+        compose.mainClock.advanceTimeBy(1_000)
         captureScreenRoboImage("build/outputs/roborazzi/${prefix}_06_borrow_dialog.png")
     }
 }
@@ -147,5 +151,5 @@ class SmallPhoneLightScreenshots : ScreenshotTests("360_light")
 @Config(sdk = [34], application = Application::class, qualifiers = "w412dp-h915dp-xxhdpi")
 class PhoneLightScreenshots : ScreenshotTests("412_light")
 
-@Config(sdk = [34], application = Application::class, qualifiers = "w412dp-h915dp-xxhdpi-night")
+@Config(sdk = [34], application = Application::class, qualifiers = "w412dp-h915dp-night-xxhdpi")
 class PhoneDarkScreenshots : ScreenshotTests("412_dark")

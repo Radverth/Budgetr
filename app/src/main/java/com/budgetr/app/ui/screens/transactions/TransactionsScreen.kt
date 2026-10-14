@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -412,14 +414,28 @@ internal fun TransactionItem(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
+            // Description and amount share the top line; date and category get the full second
+            // line, so the category isn't squeezed out by the amount on narrow phones
             Column(modifier = androidx.compose.ui.Modifier.weight(1f)) {
-                Text(
-                    text = transaction.info,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = transaction.info,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = androidx.compose.ui.Modifier.weight(1f)
+                    )
+                    Text(
+                        text = transaction.amount.toCurrencyString(),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = amountColor,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        softWrap = false,
+                        modifier = androidx.compose.ui.Modifier.padding(start = 8.dp)
+                    )
+                }
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -446,15 +462,7 @@ internal fun TransactionItem(
                 }
             }
 
-            Text(
-                text = transaction.amount.toCurrencyString(),
-                style = MaterialTheme.typography.titleMedium,
-                color = amountColor,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                softWrap = false,
-                modifier = androidx.compose.ui.Modifier.padding(horizontal = 8.dp)
-            )
+            Spacer(modifier = androidx.compose.ui.Modifier.width(4.dp))
 
             if (selectionMode) {
                 Checkbox(
