@@ -1,14 +1,17 @@
 package com.budgetr.app.data.repository
 
 import com.budgetr.app.data.local.dao.CategoryBudgetDao
+import com.budgetr.app.data.local.dao.DailyTransferDao
 import com.budgetr.app.data.local.dao.EnvelopeDao
 import com.budgetr.app.data.local.dao.GoalCategoryLinkDao
 import com.budgetr.app.data.local.dao.RecurringCostReviewDao
 import com.budgetr.app.data.local.entity.CategoryBudgetEntity
+import com.budgetr.app.data.local.entity.DailyTransferEntity
 import com.budgetr.app.data.local.entity.EnvelopeEntity
 import com.budgetr.app.data.local.entity.GoalCategoryLinkEntity
 import com.budgetr.app.data.local.entity.RecurringCostReviewEntity
 import com.budgetr.app.data.model.CategoryBudget
+import com.budgetr.app.data.model.DailyTransfer
 import com.budgetr.app.data.model.Envelope
 import com.budgetr.app.data.model.GoalCategoryLink
 import com.budgetr.app.data.model.RecurringCostReview
@@ -22,7 +25,8 @@ class BudgetRepositoryImpl @Inject constructor(
     private val categoryBudgetDao: CategoryBudgetDao,
     private val recurringCostReviewDao: RecurringCostReviewDao,
     private val goalCategoryLinkDao: GoalCategoryLinkDao,
-    private val envelopeDao: EnvelopeDao
+    private val envelopeDao: EnvelopeDao,
+    private val dailyTransferDao: DailyTransferDao
 ) : BudgetRepository {
 
     override fun getCategoryBudgets(): Flow<List<CategoryBudget>> =
@@ -104,7 +108,37 @@ class BudgetRepositoryImpl @Inject constructor(
     override suspend fun deleteEnvelope(tag: String) {
         envelopeDao.delete(tag)
     }
+
+    override fun getDailyTransfers(periodStart: String): Flow<List<DailyTransfer>> =
+        dailyTransferDao.getForPeriod(periodStart).map { entities -> entities.map { it.toModel() } }
+
+    override suspend fun getDailyTransfersSync(periodStart: String): List<DailyTransfer> =
+        dailyTransferDao.getForPeriodSync(periodStart).map { it.toModel() }
+
+    override suspend fun addDailyTransfer(transfer: DailyTransfer) {
+        dailyTransferDao.deleteOtherPeriods(transfer.periodStart)
+        dailyTransferDao.insert(
+            DailyTransferEntity(
+                periodStart = transfer.periodStart,
+                createdOn = transfer.createdOn,
+                amount = transfer.amount,
+                targetDay = transfer.targetDay
+            )
+        )
+    }
+
+    override suspend fun deleteDailyTransfer(id: Long) {
+        dailyTransferDao.delete(id)
+    }
 }
+
+private fun DailyTransferEntity.toModel() = DailyTransfer(
+    id = id,
+    periodStart = periodStart,
+    createdOn = createdOn,
+    amount = amount,
+    targetDay = targetDay
+)
 
 private fun EnvelopeEntity.toModel() = Envelope(
     tag = tag,

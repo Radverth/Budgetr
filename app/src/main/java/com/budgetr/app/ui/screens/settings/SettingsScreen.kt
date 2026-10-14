@@ -157,6 +157,33 @@ fun SettingsScreen(
         )
     }
 
+    if (uiState.showDailyPotDialog) {
+        AlertDialog(
+            onDismissRequest = viewModel::dismissDailyPotDialog,
+            title = { Text("Money for this pay period") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "What you have for non-fixed spending this pay period. It's split evenly into a daily target. " +
+                            "Leave blank to work it out from income minus fixed costs (and goals and debts, if they're on in the payday plan).",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                    OutlinedTextField(
+                        value = uiState.dailyPotInput,
+                        onValueChange = viewModel::setDailyPotInput,
+                        label = { Text("Amount (£), blank = automatic") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true
+                    )
+                    TextButton(onClick = viewModel::recalculateDailyPot) { Text("Recalculate automatically now") }
+                }
+            },
+            confirmButton = { TextButton(onClick = viewModel::confirmDailyPot) { Text("Save") } },
+            dismissButton = { TextButton(onClick = viewModel::dismissDailyPotDialog) { Text("Cancel") } }
+        )
+    }
+
     // Spending prompt threshold dialog
     if (uiState.showSpendingPromptThresholdDialog) {
         AlertDialog(
@@ -372,6 +399,32 @@ fun SettingsScreen(
                 )
             }
 
+            SectionLabel("Daily Spend Target")
+
+            SettingsSwitchRow(
+                title = "Show on Home and widget",
+                subtitle = if (uiState.dailyTargetOnHome) "Instead of Safe to spend" else "Off: Home shows Safe to spend",
+                checked = uiState.dailyTargetOnHome,
+                onCheckedChange = viewModel::setDailyTargetOnHome
+            )
+            SettingsRow(
+                icon = null,
+                title = "Money for this pay period",
+                subtitle = uiState.dailyPot?.let { pot ->
+                    (if (uiState.dailyPotIsManual) "Set by you: " else "Worked out: ") + pot.toCurrencyString() +
+                        (uiState.dailyBase?.let { " · ${it.toCurrencyString()} a day" } ?: "")
+                } ?: "Working it out…",
+                onClick = viewModel::showDailyPotDialog,
+                indentIcon = true
+            )
+            SettingsSwitchRow(
+                title = "Count budgeted categories",
+                subtitle = if (uiState.dailyCountBudgeted) "Spending in categories with their own budget counts too"
+                else "Categories with their own budget are left out",
+                checked = uiState.dailyCountBudgeted,
+                onCheckedChange = viewModel::setDailyCountBudgeted
+            )
+
             SectionLabel("Spending Prompts")
 
             Row(
@@ -444,6 +497,27 @@ private fun SettingsIconBadge(icon: androidx.compose.ui.graphics.vector.ImageVec
         contentAlignment = Alignment.Center
     ) {
         Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
+    }
+}
+
+@Composable
+private fun SettingsSwitchRow(title: String, subtitle: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Spacer(modifier = Modifier.width(52.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+            )
+        }
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 

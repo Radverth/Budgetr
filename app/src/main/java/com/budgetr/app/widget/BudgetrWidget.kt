@@ -33,6 +33,7 @@ import com.budgetr.app.data.model.Envelope
 import com.budgetr.app.data.model.Transaction
 import com.budgetr.app.data.model.TransactionCategory
 import com.budgetr.app.util.EnvelopeCalculator
+import kotlinx.coroutines.flow.first
 import com.budgetr.app.util.PayPeriodCalculator
 import com.budgetr.app.util.SafeToSpend
 import com.budgetr.app.util.SafeToSpendCalculator
@@ -116,14 +117,27 @@ class BudgetrWidget : GlanceAppWidget() {
             null
         }
 
+        // The daily spend target replaces the safe-to-spend line when it's switched on
+        val dailyLine = try {
+            if (entryPoint.preferencesManager().isDailyTargetOnHome()) {
+                val target = entryPoint.dailyTargetRepository().observe().first().target
+                val tomorrow = target.tomorrowIfNoMoreSpent?.let { " · tomorrow ${formatCurrency(it)}" } ?: ""
+                val text = if (target.isOverToday) "${formatCurrency(-target.leftToday)} over today$tomorrow"
+                else "${formatCurrency(target.leftToday)} left today$tomorrow"
+                text to target.isOverToday
+            } else null
+        } catch (e: Exception) {
+            null
+        }
+
         provideContent {
-            WidgetContent(context = context, balances = adjustedBalances, safeToSpend = safeToSpend)
+            WidgetContent(context = context, balances = adjustedBalances, safeToSpend = safeToSpend, dailyLine = dailyLine)
         }
     }
 }
 
 @Composable
-private fun WidgetContent(context: Context, balances: List<AccountBalanceEntity>, safeToSpend: SafeToSpend?) {
+private fun WidgetContent(context: Context, balances: List<AccountBalanceEntity>, safeToSpend: SafeToSpend?, dailyLine: Pair<String, Boolean>?) {
     val bgColor = Color(0xFF121212)
     val positiveColor = Color(0xFF69F0AE)
     val negativeColor = Color(0xFFFF5252)
@@ -169,7 +183,17 @@ private fun WidgetContent(context: Context, balances: List<AccountBalanceEntity>
             )
         }
 
-        if (safeToSpend != null && balances.isNotEmpty()) {
+        if (dailyLine != null) {
+            val (text, isOver) = dailyLine
+            Text(
+                text = text,
+                modifier = GlanceModifier.fillMaxWidth().clickable(openApp),
+                style = TextStyle(
+                    color = ColorProvider(if (isOver) negativeColor else subtleWhite),
+                    fontSize = 11.sp
+                )
+            )
+        } else if (safeToSpend != null && balances.isNotEmpty()) {
             val days = safeToSpend.daysLeft
             Text(
                 text = if (safeToSpend.isOverspent) {

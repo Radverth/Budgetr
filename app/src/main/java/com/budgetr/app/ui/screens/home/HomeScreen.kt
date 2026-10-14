@@ -42,7 +42,9 @@ import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -66,6 +68,9 @@ import com.budgetr.app.ui.theme.ExpenseRed
 import com.budgetr.app.ui.theme.FixedCostOrange
 import com.budgetr.app.ui.theme.IncomeGreen
 import com.budgetr.app.ui.theme.heroGradient
+import com.budgetr.app.ui.screens.daily.DailyTargetCard
+import com.budgetr.app.ui.screens.daily.DailyTransferDialog
+import com.budgetr.app.ui.screens.daily.TransferKind
 import com.budgetr.app.util.SafeToSpend
 import com.budgetr.app.util.SpendingTrend
 import com.budgetr.app.util.TagSpend
@@ -78,6 +83,7 @@ fun HomeScreen(
     onNavigateToBudgets: () -> Unit,
     onNavigateToInsights: () -> Unit,
     onNavigateToPaydayPlan: () -> Unit,
+    onNavigateToDailyTarget: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -89,6 +95,20 @@ fun HomeScreen(
             snackbarHostState.showSnackbar(it)
             viewModel.clearError()
         }
+    }
+
+    var transferKind by remember { mutableStateOf<TransferKind?>(null) }
+    val dailyTargetForDialog = uiState.dailyTarget
+    if (transferKind != null && dailyTargetForDialog != null) {
+        DailyTransferDialog(
+            state = dailyTargetForDialog,
+            kind = transferKind!!,
+            onConfirm = { amount, day ->
+                viewModel.addDailyTransfer(amount, day)
+                transferKind = null
+            },
+            onDismiss = { transferKind = null }
+        )
     }
 
     // Home leaves composition while the plan screen is open, so this re-runs on return
@@ -169,8 +189,18 @@ fun HomeScreen(
                         }
                     }
 
+                    val dailyTarget = uiState.dailyTarget
                     val safeToSpend = uiState.safeToSpend
-                    if (safeToSpend != null && uiState.accountBalances.isNotEmpty()) {
+                    if (uiState.showDailyTarget && dailyTarget != null) {
+                        item {
+                            DailyTargetCard(
+                                state = dailyTarget,
+                                onOpen = onNavigateToDailyTarget,
+                                onTransfer = { transferKind = it },
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                            )
+                        }
+                    } else if (safeToSpend != null && uiState.accountBalances.isNotEmpty()) {
                         item {
                             SafeToSpendCard(
                                 safeToSpend = safeToSpend,

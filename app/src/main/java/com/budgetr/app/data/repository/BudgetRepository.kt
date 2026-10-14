@@ -1,6 +1,7 @@
 package com.budgetr.app.data.repository
 
 import com.budgetr.app.data.model.CategoryBudget
+import com.budgetr.app.data.model.DailyTransfer
 import com.budgetr.app.data.model.Envelope
 import com.budgetr.app.data.model.GoalCategoryLink
 import com.budgetr.app.data.model.RecurringCostReview
@@ -30,4 +31,11 @@ interface BudgetRepository {
      *  With [renameFrom], the envelope of that name is renamed to [tag] and keeps its carry. */
     suspend fun setEnvelope(tag: String, limit: Double, rollover: Boolean, renameFrom: String? = null)
     suspend fun deleteEnvelope(tag: String)
+
+    /** Borrow / pay-forward moves for the daily spend target in the period starting [periodStart]. */
+    fun getDailyTransfers(periodStart: String): Flow<List<DailyTransfer>>
+    suspend fun getDailyTransfersSync(periodStart: String): List<DailyTransfer>
+    /** Saves [transfer] and drops moves from earlier periods, which no longer affect anything. */
+    suspend fun addDailyTransfer(transfer: DailyTransfer)
+    suspend fun deleteDailyTransfer(id: Long)
 }
