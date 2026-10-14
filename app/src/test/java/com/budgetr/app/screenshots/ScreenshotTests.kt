@@ -33,6 +33,8 @@ import com.budgetr.app.ui.screens.home.HomeHeader
 import com.budgetr.app.ui.screens.home.NeedsAttentionCard
 import com.budgetr.app.ui.screens.home.RecurringReviewUiItem
 import com.budgetr.app.ui.screens.home.ThisPeriodCard
+import com.budgetr.app.ui.screens.transactions.DayHeader
+import com.budgetr.app.ui.screens.transactions.DayTotals
 import com.budgetr.app.ui.screens.transactions.TransactionItem
 import com.budgetr.app.ui.theme.BudgetrTheme
 import com.budgetr.app.util.DailyTargetCalculator
@@ -126,18 +128,36 @@ abstract class ScreenshotTests(private val prefix: String) {
         EnvelopeCard(EnvelopeStatus(Envelope("Transport", 80.0), spent = 66.0, daysLeft = 12), onEdit = {})
     }
 
+    /** Same spacing as the real list: rows bring their own 16dp side padding. */
+    private fun listShot(name: String, content: @Composable () -> Unit) {
+        compose.setContent {
+            BudgetrTheme {
+                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                    Column(modifier = Modifier.padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        content()
+                    }
+                }
+            }
+        }
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/${prefix}_$name.png")
+    }
+
     @Test
-    fun transactionRows() = shot("05_transactions") {
-        TransactionItem(transaction = spend("14/10/2026", 4.2, "Tesco Express", "Groceries"), onEdit = {}, onDelete = {})
+    fun transactionRows() = listShot("05_transactions") {
+        DayHeader(date = "14/10/2026", totals = DayTotals(spent = 52.7, target = 46.96))
+        TransactionItem(transaction = spend("14/10/2026", 4.2, "Tesco Express", "Groceries"), onClick = {}, showDate = false)
+        TransactionItem(transaction = spend("14/10/2026", 48.5, "Dinner with Sam", "Eating out"), onClick = {}, showDate = false, showAccount = true)
+        DayHeader(date = "13/10/2026", totals = DayTotals(spent = 9.5, target = 42.23))
+        TransactionItem(transaction = spend("13/10/2026", 9.5, "Bus"), onClick = {}, showDate = false, selectionMode = true, selected = true)
+        DayHeader(date = "26/09/2026", totals = null)
         TransactionItem(
             transaction = Transaction(3, "26/09/2026", "Salary", 2150.0, TransactionCategory.SALARY, "Monzo"),
-            onEdit = {}, onDelete = {}
+            onClick = {}, showDate = false
         )
         TransactionItem(
             transaction = Transaction(4, "25/09/2026", "Rent and a very long description that should be cut off", -825.0, TransactionCategory.FIXED_COST, "Monzo"),
-            onEdit = {}, onDelete = {}
+            onClick = {}
         )
-        TransactionItem(transaction = spend("13/10/2026", 9.5, "Bus"), onEdit = {}, onDelete = {}, selectionMode = true, selected = true)
     }
 
     private val attention = listOf(
