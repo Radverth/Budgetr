@@ -33,6 +33,7 @@ import androidx.navigation.navArgument
 import com.budgetr.app.ui.screens.balances.AccountBalancesScreen
 import com.budgetr.app.ui.screens.budgets.BudgetsScreen
 import com.budgetr.app.ui.screens.goals.GoalsScreen
+import com.budgetr.app.ui.screens.daily.DailyTargetScreen
 import com.budgetr.app.ui.screens.home.HomeScreen
 import com.budgetr.app.ui.screens.insights.InsightsScreen
 import com.budgetr.app.ui.screens.plan.PaydayPlanScreen
@@ -132,8 +133,16 @@ fun MainScreen(onSignOut: () -> Unit) {
                         navController.navigate(NavRoutes.PAYDAY_PLAN) {
                             launchSingleTop = true
                         }
+                    },
+                    onNavigateToDailyTarget = {
+                        navController.navigate(NavRoutes.DAILY_TARGET) {
+                            launchSingleTop = true
+                        }
                     }
                 )
+            }
+            composable(NavRoutes.DAILY_TARGET) {
+                DailyTargetScreen(onNavigateBack = { navController.popBackStack() })
             }
             composable(NavRoutes.BUDGETS) {
                 BudgetsScreen(
