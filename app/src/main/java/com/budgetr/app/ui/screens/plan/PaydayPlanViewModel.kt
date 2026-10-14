@@ -4,7 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.budgetr.app.data.repository.BudgetRepository
 import com.budgetr.app.data.repository.SheetsRepository
+import com.budgetr.app.data.repository.DailyTargetRepository
+import com.budgetr.app.util.DailyTargetCalculator
 import com.budgetr.app.util.HistoryCalculator
+import com.budgetr.app.util.PayPeriodCalculator
 import com.budgetr.app.util.PaydayPlanCalculator
 import com.budgetr.app.util.PaydayPlanTotals
 import com.budgetr.app.util.PreferencesManager
@@ -58,8 +61,12 @@ data class PaydayPlanUiState(
 class PaydayPlanViewModel @Inject constructor(
     private val sheetsRepository: SheetsRepository,
     private val budgetRepository: BudgetRepository,
-    private val prefs: PreferencesManager
+    private val prefs: PreferencesManager,
+    private val dailyTargetRepository: DailyTargetRepository
 ) : ViewModel() {
+
+    private val period = PayPeriodCalculator.current(prefs.getPayDay())
+    private val periodDays = DailyTargetCalculator.dayIndex(period, period.nextPayday).coerceAtLeast(1)
 
     private val _uiState = MutableStateFlow(PaydayPlanUiState())
     val uiState: StateFlow<PaydayPlanUiState> = _uiState.asStateFlow()
@@ -151,12 +158,24 @@ class PaydayPlanViewModel @Inject constructor(
                     }
                 }
                 prefs.setPaydayPlanPending(false)
+                // The plan's money for non-fixed spending becomes this period's daily target pot,
+                // unless an amount was typed in by hand in Settings
+                if (prefs.getDailyPotOverride() == null) {
+                    prefs.setDailyPot(
+                        java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.UK).format(period.start),
+                        state.totals.toAssign.coerceAtLeast(0.0)
+                    )
+                    dailyTargetRepository.notifySettingsChanged()
+                }
                 _uiState.update { it.copy(isSaving = false, saved = true) }
             } catch (e: Exception) {
                 _uiState.update { it.copy(isSaving = false, error = e.message) }
             }
         }
     }
+
+    /** The daily spend target base this plan would give. */
+    fun dailyBase(totals: PaydayPlanTotals): Double = totals.toAssign.coerceAtLeast(0.0) / periodDays
 
     fun clearError() = _uiState.update { it.copy(error = null) }
 

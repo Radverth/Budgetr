@@ -200,6 +200,11 @@ private fun MoneyInCard(uiState: PaydayPlanUiState, viewModel: PaydayPlanViewMod
                     color = if (totals.toAssign < 0) ExpenseRed else MaterialTheme.colorScheme.onSurface
                 )
             }
+            Text(
+                text = "That gives you ${viewModel.dailyBase(totals).toCurrencyString()} a day for your daily spend target.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
