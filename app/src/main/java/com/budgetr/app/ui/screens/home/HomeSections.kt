@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -148,8 +149,9 @@ private fun AttentionRow(
     onDismiss: () -> Unit,
     titleColor: Color? = null
 ) {
-    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(text = emoji, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(end = 12.dp))
+    // The action sits under the text so titles get the full width on narrow phones
+    Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.Top) {
+        Text(text = emoji, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 2.dp, end = 12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
@@ -168,8 +170,8 @@ private fun AttentionRow(
                     overflow = TextOverflow.Ellipsis
                 )
             }
+            TextButton(onClick = onAction, contentPadding = PaddingValues(horizontal = 0.dp)) { Text(actionLabel) }
         }
-        TextButton(onClick = onAction) { Text(actionLabel) }
         IconButton(onClick = onDismiss) {
             Icon(Icons.Default.Close, contentDescription = "Dismiss", tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
         }
