@@ -16,6 +16,13 @@ class MainActivity : ComponentActivity() {
         const val ACTION_ADD_EXPENSE = "com.budgetr.app.ADD_EXPENSE"
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        if (intent.action == ACTION_ADD_EXPENSE) {
+            startActivity(Intent(this, QuickAddActivity::class.java))
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (intent.action == ACTION_ADD_EXPENSE) {

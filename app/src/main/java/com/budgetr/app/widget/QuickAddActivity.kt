@@ -89,9 +89,11 @@ class QuickAddActivity : ComponentActivity() {
                     AlertDialog(
                         onDismissRequest = { finish() },
                         title = { Text("Add expense") },
-                        text = { Text("Open Budgetr to load or set up your accounts before adding an expense.") },
+                        text = { Text(if (uiState.accountsLoaded)
+                            "Open Budgetr to load or set up your accounts before adding an expense."
+                            else "Loading accounts…") },
                         confirmButton = {
-                            TextButton(onClick = {
+                            if (uiState.accountsLoaded) TextButton(onClick = {
                                 startActivity(Intent(this@QuickAddActivity, MainActivity::class.java))
                                 finish()
                             }) { Text("Open Budgetr") }
@@ -121,7 +123,7 @@ class QuickAddActivity : ComponentActivity() {
                         spendingPromptThreshold = uiState.spendingPromptThreshold,
                         knownTags = uiState.knownTags,
                         tagSuggestions = uiState.tagSuggestions,
-                        descriptionSuggestions = uiState.descriptionSuggestions,
+                        descriptionHistory = uiState.descriptionHistory,
                         onSave = viewModel::saveTransaction,
                         onSaveTransfer = viewModel::saveTransfer,
                         onDismiss = { finish() },

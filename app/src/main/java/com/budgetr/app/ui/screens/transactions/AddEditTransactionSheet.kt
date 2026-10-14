@@ -49,6 +49,7 @@ import com.budgetr.app.data.model.Transaction
 import com.budgetr.app.data.model.TransactionCategory
 import com.budgetr.app.ui.theme.ExpenseRed
 import com.budgetr.app.ui.theme.IncomeGreen
+import com.budgetr.app.util.QuickAddSuggestions
 import com.budgetr.app.util.SpendTags
 import com.budgetr.app.util.toCurrencyString
 import java.text.SimpleDateFormat
@@ -98,7 +99,7 @@ fun AddEditTransactionSheet(
     spendingPromptThreshold: Double = 20.0,
     knownTags: List<String> = SpendTags.DEFAULTS,
     tagSuggestions: Map<String, String> = emptyMap(),
-    descriptionSuggestions: List<Transaction> = emptyList(),
+    descriptionHistory: List<Transaction> = emptyList(),
     onSave: (Transaction, TransactionLinkAction?) -> Unit,
     onSaveTransfer: (source: Transaction, destination: Transaction) -> Unit,
     onDismiss: () -> Unit,
@@ -279,8 +280,8 @@ fun AddEditTransactionSheet(
                 onAmountChange = { amount = it },
                 description = info,
                 onDescriptionChange = { info = it },
-                suggestions = if (isEdit) emptyList() else descriptionSuggestions.filter {
-                    it.account in accounts && (presetCategory == null || it.category == presetCategory)
+                suggestions = if (isEdit) emptyList() else remember(descriptionHistory, accounts, presetCategory) {
+                    QuickAddSuggestions.from(descriptionHistory, accounts, presetCategory)
                 },
                 onSuggestion = {
                     info = it.info

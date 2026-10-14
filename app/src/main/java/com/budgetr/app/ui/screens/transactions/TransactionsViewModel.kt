@@ -17,7 +17,6 @@ import com.budgetr.app.util.BudgetCapCalculator
 import com.budgetr.app.util.EnvelopeCalculator
 import com.budgetr.app.util.PayPeriodCalculator
 import com.budgetr.app.util.PreferencesManager
-import com.budgetr.app.util.QuickAddSuggestions
 import com.budgetr.app.util.SpendTags
 import com.budgetr.app.util.spendForCategory
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -58,9 +57,10 @@ data class TransactionsUiState(
     val bulkCategoryError: String? = null,
     val message: String? = null,
     val accounts: List<String> = emptyList(),
+    val accountsLoaded: Boolean = false,
     val selectedAccount: String? = null,
     val lastAddAccount: String? = null,
-    val descriptionSuggestions: List<Transaction> = emptyList(),
+    val descriptionHistory: List<Transaction> = emptyList(),
     val transactions: List<Transaction> = emptyList(),
     val categoryFilter: TransactionCategory? = null,
     /** Spending category filter, only applied while viewing one-off costs. */
@@ -157,7 +157,7 @@ class TransactionsViewModel @Inject constructor(
         viewModelScope.launch {
             repository.getAccountBalances().collect { balances ->
                 val names = balances.map { it.account }
-                _uiState.update { it.copy(accounts = names) }
+                _uiState.update { it.copy(accounts = names, accountsLoaded = true) }
                 val current = selectedAccountFlow.value
                 if (names.isNotEmpty() && (current == null || (current !in names && current != ALL_ACCOUNTS))) {
                     selectAccount(names.first())
@@ -168,12 +168,10 @@ class TransactionsViewModel @Inject constructor(
         refresh()
 
         viewModelScope.launch {
-            combine(repository.getAllTransactions(), repository.getAccountBalances()) { all, balances ->
-                all to balances.map { it.account }
-            }.collect { (all, accounts) ->
+            repository.getAllTransactions().collect { all ->
                 _uiState.update {
                     it.copy(knownTags = SpendTags.knownTags(all), tagSuggestions = SpendTags.suggestionsByInfo(all),
-                        descriptionSuggestions = QuickAddSuggestions.from(all, accounts))
+                        descriptionHistory = all)
                 }
             }
         }

@@ -9,11 +9,16 @@ import java.util.Locale
 
 /** Three recent descriptions, then frequent ones, with at most six chips in the form. */
 object QuickAddSuggestions {
-    fun from(transactions: List<Transaction>, accounts: List<String>): List<Transaction> {
+    fun from(
+        transactions: List<Transaction>,
+        accounts: List<String>,
+        category: TransactionCategory? = null
+    ): List<Transaction> {
         val format = DateTimeFormatter.ofPattern("dd/MM/uuuu").withResolverStyle(ResolverStyle.STRICT)
         val newest = transactions
             .filter { it.account in accounts && it.info.isNotBlank() &&
-                it.category != TransactionCategory.TRANSFER && it.category != TransactionCategory.UNKNOWN }
+                it.category != TransactionCategory.TRANSFER && it.category != TransactionCategory.UNKNOWN &&
+                (category == null || it.category == category) }
             .sortedWith(compareByDescending<Transaction> {
                 runCatching { LocalDate.parse(it.date, format).toEpochDay() }.getOrDefault(Long.MIN_VALUE)
             }.thenByDescending { it.rowIndex })

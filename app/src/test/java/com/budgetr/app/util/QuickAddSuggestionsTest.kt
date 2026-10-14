@@ -29,4 +29,12 @@ class QuickAddSuggestionsTest {
             tx("Transfer", "01/10/2026").copy(category = TransactionCategory.TRANSFER))
         assertTrue(QuickAddSuggestions.from(rows, listOf("Current")).isEmpty())
     }
+    @Test fun `expense shortcut filters category before limiting suggestions`() {
+        val income = (1..8).map {
+            tx("Income $it", "14/10/2026").copy(category = TransactionCategory.SALARY)
+        }
+        val expense = tx("Bus", "01/10/2026")
+        assertEquals(listOf(expense), QuickAddSuggestions.from(income + expense,
+            listOf("Current"), TransactionCategory.ONE_OFF_COST))
+    }
 }
