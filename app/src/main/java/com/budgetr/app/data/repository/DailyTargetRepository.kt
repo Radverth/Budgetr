@@ -13,6 +13,8 @@ import com.budgetr.app.util.PreferencesManager
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
@@ -22,6 +24,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
+import javax.inject.Singleton
 
 /** Everything a screen needs to show the daily spend target. */
 data class DailyTargetState(
@@ -37,6 +40,7 @@ data class DailyTargetState(
  *  the period's pot the first time it can be worked out, so later edits to income or fixed
  *  costs don't quietly change the base mid-period. */
 @OptIn(ExperimentalCoroutinesApi::class)
+@Singleton
 class DailyTargetRepository @Inject constructor(
     private val sheetsRepository: SheetsRepository,
     private val budgetRepository: BudgetRepository,
@@ -50,6 +54,11 @@ class DailyTargetRepository @Inject constructor(
             delay(60_000)
         }
     }
+
+    /** Bumped when a daily-target setting changes, so screens update straight away. */
+    private val settingsVersion = MutableStateFlow(0)
+
+    fun notifySettingsChanged() = settingsVersion.update { it + 1 }
 
     fun observe(): Flow<DailyTargetState> {
         val periodStarts = ticker
@@ -65,7 +74,7 @@ class DailyTargetRepository @Inject constructor(
                 budgetRepository.getEnvelopes()
             ) { transactions, goals, debts, envelopes -> SourceData(transactions, goals, debts, envelopes.map { it.tag.lowercase() }.toSet()) }
 
-            combine(data, budgetRepository.getDailyTransfers(periodStart), ticker) { source, transfers, now ->
+            combine(data, budgetRepository.getDailyTransfers(periodStart), ticker, settingsVersion) { source, transfers, now, _ ->
                 val manual = prefs.getDailyPotOverride()
                 val pot = manual ?: lockedPot(periodStart, source)
                 val countBudgeted = prefs.isDailyTargetCountingBudgeted()
@@ -97,7 +106,10 @@ class DailyTargetRepository @Inject constructor(
     suspend fun undoTransfer(id: Long) = budgetRepository.deleteDailyTransfer(id)
 
     /** Forget the fixed pot so it's worked out again from current income and fixed costs. */
-    fun recalculatePot() = prefs.setDailyPot(null, 0.0)
+    fun recalculatePot() {
+        prefs.setDailyPot(null, 0.0)
+        notifySettingsChanged()
+    }
 
     /** Uses the pot fixed for this period, or works it out and fixes it. Nothing is fixed
      *  while there's no income in the cache yet (e.g. before the first sync), so an empty

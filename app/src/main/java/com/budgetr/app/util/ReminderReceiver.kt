@@ -14,7 +14,13 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.budgetr.app.MainActivity
 import com.budgetr.app.R
+import com.budgetr.app.data.repository.DailyTargetRepository
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 
 const val REMINDER_CHANNEL_ID = "transaction_reminders"
@@ -28,14 +34,39 @@ class ReminderReceiver : BroadcastReceiver() {
     @Inject
     lateinit var prefs: PreferencesManager
 
+    @Inject
+    lateinit var dailyTargetRepository: DailyTargetRepository
+
     override fun onReceive(context: Context, intent: Intent) {
-        postNotification(context)
         if (prefs.isReminderEnabled()) {
             ReminderScheduler.schedule(context, prefs.getReminderHour(), prefs.getReminderMinute())
         }
+        // Reading the daily target touches the database, so finish off the main thread
+        val pending = goAsync()
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                postNotification(context, dailyTargetText())
+            } finally {
+                pending.finish()
+            }
+        }
     }
 
-    private fun postNotification(context: Context) {
+    /** Title and text that mention today's spend target, or null to use the plain reminder. */
+    private suspend fun dailyTargetText(): Pair<String, String>? {
+        if (!prefs.isDailyTargetOnHome()) return null
+        val target = withTimeoutOrNull(5_000) { dailyTargetRepository.observe().first().target } ?: return null
+        val tomorrow = target.tomorrowIfNoMoreSpent?.let { " Tomorrow starts at ${it.toCurrencyString()}." } ?: ""
+        return if (target.isOverToday) {
+            "${(-target.leftToday).toCurrencyString()} over today's target" to
+                "Log anything else you've spent today.$tomorrow"
+        } else {
+            "${target.leftToday.toCurrencyString()} left of today's target" to
+                "Log anything you've spent today so it stays accurate.$tomorrow"
+        }
+    }
+
+    private fun postNotification(context: Context, daily: Pair<String, String>?) {
         ensureChannel(context)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
@@ -53,8 +84,8 @@ class ReminderReceiver : BroadcastReceiver() {
         )
         val notification = NotificationCompat.Builder(context, REMINDER_CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("Log today's transactions")
-            .setContentText("Keep your budget accurate — add anything you've spent or earned today.")
+            .setContentTitle(daily?.first ?: "Log today's transactions")
+            .setContentText(daily?.second ?: "Keep your budget accurate — add anything you've spent or earned today.")
             .setContentIntent(contentIntent)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)

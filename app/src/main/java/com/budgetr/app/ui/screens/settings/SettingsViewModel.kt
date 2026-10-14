@@ -4,7 +4,9 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.budgetr.app.data.api.DriveFile
+import com.budgetr.app.data.repository.DailyTargetRepository
 import com.budgetr.app.data.repository.SheetsRepository
+import com.budgetr.app.util.PaydayPlanCalculator
 import com.budgetr.app.util.AuthManager
 import com.budgetr.app.util.PreferencesManager
 import com.budgetr.app.util.ReminderScheduler
@@ -36,7 +38,14 @@ data class SettingsUiState(
     val spendingPromptEnabled: Boolean = true,
     val spendingPromptThreshold: Double = 20.0,
     val showSpendingPromptThresholdDialog: Boolean = false,
-    val spendingPromptThresholdInput: String = ""
+    val spendingPromptThresholdInput: String = "",
+    val dailyTargetOnHome: Boolean = true,
+    val dailyCountBudgeted: Boolean = true,
+    val dailyPot: Double? = null,
+    val dailyPotIsManual: Boolean = false,
+    val dailyBase: Double? = null,
+    val showDailyPotDialog: Boolean = false,
+    val dailyPotInput: String = ""
 )
 
 @HiltViewModel
@@ -44,7 +53,8 @@ class SettingsViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val prefs: PreferencesManager,
     private val authManager: AuthManager,
-    private val repository: SheetsRepository
+    private val repository: SheetsRepository,
+    private val dailyTargetRepository: DailyTargetRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
@@ -58,10 +68,57 @@ class SettingsViewModel @Inject constructor(
             reminderHour = prefs.getReminderHour(),
             reminderMinute = prefs.getReminderMinute(),
             spendingPromptEnabled = prefs.isSpendingPromptEnabled(),
-            spendingPromptThreshold = prefs.getSpendingPromptThreshold()
+            spendingPromptThreshold = prefs.getSpendingPromptThreshold(),
+            dailyTargetOnHome = prefs.isDailyTargetOnHome(),
+            dailyCountBudgeted = prefs.isDailyTargetCountingBudgeted()
         )
     )
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            dailyTargetRepository.observe().collect { state ->
+                _uiState.update { it.copy(dailyPot = state.pot, dailyPotIsManual = state.potIsManual, dailyBase = state.target.base) }
+            }
+        }
+    }
+
+    fun setDailyTargetOnHome(show: Boolean) {
+        prefs.setDailyTargetOnHome(show)
+        dailyTargetRepository.notifySettingsChanged()
+        _uiState.update { it.copy(dailyTargetOnHome = show) }
+    }
+
+    fun setDailyCountBudgeted(count: Boolean) {
+        prefs.setDailyTargetCountingBudgeted(count)
+        dailyTargetRepository.notifySettingsChanged()
+        _uiState.update { it.copy(dailyCountBudgeted = count) }
+    }
+
+    fun showDailyPotDialog() = _uiState.update {
+        it.copy(showDailyPotDialog = true, dailyPotInput = prefs.getDailyPotOverride()?.toString() ?: "")
+    }
+
+    fun dismissDailyPotDialog() = _uiState.update { it.copy(showDailyPotDialog = false) }
+
+    fun setDailyPotInput(value: String) = _uiState.update { it.copy(dailyPotInput = value) }
+
+    /** Blank switches back to working the amount out automatically. */
+    fun confirmDailyPot() {
+        val input = _uiState.value.dailyPotInput
+        val amount = PaydayPlanCalculator.parseAmount(input)
+        if (input.isNotBlank() && amount == null) return
+        prefs.setDailyPotOverride(amount)
+        dailyTargetRepository.notifySettingsChanged()
+        _uiState.update { it.copy(showDailyPotDialog = false, savedMessage = "Daily spend target updated") }
+    }
+
+    /** Works the pot out again from current income and fixed costs. */
+    fun recalculateDailyPot() {
+        prefs.setDailyPotOverride(null)
+        dailyTargetRepository.recalculatePot()
+        _uiState.update { it.copy(showDailyPotDialog = false, savedMessage = "Recalculated from your income and fixed costs") }
+    }
 
     fun loadSpreadsheets() {
         viewModelScope.launch {
