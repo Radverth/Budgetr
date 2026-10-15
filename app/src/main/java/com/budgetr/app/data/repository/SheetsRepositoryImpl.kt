@@ -77,6 +77,8 @@ class SheetsRepositoryImpl @Inject constructor(
     private var sheetIdCache: Map<String, Int> = emptyMap()
     private val sheetIdMutex = Mutex()
 
+    private val backfillMutex = Mutex()
+
     // Accounts whose column G header has been written this session (see ensureTagHeader)
     private val tagHeaderWritten = mutableSetOf<String>()
 
@@ -115,9 +117,9 @@ class SheetsRepositoryImpl @Inject constructor(
 
     override suspend fun refreshTransactions(account: String) {
         val spreadsheetId = prefs.getSpreadsheetId() ?: return
-        val range = "$account!A:G"
+        val range = "$account!A:H"
         val response = api.getValues(spreadsheetId, range)
-        val rows = response.values ?: return
+        val rows = backfillRowIds(spreadsheetId, account, response.values ?: return)
 
         // First row is header — skip it
         val entities = rows.drop(1).mapIndexedNotNull { index, row ->
@@ -130,13 +132,68 @@ class SheetsRepositoryImpl @Inject constructor(
                 category = TransactionCategory.fromString(row.getOrElse(3) { "" }).name,
                 account = account,
                 activeMonths = row.getOrElse(5) { "" }.ifBlank { null },
-                tag = SpendTags.normalise(row.getOrElse(6) { "" })
+                tag = SpendTags.normalise(row.getOrElse(6) { "" }),
+                rowId = row.getOrElse(RowIds.COLUMN_INDEX) { "" }.trim().ifBlank { null }
             )
         }
 
         // Atomic replace so concurrent refreshes of the same account can't interleave into
         // duplicate rowIndex rows (which crash the transactions list with a duplicate key).
         transactionDao.replaceForAccount(account, entities)
+    }
+
+    /**
+     * Gives every row without an ID one, in a single write, and labels column H. Returns [rows]
+     * with the new IDs filled in. If the write fails (e.g. offline) the rows are returned as they
+     * were and get IDs on a later refresh; until then edits fall back to row numbers.
+     */
+    private suspend fun backfillRowIds(spreadsheetId: String, account: String, firstRead: List<List<String>>): List<List<String>> {
+        if (!needsBackfill(firstRead)) return firstRead
+        // Two refreshes of one account can run at once (Home and Transactions on launch). Re-read
+        // inside the lock so only one of them writes IDs and both cache the same ones.
+        return backfillMutex.withLock {
+            val rows = api.getValues(spreadsheetId, "$account!A:H").values ?: firstRead
+            if (!needsBackfill(rows)) return@withLock rows
+            writeRowIds(spreadsheetId, account, rows)
+        }
+    }
+
+    private fun needsBackfill(rows: List<List<String>>): Boolean =
+        RowIds.rowsMissingIds(rows).isNotEmpty() ||
+            (rows.isNotEmpty() && rows.first().getOrElse(RowIds.COLUMN_INDEX) { "" } != RowIds.HEADER)
+
+    private suspend fun writeRowIds(spreadsheetId: String, account: String, rows: List<List<String>>): List<List<String>> {
+        val missing = RowIds.rowsMissingIds(rows)
+        val needsHeader = rows.isNotEmpty() && rows.first().getOrElse(RowIds.COLUMN_INDEX) { "" } != RowIds.HEADER
+        val newIds = missing.associateWith { RowIds.newId() }
+        val sheet = "'${account.replace("'", "''")}'"
+        val data = buildList {
+            if (needsHeader) add(ValueRange(range = "$sheet!H1", values = listOf(listOf(RowIds.HEADER))))
+            newIds.forEach { (row, id) -> add(ValueRange(range = "$sheet!H$row", values = listOf(listOf(id)))) }
+        }
+        return try {
+            api.batchUpdateValues(spreadsheetId, BatchUpdateValuesRequest(data))
+            rows.mapIndexed { index, row ->
+                val id = newIds[index + 1] ?: return@mapIndexed row
+                // Pad short rows out to column H so the ID lands in the right place
+                List(maxOf(row.size, RowIds.COLUMN_INDEX + 1)) { col ->
+                    if (col == RowIds.COLUMN_INDEX) id else row.getOrElse(col) { "" }
+                }
+            }
+        } catch (e: Exception) {
+            rows
+        }
+    }
+
+    /** Column H of [account], top to bottom, for finding rows by ID. */
+    private suspend fun readIdColumn(spreadsheetId: String, account: String): List<String> =
+        api.getValues(spreadsheetId, "$account!H:H").values?.map { it.firstOrNull().orEmpty() }.orEmpty()
+
+    /** The Sheet row that currently holds [transaction], or [RowMovedException] if it's gone. */
+    private suspend fun currentRow(spreadsheetId: String, transaction: Transaction): Int {
+        if (transaction.id.isNullOrBlank()) return transaction.rowIndex
+        return RowIds.resolve(readIdColumn(spreadsheetId, transaction.account), transaction.id, transaction.rowIndex)
+            ?: throw RowMovedException()
     }
 
     override suspend fun refreshAllTransactions() {
@@ -167,7 +224,7 @@ class SheetsRepositoryImpl @Inject constructor(
 
     override suspend fun addTransaction(transaction: Transaction) {
         val spreadsheetId = prefs.getSpreadsheetId() ?: return
-        val range = "${transaction.account}!A:G"
+        val range = "${transaction.account}!A:H"
         val rounded = roundedAmount(transaction.amount, transaction.category)
         val activeMonthsStr = transaction.activeMonths?.joinToString(",") ?: ""
         val row = listOf(listOf(
@@ -177,7 +234,8 @@ class SheetsRepositoryImpl @Inject constructor(
             transaction.category.displayName,
             rounded.toString(),
             activeMonthsStr,
-            SpendTags.normalise(transaction.tag) ?: ""
+            SpendTags.normalise(transaction.tag) ?: "",
+            transaction.id ?: RowIds.newId()
         ))
         api.appendValues(spreadsheetId, range, body = ValueRange(values = row))
         ensureTagHeader(transaction)
@@ -186,7 +244,8 @@ class SheetsRepositoryImpl @Inject constructor(
 
     override suspend fun updateTransaction(transaction: Transaction) {
         val spreadsheetId = prefs.getSpreadsheetId() ?: return
-        val range = "${transaction.account}!A${transaction.rowIndex}:G${transaction.rowIndex}"
+        val sheetRow = currentRow(spreadsheetId, transaction)
+        val range = "${transaction.account}!A$sheetRow:H$sheetRow"
         val rounded = roundedAmount(transaction.amount, transaction.category)
         val activeMonthsStr = transaction.activeMonths?.joinToString(",") ?: ""
         val row = listOf(listOf(
@@ -196,7 +255,8 @@ class SheetsRepositoryImpl @Inject constructor(
             transaction.category.displayName,
             rounded.toString(),
             activeMonthsStr,
-            SpendTags.normalise(transaction.tag) ?: ""
+            SpendTags.normalise(transaction.tag) ?: "",
+            transaction.id ?: RowIds.newId()
         ))
         api.updateValues(spreadsheetId, range, body = ValueRange(values = row))
         ensureTagHeader(transaction)
@@ -204,9 +264,15 @@ class SheetsRepositoryImpl @Inject constructor(
     }
 
     override suspend fun assignSpendingCategory(transactions: List<Transaction>, tag: String?) {
-        val data = bulkSpendingCategoryValues(transactions, tag)
-        if (data.isEmpty()) return
+        if (transactions.isEmpty()) return
         val spreadsheetId = checkNotNull(prefs.getSpreadsheetId()) { "Connect a spreadsheet before assigning categories." }
+        // Point each transaction at the row that holds it now, one ID-column read per account
+        val located = transactions.groupBy { it.account }.flatMap { (account, rows) ->
+            val ids = readIdColumn(spreadsheetId, account)
+            rows.map { tx -> tx.copy(rowIndex = RowIds.resolve(ids, tx.id, tx.rowIndex) ?: throw RowMovedException()) }
+        }
+        val data = bulkSpendingCategoryValues(located, tag)
+        if (data.isEmpty()) return
         api.batchUpdateValues(spreadsheetId, BatchUpdateValuesRequest(data))
         transactions.map { it.account }.distinct().forEach { account ->
             tagHeaderWritten += account
@@ -226,7 +292,7 @@ class SheetsRepositoryImpl @Inject constructor(
     override suspend fun deleteTransaction(transaction: Transaction) {
         val spreadsheetId = prefs.getSpreadsheetId() ?: return
         val sheetId = resolveSheetIdByName(transaction.account) ?: 0
-        val rowIndex = transaction.rowIndex - 1 // 0-based for API
+        val rowIndex = currentRow(spreadsheetId, transaction) - 1 // 0-based for API
         api.batchUpdate(
             spreadsheetId,
             BatchUpdateRequest(
@@ -250,7 +316,9 @@ class SheetsRepositoryImpl @Inject constructor(
         val spreadsheetId = prefs.getSpreadsheetId() ?: return
         val sheetId = resolveSheetIdByName(account) ?: 0
 
-        // Get ONE_OFF_COST rows sorted descending so high indices delete first (prevents index shifting)
+        // Read the Sheet afresh so row numbers match it now, even if it was edited by hand.
+        // Then delete ONE_OFF_COST rows highest first, so earlier deletes don't shift later ones.
+        refreshTransactions(account)
         val oneOffEntities = transactionDao.getTransactionsByAccountSync(account)
             .filter { it.category == TransactionCategory.ONE_OFF_COST.name }
             .sortedByDescending { it.rowIndex }
@@ -480,6 +548,8 @@ class SheetsRepositoryImpl @Inject constructor(
         // wiping that period's one-off costs.
         if (spreadsheetId != null) {
             accounts.forEach { account ->
+                // Read the Sheet afresh so the row numbers below match it now
+                refreshTransactions(account)
                 val entities = transactionDao.getTransactionsByAccountSync(account)
                 entities.forEach { entity ->
                     val newDate = when (entity.category) {
@@ -768,7 +838,8 @@ class SheetsRepositoryImpl @Inject constructor(
         category = TransactionCategory.fromString(category),
         account = account,
         activeMonths = activeMonths?.split(",")?.mapNotNull { it.trim().toIntOrNull() }?.ifEmpty { null },
-        tag = tag
+        tag = tag,
+        id = rowId
     )
 
     private fun AccountBalanceEntity.toAccountBalance() = AccountBalance(
