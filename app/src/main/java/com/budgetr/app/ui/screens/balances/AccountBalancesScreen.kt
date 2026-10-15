@@ -1,5 +1,7 @@
 package com.budgetr.app.ui.screens.balances
 
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -247,12 +249,19 @@ fun AccountBalancesScreen(
                 .nestedScroll(pullRefreshState.nestedScrollConnection)
         ) {
             if (uiState.balances.isEmpty() && !uiState.isRefreshing) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(
+                    modifier = Modifier.fillMaxSize().padding(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
                     Text(
-                        text = "No balance data found.\nPull down to refresh.",
+                        text = "No accounts yet.\nAdd one, or pull down to refresh.",
                         style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                        textAlign = TextAlign.Center
                     )
+                    Spacer(Modifier.height(16.dp))
+                    Button(onClick = viewModel::showAddAccountDialog) { Text("Add an account") }
                 }
             } else {
                 LazyColumn(

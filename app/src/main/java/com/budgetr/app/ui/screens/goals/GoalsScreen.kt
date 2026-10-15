@@ -1,5 +1,6 @@
 package com.budgetr.app.ui.screens.goals
 
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -145,7 +146,7 @@ fun GoalsScreen(viewModel: GoalsViewModel = hiltViewModel()) {
         ) {
             item { SectionHeader("Savings Goals") }
             if (uiState.goals.isEmpty()) {
-                item { EmptyHint("No savings goals yet. Tap the savings icon above to add one.") }
+                item { EmptyHint("No savings goals yet.", "Add a savings goal", viewModel::showAddGoalDialog) }
             } else {
                 items(uiState.goals, key = { "goal-${it.name}" }) { goal ->
                     SavingsGoalCard(
@@ -159,7 +160,7 @@ fun GoalsScreen(viewModel: GoalsViewModel = hiltViewModel()) {
             item { Spacer(Modifier.height(8.dp)) }
             item { SectionHeader("Debts") }
             if (uiState.debts.isEmpty()) {
-                item { EmptyHint("No debts tracked. Tap the card icon above to add one.") }
+                item { EmptyHint("No debts tracked.", "Add a debt", viewModel::showAddDebtDialog) }
             } else {
                 items(uiState.debts, key = { "debt-${it.name}" }) { debt ->
                     DebtCard(
@@ -185,12 +186,15 @@ private fun SectionHeader(title: String) {
 }
 
 @Composable
-private fun EmptyHint(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-    )
+private fun EmptyHint(text: String, actionLabel: String, onAction: () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+        )
+        OutlinedButton(onClick = onAction) { Text(actionLabel) }
+    }
 }
 
 @Composable

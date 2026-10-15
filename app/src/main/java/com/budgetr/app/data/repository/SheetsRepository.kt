@@ -26,7 +26,11 @@ interface SheetsRepository {
     suspend fun deleteTransaction(transaction: Transaction)
     suspend fun deleteOneOffTransactions(account: String)
     suspend fun listSpreadsheets(): List<DriveFile>
-    suspend fun createSpreadsheetTemplate(name: String): String
+    /** Creates a new spreadsheet with a tab for each of [accounts]. */
+    suspend fun createSpreadsheetTemplate(
+        name: String,
+        accounts: List<String> = listOf("Monzo", "Halifax Debit Card", "Halifax Credit Card")
+    ): String
     suspend fun renameAccount(oldName: String, newName: String)
     suspend fun addAccount(accountName: String)
     suspend fun recordRollover(account: String, amount: Double, date: String)

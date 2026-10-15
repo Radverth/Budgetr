@@ -1,5 +1,6 @@
 package com.budgetr.app.ui.screens.onboarding
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -49,6 +50,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.budgetr.app.ui.theme.IncomeGreen
+import com.budgetr.app.util.toCurrencyString
 import com.budgetr.app.ui.theme.heroGradient
 
 @Composable
@@ -92,6 +94,8 @@ fun OnboardingScreen(
         )
     }
 
+    BackHandler(enabled = uiState.step in SETUP_STEPS) { viewModel.goBack() }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -106,9 +110,51 @@ fun OnboardingScreen(
                 onSelectExisting = viewModel::loadExistingSheets,
                 isLoading = uiState.isLoading
             )
+            OnboardingStep.PAYDAY -> PaydayStep(
+                payDay = uiState.payDay,
+                onPayDay = viewModel::setPayDay,
+                onBack = viewModel::goBack,
+                onNext = viewModel::goNext
+            )
+            OnboardingStep.ACCOUNTS -> AccountsStep(
+                accounts = uiState.accounts,
+                input = uiState.newAccountInput,
+                error = uiState.accountError,
+                onInput = viewModel::setNewAccountInput,
+                onAdd = viewModel::addAccount,
+                onRemove = viewModel::removeAccount,
+                onBack = viewModel::goBack,
+                onNext = viewModel::goNext
+            )
+            OnboardingStep.INCOME -> IncomeStep(
+                incomeInput = uiState.incomeInput,
+                accounts = uiState.accounts,
+                incomeAccount = uiState.incomeAccount,
+                onIncome = viewModel::setIncome,
+                onAccount = viewModel::setIncomeAccount,
+                onBack = viewModel::goBack,
+                onNext = viewModel::goNext
+            )
+            OnboardingStep.FIXED_COSTS -> FixedCostsStep(
+                costs = uiState.fixedCosts,
+                accounts = uiState.accounts,
+                onAdd = viewModel::addFixedCost,
+                onUpdate = viewModel::updateFixedCost,
+                onRemove = viewModel::removeFixedCost,
+                onBack = viewModel::goBack,
+                onNext = viewModel::goNext
+            )
+            OnboardingStep.SUMMARY -> SummaryStep(
+                summary = uiState.summary,
+                isCreating = uiState.isLoading,
+                onBack = viewModel::goBack,
+                onCreate = viewModel::finishSetup
+            )
             OnboardingStep.LOADING -> LoadingStep()
             OnboardingStep.DONE -> DoneStep(
                 sheetName = uiState.createdSheetName ?: "",
+                dailyAmount = uiState.dailyAmount,
+                warning = uiState.setupWarning,
                 onContinue = onComplete
             )
         }
@@ -205,9 +251,9 @@ private fun ChooseStep(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
         ) {
             Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Create a new template", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text("Start fresh", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Text(
-                    text = "We'll create a Google Sheet with the correct structure for Budgetr.",
+                    text = "Answer a few quick questions and Budgetr will set up a Google Sheet for you.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                 )
@@ -228,7 +274,7 @@ private fun ChooseStep(
                     if (isLoading) {
                         CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                     } else {
-                        Text("Create Template")
+                        Text("Set up a new sheet")
                     }
                 }
             }
@@ -270,7 +316,7 @@ private fun LoadingStep() {
 }
 
 @Composable
-private fun DoneStep(sheetName: String, onContinue: () -> Unit) {
+private fun DoneStep(sheetName: String, dailyAmount: Double?, warning: String?, onContinue: () -> Unit) {
     Column(
         modifier = Modifier.fillMaxSize().padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -302,6 +348,20 @@ private fun DoneStep(sheetName: String, onContinue: () -> Unit) {
             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
             textAlign = TextAlign.Center
         )
+        dailyAmount?.let {
+            Spacer(Modifier.height(16.dp))
+            Text(
+                text = "You have ${it.toCurrencyString()} a day to spend.",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = IncomeGreen,
+                textAlign = TextAlign.Center
+            )
+        }
+        warning?.let {
+            Spacer(Modifier.height(16.dp))
+            Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.tertiary, textAlign = TextAlign.Center)
+        }
         Spacer(Modifier.height(48.dp))
         Button(
             onClick = onContinue,
