@@ -9,8 +9,10 @@ import com.budgetr.app.data.model.Debt
 import com.budgetr.app.data.model.SavingsGoal
 import com.budgetr.app.data.model.SortOrder
 import com.budgetr.app.data.model.Transaction
+import com.budgetr.app.data.model.CategoryRule
 import com.budgetr.app.data.model.TransactionCategory
 import com.budgetr.app.data.repository.BudgetRepository
+import com.budgetr.app.data.repository.CategoryRuleRepository
 import com.budgetr.app.data.repository.DailyTargetRepository
 import com.budgetr.app.data.repository.SyncOutcome
 import com.budgetr.app.data.model.PendingChange
@@ -72,6 +74,8 @@ data class TransactionsUiState(
     val tagFilter: String? = null,
     val knownTags: List<String> = SpendTags.DEFAULTS,
     val tagSuggestions: Map<String, String> = emptyMap(),
+    /** Category rules, which win over [tagSuggestions] when filling in the spending category. */
+    val categoryRules: List<CategoryRule> = emptyList(),
     val searchQuery: String = "",
     val sortOrder: SortOrder = SortOrder.DATE_DESC,
     val error: String? = null,
@@ -138,6 +142,7 @@ class TransactionsViewModel @Inject constructor(
     private val budgetRepository: BudgetRepository,
     private val prefs: PreferencesManager,
     private val dailyTargetRepository: DailyTargetRepository,
+    private val categoryRuleRepository: CategoryRuleRepository,
     @ApplicationContext private val context: Context,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
@@ -186,6 +191,10 @@ class TransactionsViewModel @Inject constructor(
                         descriptionHistory = all)
                 }
             }
+        }
+
+        viewModelScope.launch {
+            categoryRuleRepository.getRules().collect { rules -> _uiState.update { it.copy(categoryRules = rules) } }
         }
 
         viewModelScope.launch {

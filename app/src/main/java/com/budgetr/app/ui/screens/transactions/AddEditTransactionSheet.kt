@@ -43,12 +43,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.budgetr.app.data.model.CategoryRule
 import com.budgetr.app.data.model.Debt
 import com.budgetr.app.data.model.SavingsGoal
 import com.budgetr.app.data.model.Transaction
 import com.budgetr.app.data.model.TransactionCategory
 import com.budgetr.app.ui.theme.ExpenseRed
 import com.budgetr.app.ui.theme.IncomeGreen
+import com.budgetr.app.util.CategoryRules
 import com.budgetr.app.util.QuickAddSuggestions
 import com.budgetr.app.util.SpendTags
 import com.budgetr.app.util.toCurrencyString
@@ -99,6 +101,7 @@ fun AddEditTransactionSheet(
     spendingPromptThreshold: Double = 20.0,
     knownTags: List<String> = SpendTags.DEFAULTS,
     tagSuggestions: Map<String, String> = emptyMap(),
+    categoryRules: List<CategoryRule> = emptyList(),
     descriptionHistory: List<Transaction> = emptyList(),
     onSave: (Transaction, TransactionLinkAction?) -> Unit,
     onSaveTransfer: (source: Transaction, destination: Transaction) -> Unit,
@@ -179,7 +182,7 @@ fun AddEditTransactionSheet(
     }
 
     LaunchedEffect(info) {
-        if (!tagTouched) tag = tagSuggestions[info.trim().lowercase()]
+        if (!tagTouched) tag = CategoryRules.tagFor(info, categoryRules) ?: tagSuggestions[info.trim().lowercase()]
     }
 
     LaunchedEffect(applyPayDate) {
