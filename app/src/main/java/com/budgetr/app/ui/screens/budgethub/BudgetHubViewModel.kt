@@ -3,6 +3,7 @@ package com.budgetr.app.ui.screens.budgethub
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.budgetr.app.data.repository.BudgetRepository
+import com.budgetr.app.data.repository.CategoryRuleRepository
 import com.budgetr.app.data.repository.DailyTargetRepository
 import com.budgetr.app.data.repository.DailyTargetState
 import com.budgetr.app.data.repository.SheetsRepository
@@ -26,6 +27,7 @@ data class BudgetHubUiState(
     val paydayPlanPending: Boolean = false,
     val nextPayday: Date? = null,
     val historyPeriods: Int = 0,
+    val ruleCount: Int = 0,
     val message: String? = null
 )
 
@@ -34,6 +36,7 @@ class BudgetHubViewModel @Inject constructor(
     private val dailyTargetRepository: DailyTargetRepository,
     private val budgetRepository: BudgetRepository,
     private val sheetsRepository: SheetsRepository,
+    private val categoryRuleRepository: CategoryRuleRepository,
     private val prefs: PreferencesManager
 ) : ViewModel() {
 
@@ -59,7 +62,10 @@ class BudgetHubViewModel @Inject constructor(
                     historyPeriods = history.size,
                     paydayPlanPending = prefs.isPaydayPlanPending()
                 )
-            }.collect { state -> _uiState.update { state.copy(message = it.message) } }
+            }.collect { state -> _uiState.update { state.copy(message = it.message, ruleCount = it.ruleCount) } }
+        }
+        viewModelScope.launch {
+            categoryRuleRepository.getRules().collect { rules -> _uiState.update { it.copy(ruleCount = rules.size) } }
         }
     }
 
