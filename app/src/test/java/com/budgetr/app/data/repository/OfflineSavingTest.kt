@@ -2,6 +2,14 @@ package com.budgetr.app.data.repository
 
 import android.app.Application
 import android.content.Context
+import android.os.Looper
+import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.ViewModelStore
+import com.budgetr.app.ui.screens.transactions.TransactionsViewModel
+import com.budgetr.app.data.model.PendingKind
+import org.robolectric.Shadows
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeout
 import androidx.work.Configuration
 import androidx.work.WorkManager
 import androidx.room.Room
@@ -31,6 +39,7 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 class OfflineSavingTest {
+    private lateinit var db: BudgetrDatabase
     private lateinit var repository: SheetsRepositoryImpl
     private lateinit var prefs: PreferencesManager
     private lateinit var workManager: WorkManager
@@ -48,7 +57,7 @@ class OfflineSavingTest {
         }
         prefs = PreferencesManager(context.getSharedPreferences("offline-test", Context.MODE_PRIVATE))
         prefs.setSpreadsheetId("original-sheet")
-        val db = Room.inMemoryDatabaseBuilder(context, BudgetrDatabase::class.java).allowMainThreadQueries().build()
+        db = Room.inMemoryDatabaseBuilder(context, BudgetrDatabase::class.java).allowMainThreadQueries().build()
         repository = SheetsRepositoryImpl(offlineApi(GoogleSheetsApi::class.java), offlineApi(GoogleDriveApi::class.java),
             db.transactionDao(), db.accountBalanceDao(), db.balanceRolloverDao(), db.savingsGoalDao(),
             db.debtDao(), db.envelopeDao(), db.periodSummaryDao(), db.pendingChangeDao(), context, prefs)
@@ -104,6 +113,46 @@ class OfflineSavingTest {
             assertTrue("Saving must persist a background job before returning", jobs.isNotEmpty())
         } finally {
             releaseNetwork.countDown()
+        }
+    }
+
+
+    @Test fun `editing an offline addition queues an update instead of another add`() = runBlocking {
+        val changes = editPendingAddition("Current")
+        assertEquals(listOf(PendingKind.ADD, PendingKind.UPDATE), changes.map { it.kind })
+        assertEquals("Lunch", repository.getAllTransactions().first().single().info)
+        assertEquals("coffee-id", changes.last().transaction.id)
+    }
+
+    @Test fun `moving an offline addition removes the original account entry`() = runBlocking {
+        val changes = editPendingAddition("Savings")
+        assertEquals(listOf(PendingKind.ADD, PendingKind.DELETE, PendingKind.ADD), changes.map { it.kind })
+        assertEquals("Savings", repository.getAllTransactions().first().single().account)
+        assertNotEquals("coffee-id", changes.last().transaction.id)
+    }
+
+    private suspend fun editPendingAddition(account: String): List<com.budgetr.app.data.model.PendingChange> {
+        repository.addTransaction(transaction)
+        val pending = repository.getAllTransactions().first().single()
+        val budgets = BudgetRepositoryImpl(db.categoryBudgetDao(), db.recurringCostReviewDao(),
+            db.goalCategoryLinkDao(), db.envelopeDao(), db.dailyTransferDao())
+        val vm = TransactionsViewModel(repository, budgets, prefs,
+            DailyTargetRepository(repository, budgets, prefs), RuntimeEnvironment.getApplication(), SavedStateHandle())
+        val store = ViewModelStore()
+        store.put("transactions", vm)
+        try {
+            vm.showEditSheet(pending)
+            vm.saveTransaction(pending.copy(info = "Lunch", account = account))
+            withTimeout(5000) {
+                while (vm.uiState.value.transactionToEdit != null && vm.uiState.value.addSaveCount == 0 && vm.uiState.value.error == null) {
+                    Shadows.shadowOf(Looper.getMainLooper()).idle()
+                    delay(10)
+                }
+            }
+            assertNull(vm.uiState.value.error)
+            return repository.getPendingChanges().first()
+        } finally {
+            store.clear()
         }
     }
 
