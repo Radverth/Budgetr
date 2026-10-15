@@ -475,7 +475,8 @@ class TransactionsViewModel @Inject constructor(
     fun saveTransaction(transaction: Transaction, linkAction: TransactionLinkAction? = null) {
         viewModelScope.launch {
             try {
-                if (transaction.rowIndex > 0) {
+                // Pending additions have negative row numbers, but are still existing edits.
+                if (_uiState.value.transactionToEdit != null || transaction.rowIndex > 0) {
                     val original = _uiState.value.transactionToEdit
                     if (original != null && original.account != transaction.account) {
                         // Account changed: remove from old account, append to new account
