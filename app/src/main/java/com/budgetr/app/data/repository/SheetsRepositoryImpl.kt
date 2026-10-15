@@ -8,6 +8,10 @@ import com.budgetr.app.data.model.PendingKind
 import com.budgetr.app.data.sync.PendingSyncWorker
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.combine
 import com.budgetr.app.data.api.AddSheetRequestBody
 import com.budgetr.app.data.api.BatchUpdateValuesRequest
@@ -92,6 +96,9 @@ class SheetsRepositoryImpl @Inject constructor(
 
     // One sync run at a time, so queued changes are never sent twice or out of order
     private val syncMutex = Mutex()
+
+    // Outlives any one screen (the repository is a singleton), so a send finishes after the form closes
+    private val syncScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     // Accounts whose column G header has been written this session (see ensureTagHeader)
     private val tagHeaderWritten = mutableSetOf<String>()
@@ -247,11 +254,12 @@ class SheetsRepositoryImpl @Inject constructor(
 
     override suspend fun deleteTransaction(transaction: Transaction) = enqueue(PendingKind.DELETE, transaction)
 
-    /** Saves the change on the phone, then tries to send it straight away. Offline, it waits
-     *  for the background job, which runs once there's a connection. */
+    /** Saves the change on the phone and returns straight away, so saving never waits on a
+     *  slow connection. Sending happens in the background; offline, the background job takes
+     *  over once there's a connection. */
     private suspend fun enqueue(kind: PendingKind, transaction: Transaction) {
         pendingChangeDao.insert(transaction.toPendingEntity(kind))
-        syncPendingChanges()
+        syncScope.launch { runCatching { syncPendingChanges() } }
     }
 
     override fun getPendingChanges(): Flow<List<PendingChange>> =
@@ -259,7 +267,7 @@ class SheetsRepositoryImpl @Inject constructor(
 
     override suspend fun retryPendingChange(id: Long) {
         pendingChangeDao.markFailed(id, null)
-        syncPendingChanges()
+        syncScope.launch { runCatching { syncPendingChanges() } }
     }
 
     override suspend fun discardPendingChange(id: Long) = pendingChangeDao.delete(id)
