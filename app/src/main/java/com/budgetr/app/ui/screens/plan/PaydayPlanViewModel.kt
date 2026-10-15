@@ -1,5 +1,6 @@
 package com.budgetr.app.ui.screens.plan
 
+import com.budgetr.app.util.UserMessages
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.budgetr.app.data.repository.BudgetRepository
@@ -105,7 +106,7 @@ class PaydayPlanViewModel @Inject constructor(
                     )
                 }
             } catch (e: Exception) {
-                _uiState.update { it.copy(isLoading = false, error = e.message) }
+                _uiState.update { it.copy(isLoading = false, error = UserMessages.from(e)) }
             }
         }
     }
@@ -169,7 +170,7 @@ class PaydayPlanViewModel @Inject constructor(
                 }
                 _uiState.update { it.copy(isSaving = false, saved = true) }
             } catch (e: Exception) {
-                _uiState.update { it.copy(isSaving = false, error = e.message) }
+                _uiState.update { it.copy(isSaving = false, error = UserMessages.from(e)) }
             }
         }
     }

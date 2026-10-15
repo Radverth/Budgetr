@@ -1,5 +1,6 @@
 package com.budgetr.app.ui.screens.insights
 
+import com.budgetr.app.util.UserMessages
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.budgetr.app.data.model.TransactionCategory
@@ -115,7 +116,7 @@ class InsightsViewModel @Inject constructor(
             try {
                 sheetsRepository.refreshPeriodSummaries()
             } catch (e: Exception) {
-                _uiState.update { it.copy(error = e.message) }
+                _uiState.update { it.copy(error = UserMessages.from(e)) }
             } finally {
                 _uiState.update { it.copy(isRefreshing = false) }
             }
@@ -130,7 +131,7 @@ class InsightsViewModel @Inject constructor(
                 budgetRepository.setEnvelope(tag, limit, rollover = false)
                 _uiState.update { it.copy(successMessage = "$tag budget set") }
             } catch (e: Exception) {
-                _uiState.update { it.copy(error = e.message) }
+                _uiState.update { it.copy(error = UserMessages.from(e)) }
             }
         }
     }

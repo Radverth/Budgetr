@@ -1,5 +1,6 @@
 package com.budgetr.app.ui.screens.onboarding
 
+import com.budgetr.app.util.UserMessages
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.budgetr.app.data.api.DriveFile
@@ -138,7 +139,7 @@ class OnboardingViewModel @Inject constructor(
                 repository.createSpreadsheetTemplate(name, state.accounts)
             } catch (e: Exception) {
                 _uiState.update {
-                    it.copy(isLoading = false, step = OnboardingStep.SUMMARY, error = "Couldn't create the sheet: ${e.message}")
+                    it.copy(isLoading = false, step = OnboardingStep.SUMMARY, error = "Couldn't create the sheet. ${UserMessages.from(e)}")
                 }
                 return@launch
             }

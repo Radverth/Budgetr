@@ -1,5 +1,6 @@
 package com.budgetr.app.ui.screens.budgets
 
+import com.budgetr.app.util.UserMessages
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.budgetr.app.data.model.TransactionCategory
@@ -138,7 +139,7 @@ class BudgetsViewModel @Inject constructor(
                     it.copy(showDialog = false, editingCategory = null, successMessage = "${category.displayName} budget updated")
                 }
             } catch (e: Exception) {
-                _uiState.update { it.copy(error = e.message) }
+                _uiState.update { it.copy(error = UserMessages.from(e)) }
             }
         }
     }
@@ -191,7 +192,7 @@ class BudgetsViewModel @Inject constructor(
                 budgetRepository.setEnvelope(tag, limit, dialog.rollover, renameFrom = dialog.originalTag)
                 _uiState.update { it.copy(envelopeDialog = null, successMessage = "$tag budget saved") }
             } catch (e: Exception) {
-                _uiState.update { it.copy(error = e.message) }
+                _uiState.update { it.copy(error = UserMessages.from(e)) }
             }
         }
     }

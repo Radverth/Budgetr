@@ -1,5 +1,6 @@
 package com.budgetr.app.ui.screens.home
 
+import com.budgetr.app.util.UserMessages
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.budgetr.app.BuildConfig
@@ -161,7 +162,7 @@ class HomeViewModel @Inject constructor(
                     it.copy(successMessage = if (amount > 0) "Borrowed from later days" else "Paid forward to later days")
                 }
             } catch (e: Exception) {
-                _uiState.update { it.copy(error = e.message) }
+                _uiState.update { it.copy(error = UserMessages.from(e)) }
             }
         }
     }
@@ -264,7 +265,7 @@ class HomeViewModel @Inject constructor(
                 repository.updateSavingsGoal(goal.copy(savedAmount = goal.savedAmount + item.underspendAmount))
                 _uiState.update { it.copy(successMessage = "Added to \"${item.goalName}\"") }
             } catch (e: Exception) {
-                _uiState.update { it.copy(error = e.message) }
+                _uiState.update { it.copy(error = UserMessages.from(e)) }
             }
         }
     }
@@ -294,7 +295,7 @@ class HomeViewModel @Inject constructor(
                     }
                 }
             } catch (e: Exception) {
-                _uiState.update { it.copy(error = "Couldn't start the new pay period (${e.message ?: "unknown error"}). It will retry next time you open the app.") }
+                _uiState.update { it.copy(error = "Couldn't start the new pay period . ${UserMessages.from(e)} It will retry next time you open the app.") }
             }
         }
     }
@@ -441,7 +442,7 @@ class HomeViewModel @Inject constructor(
                 // Keep the Sheet's copy of phone-only data up to date (skipped if nothing changed)
                 backupRepository.backup()
             } catch (e: Exception) {
-                _uiState.update { it.copy(error = e.message) }
+                _uiState.update { it.copy(error = UserMessages.from(e)) }
             } finally {
                 _uiState.update { it.copy(isRefreshing = false, isLoading = false) }
             }
