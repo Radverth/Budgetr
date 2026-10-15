@@ -77,6 +77,8 @@ class SheetsRepositoryImpl @Inject constructor(
     private var sheetIdCache: Map<String, Int> = emptyMap()
     private val sheetIdMutex = Mutex()
 
+    private val backfillMutex = Mutex()
+
     // Accounts whose column G header has been written this session (see ensureTagHeader)
     private val tagHeaderWritten = mutableSetOf<String>()
 
@@ -145,10 +147,24 @@ class SheetsRepositoryImpl @Inject constructor(
      * with the new IDs filled in. If the write fails (e.g. offline) the rows are returned as they
      * were and get IDs on a later refresh; until then edits fall back to row numbers.
      */
-    private suspend fun backfillRowIds(spreadsheetId: String, account: String, rows: List<List<String>>): List<List<String>> {
+    private suspend fun backfillRowIds(spreadsheetId: String, account: String, firstRead: List<List<String>>): List<List<String>> {
+        if (!needsBackfill(firstRead)) return firstRead
+        // Two refreshes of one account can run at once (Home and Transactions on launch). Re-read
+        // inside the lock so only one of them writes IDs and both cache the same ones.
+        return backfillMutex.withLock {
+            val rows = api.getValues(spreadsheetId, "$account!A:H").values ?: firstRead
+            if (!needsBackfill(rows)) return@withLock rows
+            writeRowIds(spreadsheetId, account, rows)
+        }
+    }
+
+    private fun needsBackfill(rows: List<List<String>>): Boolean =
+        RowIds.rowsMissingIds(rows).isNotEmpty() ||
+            (rows.isNotEmpty() && rows.first().getOrElse(RowIds.COLUMN_INDEX) { "" } != RowIds.HEADER)
+
+    private suspend fun writeRowIds(spreadsheetId: String, account: String, rows: List<List<String>>): List<List<String>> {
         val missing = RowIds.rowsMissingIds(rows)
         val needsHeader = rows.isNotEmpty() && rows.first().getOrElse(RowIds.COLUMN_INDEX) { "" } != RowIds.HEADER
-        if (missing.isEmpty() && !needsHeader) return rows
         val newIds = missing.associateWith { RowIds.newId() }
         val sheet = "'${account.replace("'", "''")}'"
         val data = buildList {
