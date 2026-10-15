@@ -1,5 +1,8 @@
 package com.budgetr.app.ui.screens.transactions
 
+import androidx.compose.material3.Button
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -389,18 +392,28 @@ fun TransactionsScreen(
             ) {
                 val shown = uiState.visibleTransactions
                 if (shown.isEmpty() && !uiState.isRefreshing) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    val unfiltered = uiState.searchQuery.isBlank() && uiState.categoryFilter == null && uiState.dateRange == null
+                    Column(
+                        modifier = Modifier.fillMaxSize().padding(32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
                         Text(
                             text = when {
                                 uiState.accounts.isEmpty() -> "No accounts yet.\nAdd one from the Accounts tab."
                                 uiState.searchQuery.isNotBlank() -> "No matching transactions."
                                 uiState.tagFilter != null -> "No one-off costs tagged ${uiState.tagFilter}."
                                 uiState.dateRange != null -> "Nothing between those dates."
-                                else -> "No transactions found.\nPull down to refresh."
+                                else -> "No transactions yet."
                             },
                             style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                            textAlign = TextAlign.Center
                         )
+                        if (unfiltered && uiState.accountForAdding != null) {
+                            Spacer(Modifier.height(16.dp))
+                            Button(onClick = viewModel::showAddSheet) { Text("Add a transaction") }
+                        }
                     }
                 } else {
                     // Day headers only make sense when the list is in date order
