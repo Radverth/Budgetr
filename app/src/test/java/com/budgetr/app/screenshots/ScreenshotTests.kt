@@ -1,5 +1,10 @@
 package com.budgetr.app.screenshots
 
+import com.budgetr.app.data.repository.BillRow
+import com.budgetr.app.ui.screens.forecast.CashFlowContent
+import com.budgetr.app.ui.screens.forecast.CashFlowUiState
+import com.budgetr.app.util.CashFlowCalculator
+import com.budgetr.app.util.ForecastWarning
 import com.budgetr.app.data.model.CategoryRule
 import com.budgetr.app.ui.screens.rules.CategoryRulesContent
 import com.budgetr.app.ui.screens.rules.CategoryRulesUiState
@@ -218,6 +223,7 @@ abstract class ScreenshotTests(private val prefix: String) {
 
     private val attention = listOf(
         AttentionItem.PaydayPlan,
+        AttentionItem.CashFlowWarning(ForecastWarning("Monzo", day("23/10/2026"), shortfall = 41.5, moveAmount = 45.0, fromAccount = "Halifax")),
         AttentionItem.BudgetAlert(BudgetAlertUiItem("Eating out", 72.0, 60.0, isOver = true), resetDays = 12),
         AttentionItem.GoalSuggestion(GoalSuggestionUiItem("Holiday", TransactionCategory.ONE_OFF_COST, 42.0)),
         AttentionItem.SubscriptionReview(RecurringReviewUiItem("Monzo", "Netflix", 10.99, ageDays = 210))
@@ -270,9 +276,12 @@ abstract class ScreenshotTests(private val prefix: String) {
                             budgetsOver = 1,
                             nextPayday = period.nextPayday,
                             historyPeriods = 4,
-                            ruleCount = 3
+                            ruleCount = 3,
+                            forecastWarning = ForecastWarning("Monzo", day("23/10/2026"), shortfall = 41.5, moveAmount = 45.0, fromAccount = "Halifax"),
+                            forecastReady = true
                         ),
-                        onOpenBudgets = {}, onOpenDailyTarget = {}, onOpenPaydayPlan = {}, onOpenHistory = {}, onOpenRules = {}, onTransfer = {}
+                        onOpenBudgets = {}, onOpenDailyTarget = {}, onOpenPaydayPlan = {}, onOpenHistory = {}, onOpenRules = {},
+                        onOpenForecast = {}, onTransfer = {}
                     )
                 }
             }
@@ -375,6 +384,46 @@ abstract class ScreenshotTests(private val prefix: String) {
             state = CategoryRulesUiState(isLoading = false, suggestions = listOf(CategoryRule(pattern = "Aldi", tag = "Groceries"))),
             onAdd = {}, onEdit = {}, onApply = {}, onAddSuggestion = {}
         )
+    }
+
+    private fun bill(account: String, info: String, amount: Double, dueDay: Int?) =
+        BillRow(account, info, -amount, dueDay, CashFlowCalculator.dueDate(dueDay, period))
+
+    private fun cashFlowState(monzo: Double): CashFlowUiState {
+        val dueDays = mapOf("Monzo" to "Gym" to 18, "Monzo" to "Council tax" to 20, "Halifax" to "Car insurance" to 22)
+        val transactions = listOf(
+            Transaction(2, "25/09/2026", "Gym", -30.0, TransactionCategory.FIXED_COST, "Monzo"),
+            Transaction(3, "25/09/2026", "Council tax", -142.5, TransactionCategory.FIXED_COST, "Monzo"),
+            Transaction(4, "25/09/2026", "Rent", -850.0, TransactionCategory.FIXED_COST, "Halifax"),
+            Transaction(5, "25/09/2026", "Car insurance", -48.0, TransactionCategory.FIXED_COST, "Halifax"),
+            Transaction(6, "24/10/2026", "Lodger", 300.0, TransactionCategory.RECURRING_INCOME, "Halifax")
+        )
+        val forecast = CashFlowCalculator.forecast(
+            period = period, today = day("14/10/2026"),
+            balances = linkedMapOf("Monzo" to monzo, "Halifax" to 640.0),
+            transactions = transactions,
+            dueDays = dueDays.mapKeys { (key, _) -> CashFlowCalculator.billKey(key.first, key.second) },
+            spendingAccount = "Monzo",
+            expectedSpend = List(12) { 15.0 }
+        )
+        return CashFlowUiState(
+            isLoading = false, forecast = forecast, accounts = listOf("Monzo", "Halifax"), spendingAccountIsAuto = true,
+            spendPerDay = 15.0, nextPayday = period.nextPayday,
+            bills = listOf(
+                bill("Halifax", "Rent", 850.0, null), bill("Monzo", "Gym", 30.0, 18),
+                bill("Monzo", "Council tax", 142.5, 20), bill("Halifax", "Car insurance", 48.0, 22)
+            )
+        )
+    }
+
+    @Test
+    fun cashFlowWarning() = screenShot("20_cash_flow_warning") {
+        CashFlowContent(state = cashFlowState(monzo = 120.0), onSpendingAccount = {}, onEditBill = {})
+    }
+
+    @Test
+    fun cashFlowOk() = screenShot("21_cash_flow_ok") {
+        CashFlowContent(state = cashFlowState(monzo = 420.0), onSpendingAccount = {}, onEditBill = {})
     }
 
     /** Dialogs open in their own window, which never reports idle under Robolectric 4.12

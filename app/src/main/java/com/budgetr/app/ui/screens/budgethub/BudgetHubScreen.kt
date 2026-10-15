@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Rule
+import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material.icons.filled.Today
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -61,6 +62,7 @@ fun BudgetHubScreen(
     onOpenPaydayPlan: () -> Unit,
     onOpenHistory: () -> Unit,
     onOpenRules: () -> Unit,
+    onOpenForecast: () -> Unit,
     viewModel: BudgetHubViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -100,6 +102,7 @@ fun BudgetHubScreen(
             onOpenPaydayPlan = onOpenPaydayPlan,
             onOpenHistory = onOpenHistory,
             onOpenRules = onOpenRules,
+            onOpenForecast = onOpenForecast,
             onTransfer = { transferKind = it },
             modifier = Modifier.fillMaxSize().padding(padding)
         )
@@ -114,6 +117,7 @@ internal fun BudgetHubContent(
     onOpenPaydayPlan: () -> Unit,
     onOpenHistory: () -> Unit,
     onOpenRules: () -> Unit,
+    onOpenForecast: () -> Unit,
     onTransfer: (TransferKind) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -153,6 +157,15 @@ internal fun BudgetHubContent(
                         subtitle = state.daily?.let { "${it.target.base.toCurrencyString()} a day · borrow or pay forward" }
                             ?: "Borrow or pay forward between days",
                         onClick = onOpenDailyTarget
+                    )
+                    HubDivider()
+                    HubRow(
+                        icon = Icons.Default.ShowChart,
+                        title = "Cash-flow forecast",
+                        subtitle = state.forecastWarning?.let { "${it.account} dips below £0 on ${SimpleDateFormat("EEE d MMM", Locale.UK).format(it.date)}" }
+                            ?: if (state.forecastReady) "Every account stays above £0 until payday" else "Your balances day by day until payday",
+                        subtitleColor = if (state.forecastWarning != null) ExpenseRed else null,
+                        onClick = onOpenForecast
                     )
                     HubDivider()
                     HubRow(
