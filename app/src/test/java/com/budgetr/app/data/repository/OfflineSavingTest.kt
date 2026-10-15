@@ -2,15 +2,20 @@ package com.budgetr.app.data.repository
 
 import android.app.Application
 import android.content.Context
+import androidx.work.Configuration
+import androidx.work.WorkManager
 import androidx.room.Room
 import com.budgetr.app.data.api.GoogleDriveApi
 import com.budgetr.app.data.api.GoogleSheetsApi
+import com.budgetr.app.data.api.ValueRange
 import com.budgetr.app.data.local.BudgetrDatabase
 import com.budgetr.app.data.model.Transaction
 import com.budgetr.app.data.model.TransactionCategory
 import com.budgetr.app.util.PreferencesManager
 import java.io.IOException
 import java.lang.reflect.Proxy
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
@@ -26,11 +31,19 @@ import org.robolectric.annotation.Config
 class OfflineSavingTest {
     private lateinit var repository: SheetsRepositoryImpl
     private lateinit var prefs: PreferencesManager
+    private lateinit var workManager: WorkManager
+    private var response: (String, Array<out Any?>) -> Any? = { _, _ -> throw IOException("No signal") }
     private val transaction = Transaction(2, "15/10/2026", "Coffee", -3.4,
         TransactionCategory.ONE_OFF_COST, "Current", id = "coffee-id")
 
     @Before fun setup() {
         val context = RuntimeEnvironment.getApplication()
+        try {
+            workManager = WorkManager.getInstance(context)
+        } catch (_: IllegalStateException) {
+            WorkManager.initialize(context, Configuration.Builder().build())
+            workManager = WorkManager.getInstance(context)
+        }
         prefs = PreferencesManager(context.getSharedPreferences("offline-test", Context.MODE_PRIVATE))
         prefs.setSpreadsheetId("original-sheet")
         val db = Room.inMemoryDatabaseBuilder(context, BudgetrDatabase::class.java).allowMainThreadQueries().build()
@@ -42,7 +55,7 @@ class OfflineSavingTest {
     // Only the network boundary is fake; preferences, queue, repository and Room are real.
     private fun <T> offlineApi(type: Class<T>): T = type.cast(Proxy.newProxyInstance(
         type.classLoader, arrayOf(type)
-    ) { _, _, _ -> throw IOException("No signal") })
+    ) { _, method, args -> response(method.name, args ?: emptyArray()) })
 
     @Test fun `changing sheets hides old queued changes and switching back restores them`() = runBlocking {
         repository.addTransaction(transaction)
@@ -53,6 +66,33 @@ class OfflineSavingTest {
         assertEquals(SyncOutcome.NOTHING_TO_SEND, repository.syncPendingChanges())
         prefs.setSpreadsheetId("original-sheet")
         assertEquals("Coffee", repository.getPendingChanges().first().single().transaction.info)
+    }
+
+    @Test fun `lost refresh retains the saved transaction on the phone`() = runBlocking {
+        response = { name, args ->
+            if (name == "getValues" && args[1].toString().endsWith("!H:H")) {
+                ValueRange(values = listOf(listOf("ID"), listOf("coffee-id")))
+            } else throw IOException("Connection lost after sending")
+        }
+        repository.addTransaction(transaction)
+        repository.syncPendingChanges()
+        assertEquals("Coffee", repository.getAllTransactions().first().single().info)
+        assertEquals(1, repository.getPendingChanges().first().size)
+    }
+
+    @Test fun `saving schedules durable work before a slow network call finishes`() = runBlocking {
+        val releaseNetwork = CountDownLatch(1)
+        response = { _, _ ->
+            releaseNetwork.await(10, TimeUnit.SECONDS)
+            throw IOException("No signal")
+        }
+        try {
+            repository.addTransaction(transaction)
+            val jobs = workManager.getWorkInfosForUniqueWork("pending-sheet-sync").get(5, TimeUnit.SECONDS)
+            assertTrue("Saving must persist a background job before returning", jobs.isNotEmpty())
+        } finally {
+            releaseNetwork.countDown()
+        }
     }
 
     @Test fun `edits without a stable ID are rejected before queueing`() = runBlocking {
