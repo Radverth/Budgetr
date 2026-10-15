@@ -302,18 +302,21 @@ internal fun AccountForecastCard(account: AccountForecast, nextPayday: Date?) {
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
-                Text(
-                    text = account.endBalance.toCurrencyString(),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = if (account.endBalance < 0) ExpenseRed else MaterialTheme.colorScheme.onSurface
-                )
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = account.endBalance.toCurrencyString(),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (account.endBalance < 0) ExpenseRed else MaterialTheme.colorScheme.onSurface
+                    )
+                    Text("by payday", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                }
             }
             // What the chart is pointing at: the lowest point, or the day being touched
             val focus = selected?.let { account.days.getOrNull(it) }
             Text(
                 text = if (focus != null) "${dayText(focus.date)}: ${focus.balance.toCurrencyString()}"
-                else "Lowest ${low.balance.toCurrencyString()} on ${dayText(low.date)} · day before payday on the right",
+                else "Lowest ${low.balance.toCurrencyString()} on ${dayText(low.date)} · touch the chart for any day",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                 maxLines = 2
@@ -389,16 +392,20 @@ private fun BalanceChart(account: AccountForecast, selected: Int?, onSelect: (In
     ) {
         val pad = 6.dp.toPx()
         val values = days.map { it.balance }
-        val top = maxOf(values.max(), 0.0)
-        val bottom = minOf(values.min(), 0.0)
+        // Show £0 when the balance gets anywhere near it; otherwise zoom in on the movement
+        val showZero = values.min() < values.max() / 2
+        val top = if (showZero) maxOf(values.max(), 0.0) else values.max()
+        val bottom = if (showZero) minOf(values.min(), 0.0) else values.min()
         val range = (top - bottom).takeIf { it > 0.0 } ?: 1.0
         fun x(i: Int) = if (days.size < 2) size.width / 2 else i * size.width / (days.size - 1)
         fun y(v: Double) = (pad + (top - v) / range * (size.height - 2 * pad)).toFloat()
 
         // £0 baseline, recessive
-        val zeroY = y(0.0)
-        drawLine(grid, Offset(0f, zeroY), Offset(size.width, zeroY), strokeWidth = 1.dp.toPx(),
-            pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx())))
+        val zeroY = if (showZero) y(0.0) else size.height
+        if (showZero) {
+            drawLine(grid, Offset(0f, zeroY), Offset(size.width, zeroY), strokeWidth = 1.dp.toPx(),
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx())))
+        }
 
         val path = Path().apply {
             values.forEachIndexed { i, v -> if (i == 0) moveTo(x(i), y(v)) else lineTo(x(i), y(v)) }
