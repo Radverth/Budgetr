@@ -18,13 +18,14 @@ data class PhoneBackup(
     val dailyTransfers: List<DailyTransferBackup> = emptyList(),
     val rollovers: List<RolloverBackup> = emptyList(),
     val categoryRules: List<CategoryRuleBackup> = emptyList(),
+    val billDueDays: List<BillDueDayBackup> = emptyList(),
     val settings: SettingsBackup = SettingsBackup()
 ) {
     /** True when there's nothing worth restoring. */
     val isEmpty: Boolean
         get() = categoryBudgets.isEmpty() && envelopes.isEmpty() && goalLinks.isEmpty() &&
             subscriptionReviews.isEmpty() && dailyTransfers.isEmpty() && rollovers.isEmpty() &&
-            categoryRules.isEmpty()
+            categoryRules.isEmpty() && billDueDays.isEmpty()
 
     /** Same contents, ignoring when it was saved, so an unchanged backup isn't written again. */
     fun sameContentAs(other: PhoneBackup?): Boolean = other != null && copy(savedAt = 0) == other.copy(savedAt = 0)
@@ -65,6 +66,9 @@ data class DailyTransferBackup(val periodStart: String, val createdOn: String, v
 data class CategoryRuleBackup(val pattern: String, val tag: String)
 
 @JsonClass(generateAdapter = true)
+data class BillDueDayBackup(val account: String, val infoKey: String, val dueDay: Int)
+
+@JsonClass(generateAdapter = true)
 data class RolloverBackup(val account: String, val amount: Double, val recordedDate: String)
 
 /** Preferences worth keeping. Sign-in details and which Sheet is open are left out on purpose. */
@@ -86,7 +90,8 @@ data class SettingsBackup(
     val dailyOnHome: Boolean? = null,
     val homeShowPeriod: Boolean? = null,
     val homeShowGoals: Boolean? = null,
-    val homeShowAccounts: Boolean? = null
+    val homeShowAccounts: Boolean? = null,
+    val forecastSpendingAccount: String? = null
 )
 
 /** Turns a backup into one line of JSON for a Sheet cell, and back. */

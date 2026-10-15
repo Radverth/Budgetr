@@ -48,6 +48,11 @@ class PreferencesManager @Inject constructor(
     fun setLastAddAccount(account: String) =
         prefs.edit().putString("last_add_account:${getSpreadsheetId()}", account).apply()
 
+    /** The account day-to-day spending comes from in the cash-flow forecast. Null means work it out. */
+    fun getForecastSpendingAccount(): String? = prefs.getString("forecast_spending_account:${getSpreadsheetId()}", null)
+    fun setForecastSpendingAccount(account: String?) =
+        prefs.edit().putString("forecast_spending_account:${getSpreadsheetId()}", account).apply()
+
     fun getSpreadsheetName(): String? = prefs.getString(KEY_SPREADSHEET_NAME, null)
     fun setSpreadsheetName(name: String?) = prefs.edit().putString(KEY_SPREADSHEET_NAME, name).apply()
 
