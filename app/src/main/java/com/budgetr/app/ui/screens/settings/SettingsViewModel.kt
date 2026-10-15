@@ -4,6 +4,9 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.budgetr.app.data.api.DriveFile
+import com.budgetr.app.data.backup.BackupRepository
+import com.budgetr.app.data.backup.BackupResult
+import com.budgetr.app.data.backup.RestoreResult
 import com.budgetr.app.data.repository.DailyTargetRepository
 import com.budgetr.app.data.repository.SheetsRepository
 import com.budgetr.app.util.PaydayPlanCalculator
@@ -48,7 +51,11 @@ data class SettingsUiState(
     val dailyPotInput: String = "",
     val homeShowPeriod: Boolean = true,
     val homeShowGoals: Boolean = true,
-    val homeShowAccounts: Boolean = true
+    val homeShowAccounts: Boolean = true,
+    /** When budgets and settings were last saved to the Sheet (epoch millis), 0 if never. */
+    val lastBackupAt: Long = 0,
+    val isBackingUp: Boolean = false,
+    val showRestoreConfirm: Boolean = false
 )
 
 @HiltViewModel
@@ -57,7 +64,8 @@ class SettingsViewModel @Inject constructor(
     private val prefs: PreferencesManager,
     private val authManager: AuthManager,
     private val repository: SheetsRepository,
-    private val dailyTargetRepository: DailyTargetRepository
+    private val dailyTargetRepository: DailyTargetRepository,
+    private val backupRepository: BackupRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
@@ -76,7 +84,8 @@ class SettingsViewModel @Inject constructor(
             dailyCountBudgeted = prefs.isDailyTargetCountingBudgeted(),
             homeShowPeriod = prefs.isHomeShowingPeriod(),
             homeShowGoals = prefs.isHomeShowingGoals(),
-            homeShowAccounts = prefs.isHomeShowingAccounts()
+            homeShowAccounts = prefs.isHomeShowingAccounts(),
+            lastBackupAt = prefs.getLastBackupAt()
         )
     )
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
@@ -85,6 +94,59 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             dailyTargetRepository.observe().collect { state ->
                 _uiState.update { it.copy(dailyPot = state.pot, dailyPotIsManual = state.potIsManual, dailyBase = state.target.base) }
+            }
+        }
+    }
+
+    fun backUpNow() {
+        if (_uiState.value.isBackingUp) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isBackingUp = true) }
+            val result = backupRepository.backup(force = true)
+            _uiState.update {
+                it.copy(
+                    isBackingUp = false,
+                    lastBackupAt = prefs.getLastBackupAt(),
+                    savedMessage = when (result) {
+                        BackupResult.SAVED, BackupResult.UNCHANGED -> "Budgets and settings saved to your Google Sheet"
+                        BackupResult.NOT_OVERWRITTEN ->
+                            "This phone has no budgets yet, so the backup in your Sheet was kept. Use Restore to get it back."
+                        BackupResult.FAILED -> "Couldn't reach Google Sheets. Try again when you're online."
+                    }
+                )
+            }
+        }
+    }
+
+    fun showRestoreConfirm() = _uiState.update { it.copy(showRestoreConfirm = true) }
+    fun dismissRestoreConfirm() = _uiState.update { it.copy(showRestoreConfirm = false) }
+
+    fun restoreFromSheet() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(showRestoreConfirm = false, isBackingUp = true) }
+            val result = backupRepository.restore()
+            _uiState.update {
+                it.copy(
+                    isBackingUp = false,
+                    // Settings shown on this screen may have changed
+                    dailyTargetOnHome = prefs.isDailyTargetOnHome(),
+                    dailyCountBudgeted = prefs.isDailyTargetCountingBudgeted(),
+                    homeShowPeriod = prefs.isHomeShowingPeriod(),
+                    homeShowGoals = prefs.isHomeShowingGoals(),
+                    homeShowAccounts = prefs.isHomeShowingAccounts(),
+                    payDay = prefs.getPayDay(),
+                    reminderEnabled = prefs.isReminderEnabled(),
+                    reminderHour = prefs.getReminderHour(),
+                    reminderMinute = prefs.getReminderMinute(),
+                    spendingPromptEnabled = prefs.isSpendingPromptEnabled(),
+                    spendingPromptThreshold = prefs.getSpendingPromptThreshold(),
+                    lastBackupAt = prefs.getLastBackupAt(),
+                    savedMessage = when (result) {
+                        RestoreResult.RESTORED -> "Budgets and settings restored from your Google Sheet"
+                        RestoreResult.NOTHING_TO_RESTORE -> "There's no backup in this Google Sheet yet"
+                        RestoreResult.FAILED -> "Couldn't reach Google Sheets. Try again when you're online."
+                    }
+                )
             }
         }
     }

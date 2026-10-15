@@ -15,6 +15,12 @@ interface GoalCategoryLinkDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(link: GoalCategoryLinkEntity)
 
+    @Query("SELECT * FROM goal_category_links")
+    suspend fun getAllSync(): List<GoalCategoryLinkEntity>
+
+    @Query("DELETE FROM goal_category_links")
+    suspend fun deleteAll()
+
     @Query("DELETE FROM goal_category_links WHERE goalName = :goalName")
     suspend fun delete(goalName: String)
 }

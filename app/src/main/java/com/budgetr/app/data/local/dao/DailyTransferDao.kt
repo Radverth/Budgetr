@@ -14,6 +14,12 @@ interface DailyTransferDao {
     @Query("SELECT * FROM daily_transfers WHERE periodStart = :periodStart ORDER BY id")
     suspend fun getForPeriodSync(periodStart: String): List<DailyTransferEntity>
 
+    @Query("SELECT * FROM daily_transfers ORDER BY id")
+    suspend fun getAllSync(): List<DailyTransferEntity>
+
+    @Query("DELETE FROM daily_transfers")
+    suspend fun deleteAll()
+
     @Insert
     suspend fun insert(transfer: DailyTransferEntity)
 

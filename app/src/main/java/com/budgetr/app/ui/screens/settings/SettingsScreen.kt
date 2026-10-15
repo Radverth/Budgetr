@@ -31,6 +31,7 @@ import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Notifications
@@ -184,6 +185,21 @@ fun SettingsScreen(
             },
             confirmButton = { TextButton(onClick = viewModel::confirmDailyPot) { Text("Save") } },
             dismissButton = { TextButton(onClick = viewModel::dismissDailyPotDialog) { Text("Cancel") } }
+        )
+    }
+
+    if (uiState.showRestoreConfirm) {
+        AlertDialog(
+            onDismissRequest = viewModel::dismissRestoreConfirm,
+            title = { Text("Restore from Google Sheet?") },
+            text = {
+                Text(
+                    "This replaces the budgets, carry-over, borrow and pay forward, subscription reviews and settings " +
+                        "on this phone with the copy saved in your Google Sheet. Transactions, goals and debts aren't affected."
+                )
+            },
+            confirmButton = { TextButton(onClick = viewModel::restoreFromSheet) { Text("Restore") } },
+            dismissButton = { TextButton(onClick = viewModel::dismissRestoreConfirm) { Text("Cancel") } }
         )
     }
 
@@ -361,6 +377,12 @@ fun SettingsScreen(
                 subtitle = uiState.spreadsheetName.ifBlank { "Not connected — tap to choose one" },
                 onClick = viewModel::loadSpreadsheets
             )
+            BackupRows(
+                lastBackupAt = uiState.lastBackupAt,
+                isBusy = uiState.isBackingUp,
+                onBackUp = viewModel::backUpNow,
+                onRestore = viewModel::showRestoreConfirm
+            )
 
             SectionLabel("Budget")
 
@@ -531,6 +553,28 @@ private fun SettingsIconBadge(icon: androidx.compose.ui.graphics.vector.ImageVec
     ) {
         Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
     }
+}
+
+/** "Back up now" with when it last happened, and "Restore". Shared with screenshot tests. */
+@Composable
+internal fun BackupRows(lastBackupAt: Long, isBusy: Boolean, onBackUp: () -> Unit, onRestore: () -> Unit) {
+    val last = if (lastBackupAt > 0) {
+        "Last saved " + java.text.SimpleDateFormat("d MMM, HH:mm", java.util.Locale.UK).format(java.util.Date(lastBackupAt))
+    } else "Not backed up yet"
+    SettingsRow(
+        icon = Icons.Default.CloudUpload,
+        iconTint = MaterialTheme.colorScheme.primary,
+        title = if (isBusy) "Working…" else "Back up budgets and settings",
+        subtitle = "$last · automatic",
+        onClick = { if (!isBusy) onBackUp() }
+    )
+    SettingsRow(
+        icon = null,
+        title = "Restore from Google Sheet",
+        subtitle = "For a new phone or after reinstalling",
+        onClick = { if (!isBusy) onRestore() },
+        indentIcon = true
+    )
 }
 
 @Composable

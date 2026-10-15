@@ -44,6 +44,7 @@ import com.budgetr.app.ui.screens.home.NeedsAttentionCard
 import com.budgetr.app.ui.screens.home.RecurringReviewUiItem
 import com.budgetr.app.ui.screens.home.ThisPeriodCard
 import com.budgetr.app.ui.screens.onboarding.AccountsStep
+import com.budgetr.app.ui.screens.settings.BackupRows
 import com.budgetr.app.ui.screens.onboarding.FixedCostsStep
 import com.budgetr.app.ui.screens.onboarding.PaydayStep
 import com.budgetr.app.ui.screens.onboarding.SummaryStep
@@ -339,6 +340,12 @@ abstract class ScreenshotTests(private val prefix: String) {
         DayHeader(date = "15/10/2026", totals = DayTotals(spent = 3.4, target = 31.29))
         TransactionItem(transaction = spend("15/10/2026", 3.4, "Coffee", "Eating out").copy(rowIndex = -1, pending = true), onClick = {}, showDate = false)
         TransactionItem(transaction = spend("15/10/2026", 12.0, "Lunch", "Eating out"), onClick = {}, showDate = false)
+    }
+
+    @Test
+    fun backupRows() = listShot("17_backup_rows") {
+        BackupRows(lastBackupAt = 1_791_966_000_000, isBusy = false, onBackUp = {}, onRestore = {})
+        BackupRows(lastBackupAt = 0, isBusy = true, onBackUp = {}, onRestore = {})
     }
 
     /** Dialogs open in their own window, which never reports idle under Robolectric 4.12

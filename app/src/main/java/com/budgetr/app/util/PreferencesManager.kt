@@ -33,6 +33,8 @@ class PreferencesManager @Inject constructor(
         private const val KEY_HOME_SHOW_PERIOD = "home_show_period"
         private const val KEY_HOME_SHOW_GOALS = "home_show_goals"
         private const val KEY_HOME_SHOW_ACCOUNTS = "home_show_accounts"
+        private const val KEY_LAST_BACKUP_AT = "last_backup_at"
+        private const val KEY_LAST_BACKUP_FINGERPRINT = "last_backup_fingerprint"
     }
 
     fun getAccessToken(): String? = prefs.getString(KEY_ACCESS_TOKEN, null)
@@ -132,6 +134,20 @@ class PreferencesManager @Inject constructor(
     fun setHomeShowingGoals(show: Boolean) = prefs.edit().putBoolean(KEY_HOME_SHOW_GOALS, show).apply()
     fun isHomeShowingAccounts(): Boolean = prefs.getBoolean(KEY_HOME_SHOW_ACCOUNTS, true)
     fun setHomeShowingAccounts(show: Boolean) = prefs.edit().putBoolean(KEY_HOME_SHOW_ACCOUNTS, show).apply()
+
+    /** When the phone backup last reached the Sheet (epoch millis), or 0 if never. */
+    fun getLastBackupAt(): Long = prefs.getLong(KEY_LAST_BACKUP_AT, 0L)
+
+    /** Spreadsheet + content of the last backup written, so unchanged data isn't written again. */
+    fun getLastBackupFingerprint(): String? = prefs.getString(KEY_LAST_BACKUP_FINGERPRINT, null)
+    fun setLastBackup(at: Long, fingerprint: String) = prefs.edit()
+        .putLong(KEY_LAST_BACKUP_AT, at)
+        .putString(KEY_LAST_BACKUP_FINGERPRINT, fingerprint)
+        .apply()
+
+    /** Whether this phone has already checked [spreadsheetId]'s backup for an automatic restore. */
+    fun isRestoreChecked(spreadsheetId: String): Boolean = prefs.getBoolean("restore_checked:$spreadsheetId", false)
+    fun setRestoreChecked(spreadsheetId: String) = prefs.edit().putBoolean("restore_checked:$spreadsheetId", true).apply()
 
     fun clearAll() = prefs.edit().clear().apply()
 }

@@ -18,6 +18,9 @@ interface EnvelopeDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(envelope: EnvelopeEntity)
 
+    @Query("DELETE FROM envelopes")
+    suspend fun deleteAll()
+
     @Query("DELETE FROM envelopes WHERE tag = :tag")
     suspend fun delete(tag: String)
 }
