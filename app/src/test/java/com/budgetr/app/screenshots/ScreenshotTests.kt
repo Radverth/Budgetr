@@ -41,6 +41,10 @@ import com.budgetr.app.ui.screens.home.HomeHeader
 import com.budgetr.app.ui.screens.home.NeedsAttentionCard
 import com.budgetr.app.ui.screens.home.RecurringReviewUiItem
 import com.budgetr.app.ui.screens.home.ThisPeriodCard
+import com.budgetr.app.ui.screens.onboarding.AccountsStep
+import com.budgetr.app.ui.screens.onboarding.FixedCostsStep
+import com.budgetr.app.ui.screens.onboarding.PaydayStep
+import com.budgetr.app.ui.screens.onboarding.SummaryStep
 import com.budgetr.app.ui.screens.transactions.QuickAddFields
 import com.budgetr.app.ui.screens.transactions.DayHeader
 import com.budgetr.app.ui.screens.transactions.DayTotals
@@ -49,6 +53,8 @@ import com.budgetr.app.ui.theme.BudgetrTheme
 import com.budgetr.app.util.DailyTargetCalculator
 import com.budgetr.app.util.EnvelopeStatus
 import com.budgetr.app.util.PayPeriod
+import com.budgetr.app.util.SetupFixedCost
+import com.budgetr.app.util.SetupSummary
 import com.budgetr.app.util.SpendingTrend
 import com.budgetr.app.util.TagSpend
 import com.github.takahirom.roborazzi.captureRoboImage
@@ -275,6 +281,45 @@ abstract class ScreenshotTests(private val prefix: String) {
             }
         }
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/${prefix}_11_home_header.png")
+    }
+
+    private fun screenShot(name: String, content: @Composable () -> Unit) {
+        compose.setContent {
+            BudgetrTheme {
+                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) { content() }
+            }
+        }
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/${prefix}_$name.png")
+    }
+
+    @Test
+    fun setupPayday() = screenShot("12_setup_payday") { PaydayStep(payDay = 26, onPayDay = {}, onBack = {}, onNext = {}) }
+
+    @Test
+    fun setupAccounts() = screenShot("13_setup_accounts") {
+        AccountsStep(
+            accounts = listOf("Monzo", "Halifax Credit Card"),
+            input = "Bills/Joint",
+            error = "Names can't contain : \\ / ? * [ or ]",
+            onInput = {}, onAdd = {}, onRemove = {}, onBack = {}, onNext = {}
+        )
+    }
+
+    @Test
+    fun setupBills() = screenShot("14_setup_bills") {
+        FixedCostsStep(
+            costs = listOf(SetupFixedCost("Rent", "850", "Monzo"), SetupFixedCost("Council tax", "142.50", "Halifax Credit Card")),
+            accounts = listOf("Monzo", "Halifax Credit Card"),
+            onAdd = {}, onUpdate = { _, _ -> }, onRemove = {}, onBack = {}, onNext = {}
+        )
+    }
+
+    @Test
+    fun setupSummary() = screenShot("15_setup_summary") {
+        SummaryStep(
+            summary = SetupSummary(income = 2150.0, fixedCosts = 1180.0, pot = 970.0, days = 31, perDay = 31.29),
+            isCreating = false, onBack = {}, onCreate = {}
+        )
     }
 
     /** Dialogs open in their own window, which never reports idle under Robolectric 4.12
