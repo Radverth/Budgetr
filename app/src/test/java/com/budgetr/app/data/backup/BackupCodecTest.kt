@@ -16,6 +16,7 @@ class BackupCodecTest {
         subscriptionReviews = listOf(ReviewBackup("Monzo", "Netflix", 1_700_000_000_000, -10.99, null)),
         dailyTransfers = listOf(DailyTransferBackup("25/09/2026", "14/10/2026", 10.0, null)),
         rollovers = listOf(RolloverBackup("Monzo", 120.5, "25/09/2026")),
+        categoryRules = listOf(CategoryRuleBackup("TESCO", "Groceries")),
         settings = SettingsBackup(payDay = 26, reminderEnabled = true, reminderHour = 20, dailyPotOverride = 600.0)
     )
 
@@ -39,5 +40,9 @@ class BackupCodecTest {
         assertTrue(backup.sameContentAs(backup.copy(savedAt = 1)))
         assertFalse(backup.sameContentAs(backup.copy(envelopes = emptyList())))
         assertFalse(backup.sameContentAs(null))
+    }
+
+    @Test fun `a phone with only category rules still counts as having data`() {
+        assertFalse(PhoneBackup(savedAt = 1, categoryRules = listOf(CategoryRuleBackup("Greggs", "Eating out"))).isEmpty)
     }
 }

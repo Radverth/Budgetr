@@ -7,6 +7,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.budgetr.app.data.local.dao.AccountBalanceDao
 import com.budgetr.app.data.local.dao.BalanceRolloverDao
 import com.budgetr.app.data.local.dao.CategoryBudgetDao
+import com.budgetr.app.data.local.dao.CategoryRuleDao
 import com.budgetr.app.data.local.dao.DailyTransferDao
 import com.budgetr.app.data.local.dao.DebtDao
 import com.budgetr.app.data.local.dao.EnvelopeDao
@@ -19,6 +20,7 @@ import com.budgetr.app.data.local.dao.TransactionDao
 import com.budgetr.app.data.local.entity.AccountBalanceEntity
 import com.budgetr.app.data.local.entity.BalanceRolloverEntity
 import com.budgetr.app.data.local.entity.CategoryBudgetEntity
+import com.budgetr.app.data.local.entity.CategoryRuleEntity
 import com.budgetr.app.data.local.entity.DailyTransferEntity
 import com.budgetr.app.data.local.entity.DebtEntity
 import com.budgetr.app.data.local.entity.EnvelopeEntity
@@ -42,9 +44,10 @@ import com.budgetr.app.data.local.entity.TransactionEntity
         EnvelopeEntity::class,
         PeriodSummaryEntity::class,
         DailyTransferEntity::class,
-        PendingChangeEntity::class
+        PendingChangeEntity::class,
+        CategoryRuleEntity::class
     ],
-    version = 12,
+    version = 13,
     exportSchema = false
 )
 abstract class BudgetrDatabase : RoomDatabase() {
@@ -60,6 +63,7 @@ abstract class BudgetrDatabase : RoomDatabase() {
     abstract fun periodSummaryDao(): PeriodSummaryDao
     abstract fun dailyTransferDao(): DailyTransferDao
     abstract fun pendingChangeDao(): PendingChangeDao
+    abstract fun categoryRuleDao(): CategoryRuleDao
 
     companion object {
         /** Adds the optional spending category to cached transactions. */
@@ -98,6 +102,16 @@ abstract class BudgetrDatabase : RoomDatabase() {
                         "`spreadsheetId` TEXT NOT NULL, `kind` TEXT NOT NULL, `account` TEXT NOT NULL, `txId` TEXT, `rowIndex` INTEGER NOT NULL, " +
                         "`date` TEXT NOT NULL, `info` TEXT NOT NULL, `amount` REAL NOT NULL, `category` TEXT NOT NULL, " +
                         "`activeMonths` TEXT, `tag` TEXT, `failedReason` TEXT, `createdAt` INTEGER NOT NULL)"
+                )
+            }
+        }
+
+        /** Adds category rules ("description contains TESCO → Groceries"). */
+        val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `category_rules` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`pattern` TEXT NOT NULL, `tag` TEXT NOT NULL)"
                 )
             }
         }

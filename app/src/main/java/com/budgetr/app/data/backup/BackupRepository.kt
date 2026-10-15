@@ -3,12 +3,14 @@ package com.budgetr.app.data.backup
 import android.content.Context
 import com.budgetr.app.data.local.dao.BalanceRolloverDao
 import com.budgetr.app.data.local.dao.CategoryBudgetDao
+import com.budgetr.app.data.local.dao.CategoryRuleDao
 import com.budgetr.app.data.local.dao.DailyTransferDao
 import com.budgetr.app.data.local.dao.EnvelopeDao
 import com.budgetr.app.data.local.dao.GoalCategoryLinkDao
 import com.budgetr.app.data.local.dao.RecurringCostReviewDao
 import com.budgetr.app.data.local.entity.BalanceRolloverEntity
 import com.budgetr.app.data.local.entity.CategoryBudgetEntity
+import com.budgetr.app.data.local.entity.CategoryRuleEntity
 import com.budgetr.app.data.local.entity.DailyTransferEntity
 import com.budgetr.app.data.local.entity.EnvelopeEntity
 import com.budgetr.app.data.local.entity.GoalCategoryLinkEntity
@@ -31,7 +33,7 @@ enum class RestoreResult { RESTORED, NOTHING_TO_RESTORE, FAILED }
 
 /**
  * Saves the data Budgetr keeps only on the phone (budgets, carry-over, borrow / pay forward,
- * subscription reviews, settings) to a hidden tab in the Google Sheet, and restores it.
+ * subscription reviews, category rules, settings) to a hidden tab in the Google Sheet, and restores it.
  */
 @Singleton
 class BackupRepository @Inject constructor(
@@ -42,6 +44,7 @@ class BackupRepository @Inject constructor(
     private val recurringCostReviewDao: RecurringCostReviewDao,
     private val dailyTransferDao: DailyTransferDao,
     private val balanceRolloverDao: BalanceRolloverDao,
+    private val categoryRuleDao: CategoryRuleDao,
     private val dailyTargetRepository: DailyTargetRepository,
     private val prefs: PreferencesManager,
     @ApplicationContext private val context: Context
@@ -110,6 +113,7 @@ class BackupRepository @Inject constructor(
         },
         dailyTransfers = dailyTransferDao.getAllSync().map { DailyTransferBackup(it.periodStart, it.createdOn, it.amount, it.targetDay) },
         rollovers = balanceRolloverDao.getAllSync().map { RolloverBackup(it.account, it.rolloverAmount, it.recordedDate) },
+        categoryRules = categoryRuleDao.getAllSync().map { CategoryRuleBackup(it.pattern, it.tag) },
         settings = SettingsBackup(
             payDay = prefs.getPayDay(),
             lastPayPeriodStart = prefs.getLastPayPeriodStart(),
@@ -146,6 +150,8 @@ class BackupRepository @Inject constructor(
         backup.dailyTransfers.forEach { dailyTransferDao.insert(DailyTransferEntity(0, it.periodStart, it.createdOn, it.amount, it.targetDay)) }
         balanceRolloverDao.deleteAll()
         balanceRolloverDao.insertAll(backup.rollovers.map { BalanceRolloverEntity(it.account, it.amount, it.recordedDate) })
+        categoryRuleDao.deleteAll()
+        backup.categoryRules.forEach { categoryRuleDao.upsert(CategoryRuleEntity(pattern = it.pattern, tag = it.tag)) }
 
         val s = backup.settings
         s.payDay?.let { prefs.setPayDay(it) }
