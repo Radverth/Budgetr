@@ -21,6 +21,14 @@ class BackupCodecTest {
         settings = SettingsBackup(payDay = 26, reminderEnabled = true, reminderHour = 20, dailyPotOverride = 600.0, forecastSpendingAccount = "Monzo")
     )
 
+    @Test fun `period plans snapshots and allocation receipts survive backup`() {
+        val row = com.budgetr.app.data.local.entity.PeriodReviewEntity("sheet", "01/10/2026", "plan", "snapshot", true, "receipt")
+        val original = PhoneBackup(savedAt = 1, periodReviews = listOf(row))
+        assertFalse(original.isEmpty)
+        assertEquals(original, BackupCodec.decode(BackupCodec.encode(original)))
+        assertTrue(BackupCodec.decode("""{"version":1,"savedAt":5}""")!!.periodReviews.isEmpty())
+    }
+
     @Test fun `round trips through JSON`() {
         assertEquals(backup, BackupCodec.decode(BackupCodec.encode(backup)))
     }
