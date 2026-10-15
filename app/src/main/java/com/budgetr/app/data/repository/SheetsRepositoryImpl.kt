@@ -272,13 +272,8 @@ class SheetsRepositoryImpl @Inject constructor(
     override suspend fun listSpreadsheets(): List<DriveFile> =
         driveApi.listFiles().files ?: emptyList()
 
-    override suspend fun createSpreadsheetTemplate(name: String): String {
-        val sheets = listOf(
-            SheetSpec(NewSheetProperties("Cover Sheet")),
-            SheetSpec(NewSheetProperties("Monzo")),
-            SheetSpec(NewSheetProperties("Halifax Debit Card")),
-            SheetSpec(NewSheetProperties("Halifax Credit Card"))
-        )
+    override suspend fun createSpreadsheetTemplate(name: String, accounts: List<String>): String {
+        val sheets = listOf(SheetSpec(NewSheetProperties("Cover Sheet"))) + accounts.map { SheetSpec(NewSheetProperties(it)) }
         val response = api.createSpreadsheet(
             CreateSpreadsheetRequest(
                 properties = SpreadsheetTitleProperties(title = name),
@@ -292,16 +287,12 @@ class SheetsRepositoryImpl @Inject constructor(
         api.updateValues(spreadsheetId, "Cover Sheet!A1:F1", body = ValueRange(values = coverHeaders))
 
         // Add account rows to Cover Sheet
-        val accountRows = listOf(
-            listOf("Monzo", "0", "0", "0", "0", ""),
-            listOf("Halifax Debit Card", "0", "0", "0", "0", ""),
-            listOf("Halifax Credit Card", "0", "0", "0", "0", "")
-        )
+        val accountRows = accounts.map { listOf(it, "0", "0", "0", "0", "") }
         api.appendValues(spreadsheetId, "Cover Sheet!A:F", body = ValueRange(values = accountRows))
 
         // Add headers to each transaction sheet
         val txHeaders = listOf(listOf("Date", "Info", "Amount", "Category", "RoundedAmount", "ActiveMonths", "Tag"))
-        listOf("Monzo", "Halifax Debit Card", "Halifax Credit Card").forEach { sheet ->
+        accounts.forEach { sheet ->
             api.updateValues(spreadsheetId, "$sheet!A1:G1", body = ValueRange(values = txHeaders))
         }
 
