@@ -7,6 +7,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Label
@@ -22,6 +23,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.platform.LocalContext
+import com.budgetr.app.util.CsvShare
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -108,6 +111,7 @@ fun TransactionsScreen(
     var sortMenuExpanded by remember { mutableStateOf(false) }
 
     var showDateRangePicker by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
     if (uiState.showFailedChanges) {
         FailedChangesDialog(
@@ -234,6 +238,19 @@ fun TransactionsScreen(
                     }
                     IconButton(onClick = { showDateRangePicker = true }) {
                         Icon(Icons.Default.DateRange, contentDescription = "Filter by dates")
+                    }
+                    // Exports exactly what the list is showing: tab, filters, search and dates
+                    IconButton(
+                        onClick = {
+                            CsvShare.share(
+                                context,
+                                uiState.visibleTransactions,
+                                CsvShare.label(uiState.selectedAccount, uiState.isAllAccounts)
+                            )
+                        },
+                        enabled = uiState.visibleTransactions.isNotEmpty()
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = "Export as CSV")
                     }
                     // Sort button
                     Box {
