@@ -16,6 +16,8 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /** Sends changes saved offline once the phone is back online, retrying with back-off. */
 class PendingSyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
@@ -37,13 +39,13 @@ class PendingSyncWorker(context: Context, params: WorkerParameters) : CoroutineW
     companion object {
         private const val WORK_NAME = "pending-sheet-sync"
 
-        /** Runs as soon as there's a connection. Calling it again while one is waiting does nothing. */
-        fun schedule(context: Context) {
+        /** Runs as soon as there's a connection. A new save also schedules a follow-up if a send is already running. */
+        suspend fun schedule(context: Context) = withContext(Dispatchers.IO) {
             val request = OneTimeWorkRequestBuilder<PendingSyncWorker>()
                 .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
                 .build()
-            WorkManager.getInstance(context).enqueueUniqueWork(WORK_NAME, ExistingWorkPolicy.KEEP, request)
+            WorkManager.getInstance(context).enqueueUniqueWork(WORK_NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, request).result.get()
         }
     }
 }

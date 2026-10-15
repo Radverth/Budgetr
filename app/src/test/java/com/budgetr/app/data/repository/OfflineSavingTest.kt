@@ -16,6 +16,8 @@ import java.io.IOException
 import java.lang.reflect.Proxy
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import kotlin.coroutines.Continuation
+import kotlin.coroutines.intrinsics.COROUTINE_SUSPENDED
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
@@ -55,7 +57,17 @@ class OfflineSavingTest {
     // Only the network boundary is fake; preferences, queue, repository and Room are real.
     private fun <T> offlineApi(type: Class<T>): T = type.cast(Proxy.newProxyInstance(
         type.classLoader, arrayOf(type)
-    ) { _, method, args -> response(method.name, args ?: emptyArray()) })
+    ) { _, method, args ->
+        try {
+            response(method.name, args ?: emptyArray())
+        } catch (e: IOException) {
+            // Deliver a suspend failure as Retrofit does, without Java Proxy wrapping it.
+            @Suppress("UNCHECKED_CAST")
+            val continuation = args!!.last() as Continuation<Any?>
+            continuation.resumeWith(Result.failure(e))
+            COROUTINE_SUSPENDED
+        }
+    })
 
     @Test fun `changing sheets hides old queued changes and switching back restores them`() = runBlocking {
         repository.addTransaction(transaction)

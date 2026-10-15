@@ -95,7 +95,7 @@ abstract class BudgetrDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
                     "CREATE TABLE IF NOT EXISTS `pending_changes` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
-                        "`kind` TEXT NOT NULL, `account` TEXT NOT NULL, `txId` TEXT, `rowIndex` INTEGER NOT NULL, " +
+                        "`spreadsheetId` TEXT NOT NULL, `kind` TEXT NOT NULL, `account` TEXT NOT NULL, `txId` TEXT, `rowIndex` INTEGER NOT NULL, " +
                         "`date` TEXT NOT NULL, `info` TEXT NOT NULL, `amount` REAL NOT NULL, `category` TEXT NOT NULL, " +
                         "`activeMonths` TEXT, `tag` TEXT, `failedReason` TEXT, `createdAt` INTEGER NOT NULL)"
                 )

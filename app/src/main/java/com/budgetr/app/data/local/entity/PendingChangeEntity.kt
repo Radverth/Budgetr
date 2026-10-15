@@ -8,6 +8,7 @@ import androidx.room.PrimaryKey
 data class PendingChangeEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val kind: String,
+    val spreadsheetId: String,
     val account: String,
     val txId: String?,
     val rowIndex: Int,
