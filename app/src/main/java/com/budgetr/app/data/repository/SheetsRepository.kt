@@ -4,10 +4,14 @@ import com.budgetr.app.data.api.DriveFile
 import com.budgetr.app.data.model.AccountBalance
 import com.budgetr.app.data.model.BalanceRollover
 import com.budgetr.app.data.model.Debt
+import com.budgetr.app.data.model.PendingChange
 import com.budgetr.app.data.model.PeriodSummary
 import com.budgetr.app.data.model.SavingsGoal
 import com.budgetr.app.data.model.Transaction
 import kotlinx.coroutines.flow.Flow
+
+/** What a sync run achieved. */
+enum class SyncOutcome { NOTHING_TO_SEND, SYNCED, OFFLINE, SOME_FAILED }
 
 interface SheetsRepository {
     fun getTransactions(account: String): Flow<List<Transaction>>
@@ -24,6 +28,16 @@ interface SheetsRepository {
     /** Assigns or clears spending tags in a single Sheets request, then refreshes the cache. */
     suspend fun assignSpendingCategory(transactions: List<Transaction>, tag: String?)
     suspend fun deleteTransaction(transaction: Transaction)
+
+    // --- Offline saving: adds, edits and deletes are queued on the phone first ---
+    /** Queued changes, including ones Google refused (they have a failedReason). */
+    fun getPendingChanges(): Flow<List<PendingChange>>
+    /** Sends the queue to the Sheet in order. Safe to call any time. */
+    suspend fun syncPendingChanges(): SyncOutcome
+    /** Tries a refused change again. */
+    suspend fun retryPendingChange(id: Long)
+    /** Drops a refused change; the Sheet keeps whatever it has. */
+    suspend fun discardPendingChange(id: Long)
     suspend fun deleteOneOffTransactions(account: String)
     suspend fun listSpreadsheets(): List<DriveFile>
     /** Creates a new spreadsheet with a tab for each of [accounts]. */

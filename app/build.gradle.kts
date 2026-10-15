@@ -124,6 +124,9 @@ dependencies {
     // Glance (home screen widget)
     implementation(libs.glance.appwidget)
 
+    // WorkManager (offline saving)
+    implementation(libs.androidx.work.runtime)
+
     // Testing
     testImplementation(libs.junit)
 
