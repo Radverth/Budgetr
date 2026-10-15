@@ -6,6 +6,7 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.budgetr.app.data.local.dao.AccountBalanceDao
 import com.budgetr.app.data.local.dao.BalanceRolloverDao
+import com.budgetr.app.data.local.dao.BillDueDayDao
 import com.budgetr.app.data.local.dao.CategoryBudgetDao
 import com.budgetr.app.data.local.dao.CategoryRuleDao
 import com.budgetr.app.data.local.dao.DailyTransferDao
@@ -19,6 +20,7 @@ import com.budgetr.app.data.local.dao.SavingsGoalDao
 import com.budgetr.app.data.local.dao.TransactionDao
 import com.budgetr.app.data.local.entity.AccountBalanceEntity
 import com.budgetr.app.data.local.entity.BalanceRolloverEntity
+import com.budgetr.app.data.local.entity.BillDueDayEntity
 import com.budgetr.app.data.local.entity.CategoryBudgetEntity
 import com.budgetr.app.data.local.entity.CategoryRuleEntity
 import com.budgetr.app.data.local.entity.DailyTransferEntity
@@ -45,9 +47,10 @@ import com.budgetr.app.data.local.entity.TransactionEntity
         PeriodSummaryEntity::class,
         DailyTransferEntity::class,
         PendingChangeEntity::class,
-        CategoryRuleEntity::class
+        CategoryRuleEntity::class,
+        BillDueDayEntity::class
     ],
-    version = 13,
+    version = 14,
     exportSchema = false
 )
 abstract class BudgetrDatabase : RoomDatabase() {
@@ -64,6 +67,7 @@ abstract class BudgetrDatabase : RoomDatabase() {
     abstract fun dailyTransferDao(): DailyTransferDao
     abstract fun pendingChangeDao(): PendingChangeDao
     abstract fun categoryRuleDao(): CategoryRuleDao
+    abstract fun billDueDayDao(): BillDueDayDao
 
     companion object {
         /** Adds the optional spending category to cached transactions. */
@@ -102,6 +106,16 @@ abstract class BudgetrDatabase : RoomDatabase() {
                         "`spreadsheetId` TEXT NOT NULL, `kind` TEXT NOT NULL, `account` TEXT NOT NULL, `txId` TEXT, `rowIndex` INTEGER NOT NULL, " +
                         "`date` TEXT NOT NULL, `info` TEXT NOT NULL, `amount` REAL NOT NULL, `category` TEXT NOT NULL, " +
                         "`activeMonths` TEXT, `tag` TEXT, `failedReason` TEXT, `createdAt` INTEGER NOT NULL)"
+                )
+            }
+        }
+
+        /** Adds bill due days for the cash-flow forecast. */
+        val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `bill_due_days` (`account` TEXT NOT NULL, `infoKey` TEXT NOT NULL, " +
+                        "`dueDay` INTEGER NOT NULL, PRIMARY KEY(`account`, `infoKey`))"
                 )
             }
         }

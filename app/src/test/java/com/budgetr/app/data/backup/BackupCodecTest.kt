@@ -17,7 +17,8 @@ class BackupCodecTest {
         dailyTransfers = listOf(DailyTransferBackup("25/09/2026", "14/10/2026", 10.0, null)),
         rollovers = listOf(RolloverBackup("Monzo", 120.5, "25/09/2026")),
         categoryRules = listOf(CategoryRuleBackup("TESCO", "Groceries")),
-        settings = SettingsBackup(payDay = 26, reminderEnabled = true, reminderHour = 20, dailyPotOverride = 600.0)
+        billDueDays = listOf(BillDueDayBackup("Monzo", "rent", 1)),
+        settings = SettingsBackup(payDay = 26, reminderEnabled = true, reminderHour = 20, dailyPotOverride = 600.0, forecastSpendingAccount = "Monzo")
     )
 
     @Test fun `round trips through JSON`() {

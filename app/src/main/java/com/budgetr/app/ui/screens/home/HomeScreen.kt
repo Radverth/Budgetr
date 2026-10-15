@@ -84,6 +84,7 @@ fun HomeScreen(
     onNavigateToPaydayPlan: () -> Unit,
     onNavigateToDailyTarget: () -> Unit,
     onNavigateToSettings: () -> Unit,
+    onNavigateToForecast: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -206,7 +207,8 @@ fun HomeScreen(
                         resetDays = uiState.budgetResetDays,
                         suggestions = uiState.goalSuggestions,
                         reviews = uiState.recurringReviews,
-                        dismissed = uiState.dismissedAttention
+                        dismissed = uiState.dismissedAttention,
+                        cashFlowWarnings = uiState.cashFlowWarnings
                     )
                     if (attention.isNotEmpty()) {
                         item {
@@ -217,7 +219,8 @@ fun HomeScreen(
                                 onAddToGoal = viewModel::addUnderspendToGoal,
                                 onRemindLater = viewModel::dismissRecurringReview,
                                 onDismiss = viewModel::dismissAttention,
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                                onOpenForecast = onNavigateToForecast
                             )
                         }
                     }

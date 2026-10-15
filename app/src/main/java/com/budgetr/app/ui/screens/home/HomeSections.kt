@@ -37,7 +37,10 @@ import com.budgetr.app.ui.theme.FixedCostOrange
 import com.budgetr.app.ui.theme.IncomeGreen
 import com.budgetr.app.util.SpendingTrend
 import com.budgetr.app.util.TagSpend
+import com.budgetr.app.util.ForecastWarning
 import com.budgetr.app.util.toCurrencyString
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 /** One row of Home's "Needs attention" card. [key] identifies it for dismissing. */
 sealed interface AttentionItem {
@@ -45,6 +48,11 @@ sealed interface AttentionItem {
 
     data object PaydayPlan : AttentionItem {
         override val key = "payday"
+    }
+
+    data class CashFlowWarning(val warning: ForecastWarning) : AttentionItem {
+        // Keyed by date too, so a new dip later in the period shows again
+        override val key = "cashflow:${warning.account}:${warning.date.time}"
     }
 
     data class BudgetAlert(val alert: BudgetAlertUiItem, val resetDays: Int) : AttentionItem {
@@ -67,9 +75,11 @@ internal fun attentionItems(
     resetDays: Int,
     suggestions: List<GoalSuggestionUiItem>,
     reviews: List<RecurringReviewUiItem>,
-    dismissed: Set<String>
+    dismissed: Set<String>,
+    cashFlowWarnings: List<ForecastWarning> = emptyList()
 ): List<AttentionItem> = buildList {
     if (paydayPlanPending) add(AttentionItem.PaydayPlan)
+    cashFlowWarnings.forEach { add(AttentionItem.CashFlowWarning(it)) }
     alerts.sortedByDescending { it.isOver }.forEach { add(AttentionItem.BudgetAlert(it, resetDays)) }
     suggestions.forEach { add(AttentionItem.GoalSuggestion(it)) }
     reviews.forEach { add(AttentionItem.SubscriptionReview(it)) }
@@ -83,7 +93,8 @@ internal fun NeedsAttentionCard(
     onAddToGoal: (GoalSuggestionUiItem) -> Unit,
     onRemindLater: (RecurringReviewUiItem) -> Unit,
     onDismiss: (AttentionItem) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onOpenForecast: () -> Unit = {}
 ) {
     Card(
         modifier = modifier,
@@ -105,6 +116,16 @@ internal fun NeedsAttentionCard(
                         detail = "Cover bills, goals and debts, then give the rest a job.",
                         actionLabel = "Plan now",
                         onAction = onPlanPayday,
+                        onDismiss = { onDismiss(item) }
+                    )
+                    is AttentionItem.CashFlowWarning -> AttentionRow(
+                        emoji = "📉",
+                        title = "${item.warning.account} dips below £0 on ${SimpleDateFormat("EEE d MMM", Locale.UK).format(item.warning.date)}",
+                        detail = item.warning.fromAccount?.let { "Move ${item.warning.moveAmount.toCurrencyString()} from $it before then." }
+                            ?: "Short by up to ${item.warning.shortfall.toCurrencyString()} before payday.",
+                        titleColor = ExpenseRed,
+                        actionLabel = "See forecast",
+                        onAction = onOpenForecast,
                         onDismiss = { onDismiss(item) }
                     )
                     is AttentionItem.BudgetAlert -> AttentionRow(

@@ -3,11 +3,13 @@ package com.budgetr.app.ui.screens.budgethub
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.budgetr.app.data.repository.BudgetRepository
+import com.budgetr.app.data.repository.CashFlowRepository
 import com.budgetr.app.data.repository.CategoryRuleRepository
 import com.budgetr.app.data.repository.DailyTargetRepository
 import com.budgetr.app.data.repository.DailyTargetState
 import com.budgetr.app.data.repository.SheetsRepository
 import com.budgetr.app.util.EnvelopeCalculator
+import com.budgetr.app.util.ForecastWarning
 import com.budgetr.app.util.PreferencesManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,6 +30,9 @@ data class BudgetHubUiState(
     val nextPayday: Date? = null,
     val historyPeriods: Int = 0,
     val ruleCount: Int = 0,
+    /** The first account forecast to dip below £0 before payday, if any. */
+    val forecastWarning: ForecastWarning? = null,
+    val forecastReady: Boolean = false,
     val message: String? = null
 )
 
@@ -37,6 +42,7 @@ class BudgetHubViewModel @Inject constructor(
     private val budgetRepository: BudgetRepository,
     private val sheetsRepository: SheetsRepository,
     private val categoryRuleRepository: CategoryRuleRepository,
+    private val cashFlowRepository: CashFlowRepository,
     private val prefs: PreferencesManager
 ) : ViewModel() {
 
@@ -62,10 +68,17 @@ class BudgetHubViewModel @Inject constructor(
                     historyPeriods = history.size,
                     paydayPlanPending = prefs.isPaydayPlanPending()
                 )
-            }.collect { state -> _uiState.update { state.copy(message = it.message, ruleCount = it.ruleCount) } }
+            }.collect { state -> _uiState.update { state.copy(message = it.message, ruleCount = it.ruleCount, forecastWarning = it.forecastWarning, forecastReady = it.forecastReady) } }
         }
         viewModelScope.launch {
             categoryRuleRepository.getRules().collect { rules -> _uiState.update { it.copy(ruleCount = rules.size) } }
+        }
+        viewModelScope.launch {
+            cashFlowRepository.observe().collect { snapshot ->
+                _uiState.update {
+                    it.copy(forecastWarning = snapshot.forecast?.warnings?.firstOrNull(), forecastReady = snapshot.forecast != null)
+                }
+            }
         }
     }
 

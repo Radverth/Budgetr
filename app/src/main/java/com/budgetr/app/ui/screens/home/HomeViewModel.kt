@@ -1,5 +1,7 @@
 package com.budgetr.app.ui.screens.home
 
+import com.budgetr.app.data.repository.CashFlowRepository
+import com.budgetr.app.util.ForecastWarning
 import com.budgetr.app.util.UserMessages
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -78,6 +80,8 @@ data class HomeUiState(
     val showDailyTarget: Boolean = true,
     /** "Needs attention" rows dismissed for this pay period. */
     val dismissedAttention: Set<String> = emptySet(),
+    /** Accounts forecast to dip below £0 before payday. */
+    val cashFlowWarnings: List<ForecastWarning> = emptyList(),
     val showPeriodSection: Boolean = true,
     val showGoalsSection: Boolean = true,
     val showAccountsSection: Boolean = true,
@@ -129,13 +133,19 @@ class HomeViewModel @Inject constructor(
     private val updateChecker: UpdateChecker,
     private val prefs: PreferencesManager,
     private val dailyTargetRepository: DailyTargetRepository,
-    private val backupRepository: BackupRepository
+    private val backupRepository: BackupRepository,
+    private val cashFlowRepository: CashFlowRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState(userName = authManager.getUserName()))
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
     init {
+        viewModelScope.launch {
+            cashFlowRepository.observe().collect { snapshot ->
+                _uiState.update { it.copy(cashFlowWarnings = snapshot.forecast?.warnings.orEmpty()) }
+            }
+        }
         observeData()
         observeGoalsAndDebts()
         observeSpendingControls()

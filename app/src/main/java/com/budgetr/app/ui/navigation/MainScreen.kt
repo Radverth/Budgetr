@@ -33,6 +33,7 @@ import androidx.navigation.navArgument
 import com.budgetr.app.ui.screens.balances.AccountBalancesScreen
 import com.budgetr.app.ui.screens.budgethub.BudgetHubScreen
 import com.budgetr.app.ui.screens.budgets.BudgetsScreen
+import com.budgetr.app.ui.screens.forecast.CashFlowScreen
 import com.budgetr.app.ui.screens.goals.GoalsScreen
 import com.budgetr.app.ui.screens.daily.DailyTargetScreen
 import com.budgetr.app.ui.screens.home.HomeScreen
@@ -145,6 +146,11 @@ fun MainScreen(onSignOut: () -> Unit) {
                         navController.navigate(NavRoutes.SETTINGS) {
                             launchSingleTop = true
                         }
+                    },
+                    onNavigateToForecast = {
+                        navController.navigate(NavRoutes.CASH_FLOW) {
+                            launchSingleTop = true
+                        }
                     }
                 )
             }
@@ -154,8 +160,12 @@ fun MainScreen(onSignOut: () -> Unit) {
                     onOpenDailyTarget = { navController.navigate(NavRoutes.DAILY_TARGET) { launchSingleTop = true } },
                     onOpenPaydayPlan = { navController.navigate(NavRoutes.PAYDAY_PLAN) { launchSingleTop = true } },
                     onOpenHistory = { navController.navigate(NavRoutes.INSIGHTS) { launchSingleTop = true } },
-                    onOpenRules = { navController.navigate(NavRoutes.CATEGORY_RULES) { launchSingleTop = true } }
+                    onOpenRules = { navController.navigate(NavRoutes.CATEGORY_RULES) { launchSingleTop = true } },
+                    onOpenForecast = { navController.navigate(NavRoutes.CASH_FLOW) { launchSingleTop = true } }
                 )
+            }
+            composable(NavRoutes.CASH_FLOW) {
+                CashFlowScreen(onNavigateBack = { navController.popBackStack() })
             }
             composable(NavRoutes.CATEGORY_RULES) {
                 CategoryRulesScreen(onNavigateBack = { navController.popBackStack() })
