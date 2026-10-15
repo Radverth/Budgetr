@@ -63,7 +63,8 @@ class PaydayPlanViewModel @Inject constructor(
     private val sheetsRepository: SheetsRepository,
     private val budgetRepository: BudgetRepository,
     private val prefs: PreferencesManager,
-    private val dailyTargetRepository: DailyTargetRepository
+    private val dailyTargetRepository: DailyTargetRepository,
+    private val reviews: com.budgetr.app.data.repository.PeriodReviewRepository
 ) : ViewModel() {
 
     private val period = PayPeriodCalculator.current(prefs.getPayDay())
@@ -168,6 +169,8 @@ class PaydayPlanViewModel @Inject constructor(
                     )
                     dailyTargetRepository.notifySettingsChanged()
                 }
+                val start = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.UK).format(period.start)
+                reviews.savePlan(com.budgetr.app.data.model.ReviewPlan(start, prefs.getDailyPotOverride() ?: prefs.getDailyPotAmount(), countBudgeted = prefs.isDailyTargetCountingBudgeted()))
                 _uiState.update { it.copy(isSaving = false, saved = true) }
             } catch (e: Exception) {
                 _uiState.update { it.copy(isSaving = false, error = UserMessages.from(e)) }

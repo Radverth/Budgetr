@@ -60,7 +60,7 @@ class PaydayReviewIntegrationTest {
         val db = Room.inMemoryDatabaseBuilder(context, BudgetrDatabase::class.java).allowMainThreadQueries().build()
         try {
             val repo = SheetsRepositoryImpl(api, drive, db.transactionDao(), db.accountBalanceDao(), db.balanceRolloverDao(),
-                db.savingsGoalDao(), db.debtDao(), db.envelopeDao(), db.periodSummaryDao(), db.pendingChangeDao(), context, prefs)
+                db.savingsGoalDao(), db.debtDao(), db.envelopeDao(), db.periodSummaryDao(), db.pendingChangeDao(), context, prefs, PeriodReviewRepository(db, prefs))
             repo.refreshAccountBalances()
             repo.refreshAllTransactions()
             assertTrue(repo.checkAndProcessNewPayPeriod())

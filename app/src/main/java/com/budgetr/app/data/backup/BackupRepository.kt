@@ -1,6 +1,8 @@
 package com.budgetr.app.data.backup
 
 import android.content.Context
+import androidx.room.withTransaction
+import com.budgetr.app.data.local.BudgetrDatabase
 import com.budgetr.app.data.local.dao.BalanceRolloverDao
 import com.budgetr.app.data.local.dao.BillDueDayDao
 import com.budgetr.app.data.local.dao.CategoryBudgetDao
@@ -50,7 +52,8 @@ class BackupRepository @Inject constructor(
     private val billDueDayDao: BillDueDayDao,
     private val dailyTargetRepository: DailyTargetRepository,
     private val prefs: PreferencesManager,
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val db: BudgetrDatabase
 ) {
     private val mutex = Mutex()
 
@@ -81,7 +84,7 @@ class BackupRepository @Inject constructor(
         } catch (e: Exception) {
             return@withLock RestoreResult.FAILED
         } ?: return@withLock RestoreResult.NOTHING_TO_RESTORE
-        apply(backup)
+        try { apply(backup) } catch (_: Exception) { return@withLock RestoreResult.FAILED }
         prefs.getSpreadsheetId()?.let { id ->
             prefs.setLastBackup(backup.savedAt, "$id:${BackupCodec.encode(backup.copy(savedAt = 0)).hashCode()}")
         }
@@ -106,7 +109,7 @@ class BackupRepository @Inject constructor(
         return result
     }
 
-    private suspend fun snapshot(): PhoneBackup = PhoneBackup(
+    private suspend fun snapshot(): PhoneBackup = db.withTransaction { PhoneBackup(
         savedAt = System.currentTimeMillis(),
         categoryBudgets = categoryBudgetDao.getAllSync().map { CategoryBudgetBackup(it.category, it.limit) },
         envelopes = envelopeDao.getAllSync().map { EnvelopeBackup(it.tag, it.limitAmount, it.rollover, it.carriedOver, it.carriedForPeriod) },
@@ -118,6 +121,7 @@ class BackupRepository @Inject constructor(
         rollovers = balanceRolloverDao.getAllSync().map { RolloverBackup(it.account, it.rolloverAmount, it.recordedDate) },
         categoryRules = categoryRuleDao.getAllSync().map { CategoryRuleBackup(it.pattern, it.tag) },
         billDueDays = billDueDayDao.getAllSync().map { BillDueDayBackup(it.account, it.infoKey, it.dueDay) },
+        periodReviews = db.periodReviewDao().all(prefs.getSpreadsheetId().orEmpty()),
         settings = SettingsBackup(
             payDay = prefs.getPayDay(),
             lastPayPeriodStart = prefs.getLastPayPeriodStart(),
@@ -138,9 +142,19 @@ class BackupRepository @Inject constructor(
             homeShowAccounts = prefs.isHomeShowingAccounts(),
             forecastSpendingAccount = prefs.getForecastSpendingAccount()
         )
-    )
+    ) }
 
     private suspend fun apply(backup: PhoneBackup) {
+        db.withTransaction {
+        val sheet = requireNotNull(prefs.getSpreadsheetId())
+        val restored = backup.periodReviews.map { it.copy(spreadsheetId = sheet) }
+        // Never restore older money decisions over newer receipts on this phone.
+        db.periodReviewDao().all(sheet).filter { it.receiptJson != null }.forEach { local ->
+            check(restored.any { it.periodStart == local.periodStart && it.receiptJson == local.receiptJson }) {
+                "This backup predates a saved leftover choice"
+            }
+        }
+        restored.forEach { db.periodReviewDao().put(it) }
         categoryBudgetDao.deleteAll()
         backup.categoryBudgets.forEach { categoryBudgetDao.upsert(CategoryBudgetEntity(it.category, it.limit)) }
         envelopeDao.deleteAll()
@@ -159,6 +173,8 @@ class BackupRepository @Inject constructor(
         backup.categoryRules.forEach { categoryRuleDao.upsert(CategoryRuleEntity(pattern = it.pattern, tag = it.tag)) }
         billDueDayDao.deleteAll()
         backup.billDueDays.forEach { billDueDayDao.upsert(BillDueDayEntity(it.account, it.infoKey, it.dueDay)) }
+
+        }
 
         val s = backup.settings
         s.payDay?.let { prefs.setPayDay(it) }

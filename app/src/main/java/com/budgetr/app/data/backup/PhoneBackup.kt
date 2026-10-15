@@ -26,7 +26,7 @@ data class PhoneBackup(
     val isEmpty: Boolean
         get() = categoryBudgets.isEmpty() && envelopes.isEmpty() && goalLinks.isEmpty() &&
             subscriptionReviews.isEmpty() && dailyTransfers.isEmpty() && rollovers.isEmpty() &&
-            categoryRules.isEmpty() && billDueDays.isEmpty()
+            categoryRules.isEmpty() && billDueDays.isEmpty() && periodReviews.isEmpty()
 
     /** Same contents, ignoring when it was saved, so an unchanged backup isn't written again. */
     fun sameContentAs(other: PhoneBackup?): Boolean = other != null && copy(savedAt = 0) == other.copy(savedAt = 0)
