@@ -18,6 +18,9 @@ interface RecurringCostReviewDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: RecurringCostReviewEntity)
 
+    @Query("DELETE FROM recurring_cost_reviews")
+    suspend fun deleteAll()
+
     @Query("DELETE FROM recurring_cost_reviews WHERE account = :account AND info = :info")
     suspend fun delete(account: String, info: String)
 }

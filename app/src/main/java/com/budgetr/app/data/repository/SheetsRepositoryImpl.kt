@@ -73,6 +73,7 @@ import javax.inject.Inject
 private const val SAVINGS_GOALS_SHEET = "Savings Goals"
 private const val DEBTS_SHEET = "Debts"
 private const val HISTORY_SHEET = "History"
+private const val BACKUP_SHEET = "Budgetr backup"
 
 class SheetsRepositoryImpl @Inject constructor(
     private val api: GoogleSheetsApi,
@@ -869,6 +870,36 @@ class SheetsRepositoryImpl @Inject constructor(
     }
 
     /** Creates [sheetTitle] with a header row if it doesn't already exist in the spreadsheet. */
+    override suspend fun readPhoneBackup(): String? {
+        val spreadsheetId = prefs.getSpreadsheetId() ?: return null
+        if (resolveSheetIdByName(BACKUP_SHEET) == null) return null
+        return api.getValues(spreadsheetId, "'$BACKUP_SHEET'!B2").values?.firstOrNull()?.firstOrNull()
+    }
+
+    override suspend fun writePhoneBackup(json: String, savedAtText: String) {
+        val spreadsheetId = prefs.getSpreadsheetId() ?: return
+        if (resolveSheetIdByName(BACKUP_SHEET) == null) {
+            api.batchUpdate(
+                spreadsheetId,
+                BatchUpdateRequest(
+                    requests = listOf(Request(addSheet = AddSheetRequestBody(properties = NewSheetProperties(title = BACKUP_SHEET, hidden = true))))
+                )
+            )
+            sheetIdCache = emptyMap()
+        }
+        api.updateValues(
+            spreadsheetId,
+            "'$BACKUP_SHEET'!A1:B2",
+            valueInputOption = "RAW",
+            body = ValueRange(
+                values = listOf(
+                    listOf("Saved", "Budgetr phone backup (budgets and settings). Please don't edit."),
+                    listOf(savedAtText, json)
+                )
+            )
+        )
+    }
+
     private suspend fun ensureSheetExists(sheetTitle: String, header: List<String>) {
         val spreadsheetId = prefs.getSpreadsheetId() ?: return
         if (resolveSheetIdByName(sheetTitle) != null) return

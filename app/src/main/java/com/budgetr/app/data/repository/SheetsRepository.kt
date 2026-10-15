@@ -29,6 +29,12 @@ interface SheetsRepository {
     suspend fun assignSpendingCategory(transactions: List<Transaction>, tag: String?)
     suspend fun deleteTransaction(transaction: Transaction)
 
+    // --- Phone backup (hidden tab) ---
+    /** The backup JSON saved in the Sheet, or null if there's none yet. */
+    suspend fun readPhoneBackup(): String?
+    /** Saves the backup JSON to the hidden tab, creating it the first time. */
+    suspend fun writePhoneBackup(json: String, savedAtText: String)
+
     // --- Offline saving: adds, edits and deletes are queued on the phone first ---
     /** Queued changes, including ones Google refused (they have a failedReason). */
     fun getPendingChanges(): Flow<List<PendingChange>>

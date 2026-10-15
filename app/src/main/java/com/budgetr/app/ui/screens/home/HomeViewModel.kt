@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.budgetr.app.BuildConfig
 import com.budgetr.app.data.model.AccountBalance
 import com.budgetr.app.data.model.TransactionCategory
+import com.budgetr.app.data.backup.BackupRepository
+import com.budgetr.app.data.backup.RestoreResult
 import com.budgetr.app.data.repository.BudgetRepository
 import com.budgetr.app.data.repository.DailyTargetRepository
 import com.budgetr.app.data.repository.DailyTargetState
@@ -125,7 +127,8 @@ class HomeViewModel @Inject constructor(
     private val authManager: AuthManager,
     private val updateChecker: UpdateChecker,
     private val prefs: PreferencesManager,
-    private val dailyTargetRepository: DailyTargetRepository
+    private val dailyTargetRepository: DailyTargetRepository,
+    private val backupRepository: BackupRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState(userName = authManager.getUserName()))
@@ -426,11 +429,17 @@ class HomeViewModel @Inject constructor(
             try {
                 // Send anything saved while offline before reading the Sheet again
                 runCatching { repository.syncPendingChanges() }
+                // A new phone (or a reinstall) gets its budgets and settings back from the Sheet
+                if (backupRepository.restoreIfNewPhone() == RestoreResult.RESTORED) {
+                    _uiState.update { it.copy(successMessage = "Restored your budgets and settings from your Google Sheet") }
+                }
                 repository.refreshAccountBalances()
                 repository.refreshAllTransactions()
                 repository.refreshSavingsGoals()
                 repository.refreshDebts()
                 syncRecurringCostTracking()
+                // Keep the Sheet's copy of phone-only data up to date (skipped if nothing changed)
+                backupRepository.backup()
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = e.message) }
             } finally {

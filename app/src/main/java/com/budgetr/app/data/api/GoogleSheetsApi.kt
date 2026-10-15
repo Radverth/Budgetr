@@ -114,7 +114,9 @@ data class AddSheetRequestBody(
 
 @JsonClass(generateAdapter = true)
 data class NewSheetProperties(
-    @Json(name = "title") val title: String
+    @Json(name = "title") val title: String,
+    /** Hidden tabs don't show in the Sheet's tab bar (used for the phone backup). */
+    @Json(name = "hidden") val hidden: Boolean? = null
 )
 
 @JsonClass(generateAdapter = true)

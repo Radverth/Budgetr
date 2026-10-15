@@ -15,6 +15,12 @@ interface CategoryBudgetDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(budget: CategoryBudgetEntity)
 
+    @Query("SELECT * FROM category_budgets")
+    suspend fun getAllSync(): List<CategoryBudgetEntity>
+
+    @Query("DELETE FROM category_budgets")
+    suspend fun deleteAll()
+
     @Query("DELETE FROM category_budgets WHERE category = :category")
     suspend fun delete(category: String)
 }
