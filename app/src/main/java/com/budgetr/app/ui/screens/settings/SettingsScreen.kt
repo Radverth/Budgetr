@@ -565,7 +565,7 @@ internal fun BackupRows(lastBackupAt: Long, isBusy: Boolean, onBackUp: () -> Uni
         icon = Icons.Default.CloudUpload,
         iconTint = MaterialTheme.colorScheme.primary,
         title = if (isBusy) "Working…" else "Back up budgets and settings",
-        subtitle = "$last · also happens automatically",
+        subtitle = "$last · automatic",
         onClick = { if (!isBusy) onBackUp() }
     )
     SettingsRow(
