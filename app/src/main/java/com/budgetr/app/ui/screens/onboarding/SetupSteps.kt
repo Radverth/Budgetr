@@ -40,6 +40,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.budgetr.app.ui.theme.ExpenseRed
 import com.budgetr.app.ui.theme.IncomeGreen
@@ -109,7 +110,7 @@ internal fun PaydayStep(payDay: Int, onPayDay: (Int) -> Unit, onBack: () -> Unit
                 FilterChip(
                     selected = day == payDay,
                     onClick = { onPayDay(day) },
-                    label = { Text(day.toString(), modifier = Modifier.width(22.dp)) }
+                    label = { Text(day.toString(), modifier = Modifier.width(22.dp), textAlign = TextAlign.Center) }
                 )
             }
         }
