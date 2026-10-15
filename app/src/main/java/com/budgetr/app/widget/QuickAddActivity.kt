@@ -77,6 +77,8 @@ class QuickAddActivity : ComponentActivity() {
                 LaunchedEffect(uiState.addSaveCount) {
                     if (uiState.addSaveCount > 0) {
                         try {
+                            // Wait for the save to reach the Sheet so the widget's balance includes it
+                            repository.syncPendingChanges()
                             repository.refreshAccountBalances()
                             val manager = GlanceAppWidgetManager(applicationContext)
                             val ids = manager.getGlanceIds(BudgetrWidget::class.java)

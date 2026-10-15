@@ -7,6 +7,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Label
 import androidx.compose.material3.DatePickerDialog
@@ -107,6 +108,15 @@ fun TransactionsScreen(
     var sortMenuExpanded by remember { mutableStateOf(false) }
 
     var showDateRangePicker by remember { mutableStateOf(false) }
+
+    if (uiState.showFailedChanges) {
+        FailedChangesDialog(
+            changes = uiState.pendingChanges,
+            onRetry = viewModel::retryChange,
+            onDiscard = viewModel::discardChange,
+            onDismiss = viewModel::dismissFailedChanges
+        )
+    }
 
     BackHandler(enabled = uiState.isSelecting) { viewModel.cancelSelection() }
 
@@ -304,6 +314,14 @@ fun TransactionsScreen(
                     }
                 }
             }
+
+            PendingSyncBanner(
+                changes = uiState.pendingChanges,
+                isSyncing = uiState.isSyncing,
+                onSyncNow = viewModel::syncNow,
+                onReview = viewModel::showFailedChanges,
+                modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp)
+            )
 
             // Search bar
             OutlinedTextField(
@@ -652,6 +670,21 @@ internal fun TransactionItem(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                if (transaction.pending) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
+                        Icon(
+                            Icons.Default.CloudOff,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.tertiary,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text(
+                            text = " Not synced yet",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.tertiary
+                        )
+                    }
+                }
             }
 
             if (selectionMode) {

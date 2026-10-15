@@ -11,6 +11,8 @@ import com.budgetr.app.data.model.Transaction
 import com.budgetr.app.data.model.TransactionCategory
 import com.budgetr.app.data.repository.BudgetRepository
 import com.budgetr.app.data.repository.DailyTargetRepository
+import com.budgetr.app.data.repository.SyncOutcome
+import com.budgetr.app.data.model.PendingChange
 import com.budgetr.app.data.repository.SheetsRepository
 import com.budgetr.app.util.BudgetAlertNotifier
 import com.budgetr.app.util.BudgetCapCalculator
@@ -78,6 +80,10 @@ data class TransactionsUiState(
     val undoable: Transaction? = null,
     /** Inclusive start and end of the date filter, as epoch millis. */
     val dateRange: Pair<Long, Long>? = null,
+    /** Changes saved on the phone that haven't reached the Sheet yet (offline saving). */
+    val pendingChanges: List<PendingChange> = emptyList(),
+    val isSyncing: Boolean = false,
+    val showFailedChanges: Boolean = false,
     /** dd/MM/yyyy → that day's spend and target, when the daily spend target covers it. */
     val dayTotals: Map<String, DayTotals> = emptyMap(),
     val transactionToEdit: Transaction? = null,
@@ -186,6 +192,12 @@ class TransactionsViewModel @Inject constructor(
             dailyTargetRepository.observe().collect { state ->
                 val totals = state.target.days.associate { fmt.format(it.date) to DayTotals(it.spent, it.target) }
                 _uiState.update { it.copy(dayTotals = totals) }
+            }
+        }
+
+        viewModelScope.launch {
+            repository.getPendingChanges().collect { changes ->
+                _uiState.update { it.copy(pendingChanges = changes, showFailedChanges = it.showFailedChanges && changes.any { c -> c.failedReason != null }) }
             }
         }
 
@@ -429,10 +441,42 @@ class TransactionsViewModel @Inject constructor(
 
     fun clearUndo() = _uiState.update { it.copy(undoable = null) }
 
+    /** "Sync now" on the banner: send everything waiting, then say how it went. */
+    fun syncNow() {
+        if (_uiState.value.isSyncing) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSyncing = true) }
+            val outcome = runCatching { repository.syncPendingChanges() }.getOrNull()
+            _uiState.update {
+                it.copy(
+                    isSyncing = false,
+                    message = when (outcome) {
+                        SyncOutcome.SYNCED -> "All changes saved to your Google Sheet"
+                        SyncOutcome.OFFLINE -> "Still offline. Changes will be sent when you're back online."
+                        SyncOutcome.SOME_FAILED -> "Some changes couldn't be saved. Tap Review."
+                        else -> null
+                    }
+                )
+            }
+        }
+    }
+
+    fun showFailedChanges() = _uiState.update { it.copy(showFailedChanges = true) }
+    fun dismissFailedChanges() = _uiState.update { it.copy(showFailedChanges = false) }
+
+    fun retryChange(id: Long) {
+        viewModelScope.launch { runCatching { repository.retryPendingChange(id) } }
+    }
+
+    fun discardChange(id: Long) {
+        viewModelScope.launch { repository.discardPendingChange(id) }
+    }
+
     fun saveTransaction(transaction: Transaction, linkAction: TransactionLinkAction? = null) {
         viewModelScope.launch {
             try {
-                if (transaction.rowIndex > 0) {
+                // Pending additions have negative row numbers, but are still existing edits.
+                if (_uiState.value.transactionToEdit != null || transaction.rowIndex > 0) {
                     val original = _uiState.value.transactionToEdit
                     if (original != null && original.account != transaction.account) {
                         // Account changed: remove from old account, append to new account

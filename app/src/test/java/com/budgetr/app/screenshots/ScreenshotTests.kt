@@ -24,6 +24,8 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.unit.dp
 import com.budgetr.app.data.model.DailyTransfer
 import com.budgetr.app.data.model.Envelope
+import com.budgetr.app.data.model.PendingChange
+import com.budgetr.app.data.model.PendingKind
 import com.budgetr.app.data.model.Transaction
 import com.budgetr.app.data.model.TransactionCategory
 import com.budgetr.app.data.repository.DailyTargetState
@@ -47,6 +49,7 @@ import com.budgetr.app.ui.screens.onboarding.PaydayStep
 import com.budgetr.app.ui.screens.onboarding.SummaryStep
 import com.budgetr.app.ui.screens.transactions.QuickAddFields
 import com.budgetr.app.ui.screens.transactions.DayHeader
+import com.budgetr.app.ui.screens.transactions.PendingSyncBanner
 import com.budgetr.app.ui.screens.transactions.DayTotals
 import com.budgetr.app.ui.screens.transactions.TransactionItem
 import com.budgetr.app.ui.theme.BudgetrTheme
@@ -320,6 +323,22 @@ abstract class ScreenshotTests(private val prefix: String) {
             summary = SetupSummary(income = 2150.0, fixedCosts = 1180.0, pot = 970.0, days = 31, perDay = 31.29),
             isCreating = false, onBack = {}, onCreate = {}
         )
+    }
+
+    @Test
+    fun pendingSync() = listShot("16_pending_sync") {
+        PendingSyncBanner(
+            changes = listOf(
+                PendingChange(1, PendingKind.ADD, spend("15/10/2026", 3.4, "Coffee")),
+                PendingChange(2, PendingKind.UPDATE, spend("14/10/2026", 9.5, "Bus")),
+                PendingChange(3, PendingKind.DELETE, spend("13/10/2026", 4.2, "Tesco"), failedReason = "This transaction was changed or removed in your Google Sheet.")
+            ),
+            isSyncing = false, onSyncNow = {}, onReview = {},
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+        )
+        DayHeader(date = "15/10/2026", totals = DayTotals(spent = 3.4, target = 31.29))
+        TransactionItem(transaction = spend("15/10/2026", 3.4, "Coffee", "Eating out").copy(rowIndex = -1, pending = true), onClick = {}, showDate = false)
+        TransactionItem(transaction = spend("15/10/2026", 12.0, "Lunch", "Eating out"), onClick = {}, showDate = false)
     }
 
     /** Dialogs open in their own window, which never reports idle under Robolectric 4.12

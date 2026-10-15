@@ -1,5 +1,19 @@
 package com.budgetr.app.data.repository
 
+import android.content.Context
+import java.io.IOException
+import com.budgetr.app.data.local.dao.PendingChangeDao
+import com.budgetr.app.data.local.entity.PendingChangeEntity
+import com.budgetr.app.data.model.PendingChange
+import com.budgetr.app.data.model.PendingKind
+import com.budgetr.app.data.sync.PendingSyncWorker
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.combine
 import com.budgetr.app.data.api.AddSheetRequestBody
 import com.budgetr.app.data.api.BatchUpdateValuesRequest
 import com.budgetr.app.data.api.BatchUpdateRequest
@@ -70,6 +84,8 @@ class SheetsRepositoryImpl @Inject constructor(
     private val debtDao: DebtDao,
     private val envelopeDao: EnvelopeDao,
     private val periodSummaryDao: PeriodSummaryDao,
+    private val pendingChangeDao: PendingChangeDao,
+    @ApplicationContext private val context: Context,
     private val prefs: PreferencesManager
 ) : SheetsRepository {
 
@@ -78,6 +94,12 @@ class SheetsRepositoryImpl @Inject constructor(
     private val sheetIdMutex = Mutex()
 
     private val backfillMutex = Mutex()
+
+    // One sync run at a time, so queued changes are never sent twice or out of order
+    private val syncMutex = Mutex()
+
+    // Outlives any one screen (the repository is a singleton), so a send finishes after the form closes
+    private val syncScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     // Accounts whose column G header has been written this session (see ensureTagHeader)
     private val tagHeaderWritten = mutableSetOf<String>()
@@ -93,16 +115,19 @@ class SheetsRepositoryImpl @Inject constructor(
         sheetIdCache[name]
     }
 
+    // The cache mirrors the Sheet; queued changes are laid on top so they show straight away.
     override fun getTransactions(account: String): Flow<List<Transaction>> =
-        transactionDao.getTransactionsByAccount(account).map { entities ->
+        combine(transactionDao.getTransactionsByAccount(account), pendingChangeDao.getAll()) { entities, pending ->
             // Guard against any duplicate rowIndex rows left in the cache by an older build:
             // distinct keeps the UI's per-row keys unique so the LazyColumn can't crash.
-            entities.map { it.toTransaction() }.distinctBy { it.rowIndex }
+            val sheet = entities.map { it.toTransaction() }.distinctBy { it.rowIndex }
+            PendingOverlay.apply(sheet, pending.filter { it.spreadsheetId == prefs.getSpreadsheetId() }.map { it.toModel() }.filter { it.transaction.account == account })
         }
 
     override fun getAllTransactions(): Flow<List<Transaction>> =
-        transactionDao.getAll().map { entities ->
-            entities.map { it.toTransaction() }.distinctBy { it.account to it.rowIndex }
+        combine(transactionDao.getAll(), pendingChangeDao.getAll()) { entities, pending ->
+            val sheet = entities.map { it.toTransaction() }.distinctBy { it.account to it.rowIndex }
+            PendingOverlay.apply(sheet, pending.filter { it.spreadsheetId == prefs.getSpreadsheetId() }.map { it.toModel() })
         }
 
     override fun getAccountBalances(): Flow<List<AccountBalance>> =
@@ -117,9 +142,13 @@ class SheetsRepositoryImpl @Inject constructor(
 
     override suspend fun refreshTransactions(account: String) {
         val spreadsheetId = prefs.getSpreadsheetId() ?: return
+        refreshTransactions(account, spreadsheetId)
+    }
+
+    private suspend fun refreshTransactions(account: String, spreadsheetId: String) {
         val range = "$account!A:H"
         val response = api.getValues(spreadsheetId, range)
-        val rows = backfillRowIds(spreadsheetId, account, response.values ?: return)
+        val rows = backfillRowIds(spreadsheetId, account, response.values.orEmpty())
 
         // First row is header — skip it
         val entities = rows.drop(1).mapIndexedNotNull { index, row ->
@@ -139,6 +168,7 @@ class SheetsRepositoryImpl @Inject constructor(
 
         // Atomic replace so concurrent refreshes of the same account can't interleave into
         // duplicate rowIndex rows (which crash the transactions list with a duplicate key).
+        if (prefs.getSpreadsheetId() != spreadsheetId) throw IOException("The selected spreadsheet changed during sync")
         transactionDao.replaceForAccount(account, entities)
     }
 
@@ -223,7 +253,87 @@ class SheetsRepositoryImpl @Inject constructor(
     }
 
     override suspend fun addTransaction(transaction: Transaction) {
-        val spreadsheetId = prefs.getSpreadsheetId() ?: return
+        enqueue(PendingKind.ADD, transaction.copy(id = transaction.id ?: RowIds.newId()))
+    }
+
+    override suspend fun updateTransaction(transaction: Transaction) = enqueue(PendingKind.UPDATE, transaction)
+
+    override suspend fun deleteTransaction(transaction: Transaction) = enqueue(PendingKind.DELETE, transaction)
+
+    /** Saves the change on the phone and returns straight away, so saving never waits on a
+     *  slow connection. Sending happens in the background; offline, the background job takes
+     *  over once there's a connection. */
+    private suspend fun enqueue(kind: PendingKind, transaction: Transaction) {
+        val spreadsheetId = checkNotNull(prefs.getSpreadsheetId()) { "Connect a spreadsheet before saving changes." }
+        require(kind == PendingKind.ADD || !transaction.id.isNullOrBlank()) {
+            "Pull down to refresh this transaction before editing or deleting it."
+        }
+        pendingChangeDao.insert(transaction.toPendingEntity(kind, spreadsheetId))
+        PendingSyncWorker.schedule(context)
+        syncScope.launch { runCatching { syncPendingChanges() } }
+    }
+
+    override fun getPendingChanges(): Flow<List<PendingChange>> =
+        pendingChangeDao.getAll().map { list -> list.filter { it.spreadsheetId == prefs.getSpreadsheetId() }.map { it.toModel() } }
+
+    override suspend fun retryPendingChange(id: Long) {
+        pendingChangeDao.markFailed(id, null)
+        PendingSyncWorker.schedule(context)
+        syncScope.launch { runCatching { syncPendingChanges() } }
+    }
+
+    override suspend fun discardPendingChange(id: Long) {
+        pendingChangeDao.delete(id)
+        PendingSyncWorker.schedule(context)
+        syncScope.launch { runCatching { syncPendingChanges() } }
+    }
+
+    /**
+     * Sends queued changes in the order they were made. A dropped connection or a server hiccup
+     * stops the run and leaves the rest queued for later. A change Google refuses outright is
+     * marked failed (with a reason); later changes wait for Retry or Discard to preserve order.
+     * Each save has already booked a durable background job to retry when connected.
+     */
+    override suspend fun syncPendingChanges(): SyncOutcome = syncMutex.withLock {
+        val spreadsheetId = prefs.getSpreadsheetId() ?: return@withLock SyncOutcome.NOTHING_TO_SEND
+        val queue = pendingChangeDao.getAllSync().filter { it.spreadsheetId == spreadsheetId }
+        if (queue.isEmpty()) return@withLock SyncOutcome.NOTHING_TO_SEND
+        var anyFailed = false
+        var outcome: SyncOutcome? = null
+        for (entity in queue) {
+            if (entity.failedReason != null) {
+                anyFailed = true
+                break
+            }
+            val change = entity.toModel()
+            try {
+                when (change.kind) {
+                    PendingKind.ADD -> remoteAdd(spreadsheetId, change.transaction)
+                    PendingKind.UPDATE -> remoteUpdate(spreadsheetId, change.transaction)
+                    PendingKind.DELETE -> remoteDelete(spreadsheetId, change.transaction)
+                }
+                // Keep the overlay until the confirmed Sheet state is safely cached.
+                refreshTransactions(change.transaction.account, spreadsheetId)
+                pendingChangeDao.delete(entity.id)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (SyncErrors.isRetryable(e)) {
+                    outcome = SyncOutcome.OFFLINE
+                    break
+                }
+                pendingChangeDao.markFailed(entity.id, SyncErrors.reason(e))
+                anyFailed = true
+                break
+            }
+        }
+        outcome ?: if (anyFailed) SyncOutcome.SOME_FAILED else SyncOutcome.SYNCED
+    }
+
+    /** Appends [transaction], unless its ID is already in the Sheet (an earlier attempt got
+     *  through but the reply was lost), so a retry never adds it twice. */
+    private suspend fun remoteAdd(spreadsheetId: String, transaction: Transaction) {
+        if (transaction.id != null && transaction.id in readIdColumn(spreadsheetId, transaction.account).map { it.trim() }) return
         val range = "${transaction.account}!A:H"
         val rounded = roundedAmount(transaction.amount, transaction.category)
         val activeMonthsStr = transaction.activeMonths?.joinToString(",") ?: ""
@@ -238,12 +348,10 @@ class SheetsRepositoryImpl @Inject constructor(
             transaction.id ?: RowIds.newId()
         ))
         api.appendValues(spreadsheetId, range, body = ValueRange(values = row))
-        ensureTagHeader(transaction)
-        refreshTransactions(transaction.account)
+        ensureTagHeader(transaction, spreadsheetId)
     }
 
-    override suspend fun updateTransaction(transaction: Transaction) {
-        val spreadsheetId = prefs.getSpreadsheetId() ?: return
+    private suspend fun remoteUpdate(spreadsheetId: String, transaction: Transaction) {
         val sheetRow = currentRow(spreadsheetId, transaction)
         val range = "${transaction.account}!A$sheetRow:H$sheetRow"
         val rounded = roundedAmount(transaction.amount, transaction.category)
@@ -259,8 +367,7 @@ class SheetsRepositoryImpl @Inject constructor(
             transaction.id ?: RowIds.newId()
         ))
         api.updateValues(spreadsheetId, range, body = ValueRange(values = row))
-        ensureTagHeader(transaction)
-        refreshTransactions(transaction.account)
+        ensureTagHeader(transaction, spreadsheetId)
     }
 
     override suspend fun assignSpendingCategory(transactions: List<Transaction>, tag: String?) {
@@ -282,17 +389,22 @@ class SheetsRepositoryImpl @Inject constructor(
 
     /** Sheets made before tags existed have no header over column G. Label it the first time
      *  a tagged transaction is written to that account this session. */
-    private suspend fun ensureTagHeader(transaction: Transaction) {
+    private suspend fun ensureTagHeader(transaction: Transaction, spreadsheetId: String) {
         if (SpendTags.normalise(transaction.tag) == null || transaction.account in tagHeaderWritten) return
-        val spreadsheetId = prefs.getSpreadsheetId() ?: return
         api.updateValues(spreadsheetId, "${transaction.account}!G1", body = ValueRange(values = listOf(listOf("Tag"))))
         tagHeaderWritten += transaction.account
     }
 
-    override suspend fun deleteTransaction(transaction: Transaction) {
-        val spreadsheetId = prefs.getSpreadsheetId() ?: return
-        val sheetId = resolveSheetIdByName(transaction.account) ?: 0
-        val rowIndex = currentRow(spreadsheetId, transaction) - 1 // 0-based for API
+    /** Deleting a row that's already gone counts as done. */
+    private suspend fun remoteDelete(spreadsheetId: String, transaction: Transaction) {
+        val sheetId = api.getSpreadsheet(spreadsheetId).sheets
+            ?.mapNotNull { it.properties }?.firstOrNull { it.title == transaction.account }?.sheetId
+            ?: throw RowMovedException()
+        val rowIndex = try {
+            currentRow(spreadsheetId, transaction) - 1 // 0-based for API
+        } catch (e: RowMovedException) {
+            return
+        }
         api.batchUpdate(
             spreadsheetId,
             BatchUpdateRequest(
@@ -309,7 +421,6 @@ class SheetsRepositoryImpl @Inject constructor(
                 )
             )
         )
-        refreshTransactions(transaction.account)
     }
 
     override suspend fun deleteOneOffTransactions(account: String) {
@@ -829,6 +940,37 @@ class SheetsRepositoryImpl @Inject constructor(
         }
         return if (amount < 0) floor(amount) else ceil(amount)
     }
+
+    private fun Transaction.toPendingEntity(kind: PendingKind, spreadsheetId: String) = PendingChangeEntity(
+        spreadsheetId = spreadsheetId,
+        kind = kind.name,
+        account = account,
+        txId = id,
+        rowIndex = rowIndex,
+        date = date,
+        info = info,
+        amount = amount,
+        category = category.name,
+        activeMonths = activeMonths?.joinToString(","),
+        tag = tag
+    )
+
+    private fun PendingChangeEntity.toModel() = PendingChange(
+        id = id,
+        kind = runCatching { PendingKind.valueOf(kind) }.getOrDefault(PendingKind.ADD),
+        transaction = Transaction(
+            rowIndex = rowIndex,
+            date = date,
+            info = info,
+            amount = amount,
+            category = TransactionCategory.fromString(category),
+            account = account,
+            activeMonths = activeMonths?.split(",")?.mapNotNull { it.trim().toIntOrNull() }?.ifEmpty { null },
+            tag = tag,
+            id = txId
+        ),
+        failedReason = failedReason
+    )
 
     private fun TransactionEntity.toTransaction() = Transaction(
         rowIndex = rowIndex,

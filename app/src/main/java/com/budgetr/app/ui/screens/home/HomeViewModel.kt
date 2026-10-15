@@ -424,6 +424,8 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isRefreshing = true, error = null) }
             try {
+                // Send anything saved while offline before reading the Sheet again
+                runCatching { repository.syncPendingChanges() }
                 repository.refreshAccountBalances()
                 repository.refreshAllTransactions()
                 repository.refreshSavingsGoals()
