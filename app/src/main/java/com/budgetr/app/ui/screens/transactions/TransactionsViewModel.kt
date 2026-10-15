@@ -60,6 +60,8 @@ data class TransactionsUiState(
     val accountsLoaded: Boolean = false,
     val selectedAccount: String? = null,
     val lastAddAccount: String? = null,
+    /** Quick add (widget, shortcut, tile) has no open account tab, so it starts on the last one used. */
+    val preferLastAccount: Boolean = false,
     val descriptionHistory: List<Transaction> = emptyList(),
     val transactions: List<Transaction> = emptyList(),
     val categoryFilter: TransactionCategory? = null,
@@ -113,10 +115,13 @@ data class TransactionsUiState(
     /** Rows to show: everything except deletes still on their way to the Sheet. */
     val visibleTransactions: List<Transaction> get() = transactions.filter { it !in pendingDeletes }
 
-    /** Prefer the last saved account, falling back safely if an account was removed. */
-    val accountForAdding: String? get() = lastAddAccount?.takeIf { it in accounts }
-        ?: selectedAccount?.takeIf { it in accounts }
-        ?: accounts.firstOrNull()
+    /** The open account tab wins, since that's the account on screen. The All tab and quick
+     *  add use the last account saved to. Removed accounts fall back to the first one. */
+    val accountForAdding: String? get() {
+        val open = selectedAccount?.takeIf { it in accounts }
+        val last = lastAddAccount?.takeIf { it in accounts }
+        return (if (preferLastAccount) last ?: open else open ?: last) ?: accounts.firstOrNull()
+    }
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -387,6 +392,8 @@ class TransactionsViewModel @Inject constructor(
     fun clearMessage() = _uiState.update { it.copy(message = null) }
 
     private fun transactionCount(n: Int) = if (n == 1) "1 transaction" else "$n transactions"
+
+    fun preferLastAccountForAdding() = _uiState.update { it.copy(preferLastAccount = true) }
 
     fun showAddSheet() = _uiState.update {
         it.copy(showAddSheet = true, transactionToEdit = null, lastAddAccount = prefs.getLastAddAccount())

@@ -67,6 +67,7 @@ class QuickAddActivity : ComponentActivity() {
                 val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
                 LaunchedEffect(Unit) {
+                    viewModel.preferLastAccountForAdding()
                     viewModel.showAddSheet()
                 }
 
