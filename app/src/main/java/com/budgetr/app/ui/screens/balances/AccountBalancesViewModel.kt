@@ -1,5 +1,6 @@
 package com.budgetr.app.ui.screens.balances
 
+import com.budgetr.app.util.UserMessages
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.budgetr.app.data.model.AccountBalance
@@ -106,7 +107,7 @@ class AccountBalancesViewModel @Inject constructor(
                 repository.refreshAccountBalances()
                 repository.refreshAllTransactions()
             } catch (e: Exception) {
-                _uiState.update { it.copy(error = e.message) }
+                _uiState.update { it.copy(error = UserMessages.from(e)) }
             } finally {
                 _uiState.update { it.copy(isRefreshing = false) }
             }
@@ -136,7 +137,7 @@ class AccountBalancesViewModel @Inject constructor(
                 repository.renameAccount(account.account, newName)
                 _uiState.update { it.copy(renameAccount = null, renameText = "", isRenaming = false, successMessage = "Account renamed to \"$newName\"") }
             } catch (e: Exception) {
-                _uiState.update { it.copy(isRenaming = false, error = e.message) }
+                _uiState.update { it.copy(isRenaming = false, error = UserMessages.from(e)) }
             }
         }
     }
@@ -158,7 +159,7 @@ class AccountBalancesViewModel @Inject constructor(
                 repository.addAccount(name)
                 _uiState.update { it.copy(showAddAccount = false, newAccountName = "", isAddingAccount = false, successMessage = "\"$name\" account created") }
             } catch (e: Exception) {
-                _uiState.update { it.copy(isAddingAccount = false, error = e.message) }
+                _uiState.update { it.copy(isAddingAccount = false, error = UserMessages.from(e)) }
             }
         }
     }
@@ -177,7 +178,7 @@ class AccountBalancesViewModel @Inject constructor(
                 repository.deleteAccount(account.account)
                 _uiState.update { it.copy(deleteAccount = null, isDeletingAccount = false, successMessage = "\"${account.account}\" deleted") }
             } catch (e: Exception) {
-                _uiState.update { it.copy(isDeletingAccount = false, error = e.message) }
+                _uiState.update { it.copy(isDeletingAccount = false, error = UserMessages.from(e)) }
             }
         }
     }
@@ -208,7 +209,7 @@ class AccountBalancesViewModel @Inject constructor(
                 repository.recordRollover(account, amount, today)
                 _uiState.update { it.copy(rolloverEditAccount = null, rolloverEditText = "", isRecordingRollover = false) }
             } catch (e: Exception) {
-                _uiState.update { it.copy(isRecordingRollover = false, error = e.message) }
+                _uiState.update { it.copy(isRecordingRollover = false, error = UserMessages.from(e)) }
             }
         }
     }
@@ -218,7 +219,7 @@ class AccountBalancesViewModel @Inject constructor(
             try {
                 repository.deleteRollover(account)
             } catch (e: Exception) {
-                _uiState.update { it.copy(error = e.message) }
+                _uiState.update { it.copy(error = UserMessages.from(e)) }
             }
         }
     }
@@ -234,7 +235,7 @@ class AccountBalancesViewModel @Inject constructor(
                 }
                 _uiState.update { it.copy(isRecordingRollover = false, successMessage = "Rollover recorded for ${_uiState.value.balances.size} accounts") }
             } catch (e: Exception) {
-                _uiState.update { it.copy(isRecordingRollover = false, error = e.message) }
+                _uiState.update { it.copy(isRecordingRollover = false, error = UserMessages.from(e)) }
             }
         }
     }

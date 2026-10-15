@@ -1,5 +1,6 @@
 package com.budgetr.app.ui.screens.goals
 
+import com.budgetr.app.util.UserMessages
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.budgetr.app.data.model.Debt
@@ -75,7 +76,7 @@ class GoalsViewModel @Inject constructor(
                 repository.refreshSavingsGoals()
                 repository.refreshDebts()
             } catch (e: Exception) {
-                _uiState.update { it.copy(error = e.message) }
+                _uiState.update { it.copy(error = UserMessages.from(e)) }
             } finally {
                 _uiState.update { it.copy(isRefreshing = false) }
             }
@@ -138,7 +139,7 @@ class GoalsViewModel @Inject constructor(
                     it.copy(isSavingGoal = false, showGoalDialog = false, editingGoal = null, successMessage = "\"$name\" saved")
                 }
             } catch (e: Exception) {
-                _uiState.update { it.copy(isSavingGoal = false, error = e.message) }
+                _uiState.update { it.copy(isSavingGoal = false, error = UserMessages.from(e)) }
             }
         }
     }
@@ -154,7 +155,7 @@ class GoalsViewModel @Inject constructor(
                 budgetRepository.clearGoalCategoryLink(goal.name)
                 _uiState.update { it.copy(goalToDelete = null, successMessage = "\"${goal.name}\" deleted") }
             } catch (e: Exception) {
-                _uiState.update { it.copy(goalToDelete = null, error = e.message) }
+                _uiState.update { it.copy(goalToDelete = null, error = UserMessages.from(e)) }
             }
         }
     }
@@ -204,7 +205,7 @@ class GoalsViewModel @Inject constructor(
                     it.copy(isSavingDebt = false, showDebtDialog = false, editingDebt = null, successMessage = "\"$name\" saved")
                 }
             } catch (e: Exception) {
-                _uiState.update { it.copy(isSavingDebt = false, error = e.message) }
+                _uiState.update { it.copy(isSavingDebt = false, error = UserMessages.from(e)) }
             }
         }
     }
@@ -219,7 +220,7 @@ class GoalsViewModel @Inject constructor(
                 repository.deleteDebt(debt.name)
                 _uiState.update { it.copy(debtToDelete = null, successMessage = "\"${debt.name}\" deleted") }
             } catch (e: Exception) {
-                _uiState.update { it.copy(debtToDelete = null, error = e.message) }
+                _uiState.update { it.copy(debtToDelete = null, error = UserMessages.from(e)) }
             }
         }
     }

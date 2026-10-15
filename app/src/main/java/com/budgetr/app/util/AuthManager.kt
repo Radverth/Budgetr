@@ -58,14 +58,19 @@ class AuthManager @Inject constructor(
     fun getAccessToken(): String? = prefs.getAccessToken()
 
     /**
-     * Clears the cached token and fetches a fresh one. Runs synchronously — call only from
-     * a background thread (OkHttp interceptor threads are fine).
+     * Swaps the expired [staleToken] for a fresh one. Runs synchronously — call only from a
+     * background thread (OkHttp interceptor threads are fine). One refresh at a time: if several
+     * requests hit an expired token together, the first refreshes and the rest reuse its token.
      */
-    fun refreshToken(): String? {
-        val account = GoogleSignIn.getLastSignedInAccount(context) ?: return null
+    @Synchronized
+    fun refreshToken(staleToken: String? = prefs.getAccessToken()): String? {
+        val current = prefs.getAccessToken()
+        if (current != null && current != staleToken) return current
+        val account = GoogleSignIn.getLastSignedInAccount(context)?.account ?: return null
         return try {
-            GoogleAuthUtil.clearToken(context, prefs.getAccessToken() ?: return null)
-            val newToken = GoogleAuthUtil.getToken(context, account.account!!, TOKEN_SCOPE)
+            // Nothing saved (e.g. after a failed refresh) still gets a new token, rather than giving up
+            current?.let { GoogleAuthUtil.clearToken(context, it) }
+            val newToken = GoogleAuthUtil.getToken(context, account, TOKEN_SCOPE)
             prefs.setAccessToken(newToken)
             newToken
         } catch (e: UserRecoverableAuthException) {

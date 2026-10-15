@@ -10,12 +10,13 @@ class AuthInterceptor @Inject constructor(
     private val authManager: AuthManager
 ) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
-        val response = chain.proceed(chain.request().withBearerToken(authManager.getAccessToken()))
+        val token = authManager.getAccessToken()
+        val response = chain.proceed(chain.request().withBearerToken(token))
         if (response.code == 401) {
             response.close()
-            // Refresh token synchronously (interceptor runs on a background thread)
-            authManager.refreshToken()
-            return chain.proceed(chain.request().withBearerToken(authManager.getAccessToken()))
+            // Refresh quietly (interceptor runs on a background thread) and try once more
+            val fresh = authManager.refreshToken(staleToken = token)
+            return chain.proceed(chain.request().withBearerToken(fresh ?: token))
         }
         return response
     }

@@ -1,5 +1,6 @@
 package com.budgetr.app.ui.screens.transactions
 
+import com.budgetr.app.util.UserMessages
 import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -318,7 +319,7 @@ class TransactionsViewModel @Inject constructor(
             try {
                 if (account == ALL_ACCOUNTS) repository.refreshAllTransactions() else repository.refreshTransactions(account)
             } catch (e: Exception) {
-                _uiState.update { it.copy(error = e.message) }
+                _uiState.update { it.copy(error = UserMessages.from(e)) }
             } finally {
                 _uiState.update { it.copy(isRefreshing = false) }
             }
@@ -393,7 +394,7 @@ class TransactionsViewModel @Inject constructor(
                 throw e
             } catch (e: Exception) {
                 _uiState.update { it.copy(
-                    bulkCategoryError = "Could not confirm the update. Close this dialog and refresh before retrying. ${e.message.orEmpty()}"
+                    bulkCategoryError = "Could not confirm the update. Close this dialog and refresh before retrying. ${UserMessages.from(e)}"
                 ) }
             } finally {
                 _uiState.update { it.copy(isAssigningCategory = false) }
@@ -421,7 +422,7 @@ class TransactionsViewModel @Inject constructor(
                 repository.deleteTransaction(transaction)
                 _uiState.update { it.copy(undoable = transaction) }
             } catch (e: Exception) {
-                _uiState.update { it.copy(pendingDeletes = it.pendingDeletes - transaction, error = e.message) }
+                _uiState.update { it.copy(pendingDeletes = it.pendingDeletes - transaction, error = UserMessages.from(e)) }
             }
         }
     }
@@ -434,7 +435,7 @@ class TransactionsViewModel @Inject constructor(
                 repository.addTransaction(transaction.copy(rowIndex = 0, id = null))
                 _uiState.update { it.copy(message = "Restored \"${transaction.info}\"") }
             } catch (e: Exception) {
-                _uiState.update { it.copy(error = e.message) }
+                _uiState.update { it.copy(error = UserMessages.from(e)) }
             }
         }
     }
@@ -515,7 +516,7 @@ class TransactionsViewModel @Inject constructor(
                     _uiState.update { it.copy(addSaveCount = it.addSaveCount + 1) }
                 }
             } catch (e: Exception) {
-                _uiState.update { it.copy(error = e.message) }
+                _uiState.update { it.copy(error = UserMessages.from(e)) }
             }
         }
     }
@@ -545,7 +546,7 @@ class TransactionsViewModel @Inject constructor(
                 prefs.setLastAddAccount(source.account)
                 _uiState.update { it.copy(addSaveCount = it.addSaveCount + 1, lastAddAccount = source.account) }
             } catch (e: Exception) {
-                _uiState.update { it.copy(error = e.message) }
+                _uiState.update { it.copy(error = UserMessages.from(e)) }
             }
         }
     }
