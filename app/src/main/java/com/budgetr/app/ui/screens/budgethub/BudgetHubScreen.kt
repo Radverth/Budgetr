@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Rule
 import androidx.compose.material.icons.filled.Today
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -59,6 +60,7 @@ fun BudgetHubScreen(
     onOpenDailyTarget: () -> Unit,
     onOpenPaydayPlan: () -> Unit,
     onOpenHistory: () -> Unit,
+    onOpenRules: () -> Unit,
     viewModel: BudgetHubViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -97,6 +99,7 @@ fun BudgetHubScreen(
             onOpenDailyTarget = onOpenDailyTarget,
             onOpenPaydayPlan = onOpenPaydayPlan,
             onOpenHistory = onOpenHistory,
+            onOpenRules = onOpenRules,
             onTransfer = { transferKind = it },
             modifier = Modifier.fillMaxSize().padding(padding)
         )
@@ -110,6 +113,7 @@ internal fun BudgetHubContent(
     onOpenDailyTarget: () -> Unit,
     onOpenPaydayPlan: () -> Unit,
     onOpenHistory: () -> Unit,
+    onOpenRules: () -> Unit,
     onTransfer: (TransferKind) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -172,6 +176,17 @@ internal fun BudgetHubContent(
                             else -> "${state.historyPeriods} pay periods saved"
                         },
                         onClick = onOpenHistory
+                    )
+                    HubDivider()
+                    HubRow(
+                        icon = Icons.Default.Rule,
+                        title = "Category rules",
+                        subtitle = when (state.ruleCount) {
+                            0 -> "Fill in categories automatically, e.g. TESCO → Groceries"
+                            1 -> "1 rule fills in categories for you"
+                            else -> "${state.ruleCount} rules fill in categories for you"
+                        },
+                        onClick = onOpenRules
                     )
                 }
             }

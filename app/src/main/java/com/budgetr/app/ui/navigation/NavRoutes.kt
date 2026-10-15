@@ -21,4 +21,5 @@ object NavRoutes {
     const val INSIGHTS = "insights"
     const val PAYDAY_PLAN = "payday_plan"
     const val DAILY_TARGET = "daily_target"
+    const val CATEGORY_RULES = "category_rules"
 }

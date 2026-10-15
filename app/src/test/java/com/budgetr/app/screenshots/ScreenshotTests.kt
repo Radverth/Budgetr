@@ -1,5 +1,9 @@
 package com.budgetr.app.screenshots
 
+import com.budgetr.app.data.model.CategoryRule
+import com.budgetr.app.ui.screens.rules.CategoryRulesContent
+import com.budgetr.app.ui.screens.rules.CategoryRulesUiState
+import com.budgetr.app.ui.screens.rules.RuleRow
 import android.app.Application
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -265,9 +269,10 @@ abstract class ScreenshotTests(private val prefix: String) {
                             budgetCount = 3,
                             budgetsOver = 1,
                             nextPayday = period.nextPayday,
-                            historyPeriods = 4
+                            historyPeriods = 4,
+                            ruleCount = 3
                         ),
-                        onOpenBudgets = {}, onOpenDailyTarget = {}, onOpenPaydayPlan = {}, onOpenHistory = {}, onTransfer = {}
+                        onOpenBudgets = {}, onOpenDailyTarget = {}, onOpenPaydayPlan = {}, onOpenHistory = {}, onOpenRules = {}, onTransfer = {}
                     )
                 }
             }
@@ -346,6 +351,30 @@ abstract class ScreenshotTests(private val prefix: String) {
     fun backupRows() = listShot("17_backup_rows") {
         BackupRows(lastBackupAt = 1_791_966_000_000, isBusy = false, onBackUp = {}, onRestore = {})
         BackupRows(lastBackupAt = 0, isBusy = true, onBackUp = {}, onRestore = {})
+    }
+
+    @Test
+    fun categoryRules() = screenShot("18_category_rules") {
+        CategoryRulesContent(
+            state = CategoryRulesUiState(
+                isLoading = false,
+                rules = listOf(
+                    RuleRow(CategoryRule(1, "TESCO", "Groceries"), pastCount = 14, pastRetagged = 2),
+                    RuleRow(CategoryRule(2, "Tesco Petrol Station Leeds Road", "Transport"), pastCount = 0, pastRetagged = 0),
+                    RuleRow(CategoryRule(3, "Greggs", "Eating out"), pastCount = 1, pastRetagged = 0)
+                ),
+                suggestions = listOf(CategoryRule(pattern = "Boots", tag = "Health"), CategoryRule(pattern = "Trainline", tag = "Transport"))
+            ),
+            onAdd = {}, onEdit = {}, onApply = {}, onAddSuggestion = {}
+        )
+    }
+
+    @Test
+    fun categoryRulesEmpty() = screenShot("19_category_rules_empty") {
+        CategoryRulesContent(
+            state = CategoryRulesUiState(isLoading = false, suggestions = listOf(CategoryRule(pattern = "Aldi", tag = "Groceries"))),
+            onAdd = {}, onEdit = {}, onApply = {}, onAddSuggestion = {}
+        )
     }
 
     /** Dialogs open in their own window, which never reports idle under Robolectric 4.12

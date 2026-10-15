@@ -17,12 +17,14 @@ data class PhoneBackup(
     val subscriptionReviews: List<ReviewBackup> = emptyList(),
     val dailyTransfers: List<DailyTransferBackup> = emptyList(),
     val rollovers: List<RolloverBackup> = emptyList(),
+    val categoryRules: List<CategoryRuleBackup> = emptyList(),
     val settings: SettingsBackup = SettingsBackup()
 ) {
     /** True when there's nothing worth restoring. */
     val isEmpty: Boolean
         get() = categoryBudgets.isEmpty() && envelopes.isEmpty() && goalLinks.isEmpty() &&
-            subscriptionReviews.isEmpty() && dailyTransfers.isEmpty() && rollovers.isEmpty()
+            subscriptionReviews.isEmpty() && dailyTransfers.isEmpty() && rollovers.isEmpty() &&
+            categoryRules.isEmpty()
 
     /** Same contents, ignoring when it was saved, so an unchanged backup isn't written again. */
     fun sameContentAs(other: PhoneBackup?): Boolean = other != null && copy(savedAt = 0) == other.copy(savedAt = 0)
@@ -58,6 +60,9 @@ data class ReviewBackup(
 
 @JsonClass(generateAdapter = true)
 data class DailyTransferBackup(val periodStart: String, val createdOn: String, val amount: Double, val targetDay: String?)
+
+@JsonClass(generateAdapter = true)
+data class CategoryRuleBackup(val pattern: String, val tag: String)
 
 @JsonClass(generateAdapter = true)
 data class RolloverBackup(val account: String, val amount: Double, val recordedDate: String)

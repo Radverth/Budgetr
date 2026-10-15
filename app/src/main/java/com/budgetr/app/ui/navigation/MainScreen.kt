@@ -38,6 +38,7 @@ import com.budgetr.app.ui.screens.daily.DailyTargetScreen
 import com.budgetr.app.ui.screens.home.HomeScreen
 import com.budgetr.app.ui.screens.insights.InsightsScreen
 import com.budgetr.app.ui.screens.plan.PaydayPlanScreen
+import com.budgetr.app.ui.screens.rules.CategoryRulesScreen
 import com.budgetr.app.ui.screens.settings.SettingsScreen
 import com.budgetr.app.ui.screens.transactions.TransactionsScreen
 
@@ -152,8 +153,12 @@ fun MainScreen(onSignOut: () -> Unit) {
                     onOpenBudgets = { navController.navigate(NavRoutes.BUDGETS) { launchSingleTop = true } },
                     onOpenDailyTarget = { navController.navigate(NavRoutes.DAILY_TARGET) { launchSingleTop = true } },
                     onOpenPaydayPlan = { navController.navigate(NavRoutes.PAYDAY_PLAN) { launchSingleTop = true } },
-                    onOpenHistory = { navController.navigate(NavRoutes.INSIGHTS) { launchSingleTop = true } }
+                    onOpenHistory = { navController.navigate(NavRoutes.INSIGHTS) { launchSingleTop = true } },
+                    onOpenRules = { navController.navigate(NavRoutes.CATEGORY_RULES) { launchSingleTop = true } }
                 )
+            }
+            composable(NavRoutes.CATEGORY_RULES) {
+                CategoryRulesScreen(onNavigateBack = { navController.popBackStack() })
             }
             composable(NavRoutes.DAILY_TARGET) {
                 DailyTargetScreen(onNavigateBack = { navController.popBackStack() })
