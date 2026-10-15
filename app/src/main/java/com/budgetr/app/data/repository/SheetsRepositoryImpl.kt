@@ -7,6 +7,7 @@ import com.budgetr.app.data.local.entity.PendingChangeEntity
 import com.budgetr.app.data.model.PendingChange
 import com.budgetr.app.data.model.PendingKind
 import com.budgetr.app.data.sync.PendingSyncWorker
+import com.budgetr.app.widget.WidgetRefresher
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -251,6 +252,8 @@ class SheetsRepositoryImpl @Inject constructor(
 
         accountBalanceDao.deleteAll()
         accountBalanceDao.insertAll(entities)
+        // The widget shows these balances, so redraw it whenever they change
+        WidgetRefresher.refresh(context)
     }
 
     override suspend fun addTransaction(transaction: Transaction) {
@@ -328,6 +331,8 @@ class SheetsRepositoryImpl @Inject constructor(
                 break
             }
         }
+        // Something may have reached the Sheet, so bring the widget up to date
+        WidgetRefresher.refresh(context)
         outcome ?: if (anyFailed) SyncOutcome.SOME_FAILED else SyncOutcome.SYNCED
     }
 
