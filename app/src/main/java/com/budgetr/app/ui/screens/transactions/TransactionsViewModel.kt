@@ -419,7 +419,7 @@ class TransactionsViewModel @Inject constructor(
     fun undoDelete(transaction: Transaction) {
         viewModelScope.launch {
             try {
-                repository.addTransaction(transaction.copy(rowIndex = 0))
+                repository.addTransaction(transaction.copy(rowIndex = 0, id = null))
                 _uiState.update { it.copy(message = "Restored \"${transaction.info}\"") }
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = e.message) }
@@ -437,7 +437,7 @@ class TransactionsViewModel @Inject constructor(
                     if (original != null && original.account != transaction.account) {
                         // Account changed: remove from old account, append to new account
                         repository.deleteTransaction(original)
-                        repository.addTransaction(transaction.copy(rowIndex = 0))
+                        repository.addTransaction(transaction.copy(rowIndex = 0, id = null))
                     } else {
                         repository.updateTransaction(transaction)
                     }

@@ -15,5 +15,7 @@ data class TransactionEntity(
     /** Comma-separated month numbers (e.g. "1,6,12"). Null means active every month. */
     val activeMonths: String? = null,
     /** Optional spending category, e.g. "Groceries". Null means untagged. */
-    val tag: String? = null
+    val tag: String? = null,
+    /** Hidden row ID from Sheet column H. Null until the row has been given one. */
+    val rowId: String? = null
 )

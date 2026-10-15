@@ -41,7 +41,7 @@ import com.budgetr.app.data.local.entity.TransactionEntity
         PeriodSummaryEntity::class,
         DailyTransferEntity::class
     ],
-    version = 10,
+    version = 11,
     exportSchema = false
 )
 abstract class BudgetrDatabase : RoomDatabase() {
@@ -83,6 +83,13 @@ abstract class BudgetrDatabase : RoomDatabase() {
                         "`income` REAL NOT NULL, `fixedCosts` REAL NOT NULL, `oneOffCosts` REAL NOT NULL, " +
                         "`endBalance` REAL NOT NULL, `tagTotals` TEXT NOT NULL, PRIMARY KEY(`periodStart`))"
                 )
+            }
+        }
+
+        /** Adds the hidden row ID that keeps edits pointed at the right Sheet row. */
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE transactions ADD COLUMN rowId TEXT")
             }
         }
 

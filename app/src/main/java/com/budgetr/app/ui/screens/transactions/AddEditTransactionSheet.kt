@@ -543,6 +543,8 @@ fun AddEditTransactionSheet(
                     onSave(
                         Transaction(
                             rowIndex = existingTransaction?.rowIndex ?: 0,
+                            // Keeps the hidden row ID so the save finds the right Sheet row
+                            id = existingTransaction?.id,
                             date = date,
                             info = info,
                             amount = signedAmount,
