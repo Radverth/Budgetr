@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut android:shortcutId="add_expense" android:enabled="true"
+        android:icon="@drawable/ic_add_expense_shortcut"
+        android:shortcutShortLabel="@string/add_expense">
+        <intent android:action="com.budgetr.app.ADD_EXPENSE"
+            android:targetPackage="com.budgetr.app"
+            android:targetClass="com.budgetr.app.MainActivity" />
+    </shortcut>
+</shortcuts>

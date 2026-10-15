@@ -57,7 +57,12 @@ data class TransactionsUiState(
     val bulkCategoryError: String? = null,
     val message: String? = null,
     val accounts: List<String> = emptyList(),
+    val accountsLoaded: Boolean = false,
     val selectedAccount: String? = null,
+    val lastAddAccount: String? = null,
+    /** Quick add (widget, shortcut, tile) has no open account tab, so it starts on the last one used. */
+    val preferLastAccount: Boolean = false,
+    val descriptionHistory: List<Transaction> = emptyList(),
     val transactions: List<Transaction> = emptyList(),
     val categoryFilter: TransactionCategory? = null,
     /** Spending category filter, only applied while viewing one-off costs. */
@@ -110,8 +115,13 @@ data class TransactionsUiState(
     /** Rows to show: everything except deletes still on their way to the Sheet. */
     val visibleTransactions: List<Transaction> get() = transactions.filter { it !in pendingDeletes }
 
-    /** Account new transactions go into: the open tab, or the first account on the All tab. */
-    val accountForAdding: String? get() = if (isAllAccounts) accounts.firstOrNull() else selectedAccount
+    /** The open account tab wins, since that's the account on screen. The All tab and quick
+     *  add use the last account saved to. Removed accounts fall back to the first one. */
+    val accountForAdding: String? get() {
+        val open = selectedAccount?.takeIf { it in accounts }
+        val last = lastAddAccount?.takeIf { it in accounts }
+        return (if (preferLastAccount) last ?: open else open ?: last) ?: accounts.firstOrNull()
+    }
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -130,6 +140,7 @@ class TransactionsViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(
         TransactionsUiState(
             selectedAccount = initialAccount,
+            lastAddAccount = prefs.getLastAddAccount(),
             payDay = prefs.getPayDay(),
             spendingPromptEnabled = prefs.isSpendingPromptEnabled(),
             spendingPromptThreshold = prefs.getSpendingPromptThreshold()
@@ -151,7 +162,7 @@ class TransactionsViewModel @Inject constructor(
         viewModelScope.launch {
             repository.getAccountBalances().collect { balances ->
                 val names = balances.map { it.account }
-                _uiState.update { it.copy(accounts = names) }
+                _uiState.update { it.copy(accounts = names, accountsLoaded = true) }
                 val current = selectedAccountFlow.value
                 if (names.isNotEmpty() && (current == null || (current !in names && current != ALL_ACCOUNTS))) {
                     selectAccount(names.first())
@@ -164,7 +175,8 @@ class TransactionsViewModel @Inject constructor(
         viewModelScope.launch {
             repository.getAllTransactions().collect { all ->
                 _uiState.update {
-                    it.copy(knownTags = SpendTags.knownTags(all), tagSuggestions = SpendTags.suggestionsByInfo(all))
+                    it.copy(knownTags = SpendTags.knownTags(all), tagSuggestions = SpendTags.suggestionsByInfo(all),
+                        descriptionHistory = all)
                 }
             }
         }
@@ -381,7 +393,11 @@ class TransactionsViewModel @Inject constructor(
 
     private fun transactionCount(n: Int) = if (n == 1) "1 transaction" else "$n transactions"
 
-    fun showAddSheet() = _uiState.update { it.copy(showAddSheet = true, transactionToEdit = null) }
+    fun preferLastAccountForAdding() = _uiState.update { it.copy(preferLastAccount = true) }
+
+    fun showAddSheet() = _uiState.update {
+        it.copy(showAddSheet = true, transactionToEdit = null, lastAddAccount = prefs.getLastAddAccount())
+    }
     fun showEditSheet(transaction: Transaction) = _uiState.update { it.copy(transactionToEdit = transaction, showAddSheet = true) }
     fun dismissSheet() = _uiState.update { it.copy(showAddSheet = false, transactionToEdit = null) }
 
@@ -438,6 +454,8 @@ class TransactionsViewModel @Inject constructor(
                     }
 
                     repository.addTransaction(transaction)
+                    prefs.setLastAddAccount(transaction.account)
+                    _uiState.update { it.copy(lastAddAccount = transaction.account) }
 
                     if (budget != null && spendBefore != null && !BudgetCapCalculator.isOverLimit(spendBefore, budget.limit)) {
                         val spendAfter = spendForCategory(repository.getAllTransactions().first(), budget.category, period = period)
@@ -480,7 +498,8 @@ class TransactionsViewModel @Inject constructor(
             try {
                 repository.addTransaction(source)
                 repository.addTransaction(destination)
-                _uiState.update { it.copy(addSaveCount = it.addSaveCount + 1) }
+                prefs.setLastAddAccount(source.account)
+                _uiState.update { it.copy(addSaveCount = it.addSaveCount + 1, lastAddAccount = source.account) }
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = e.message) }
             }

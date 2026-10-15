@@ -41,6 +41,11 @@ class PreferencesManager @Inject constructor(
     fun getSpreadsheetId(): String? = prefs.getString(KEY_SPREADSHEET_ID, null)
     fun setSpreadsheetId(id: String?) = prefs.edit().putString(KEY_SPREADSHEET_ID, id).apply()
 
+    /** Account names belong to a particular spreadsheet, not to the signed-in user. */
+    fun getLastAddAccount(): String? = prefs.getString("last_add_account:${getSpreadsheetId()}", null)
+    fun setLastAddAccount(account: String) =
+        prefs.edit().putString("last_add_account:${getSpreadsheetId()}", account).apply()
+
     fun getSpreadsheetName(): String? = prefs.getString(KEY_SPREADSHEET_NAME, null)
     fun setSpreadsheetName(name: String?) = prefs.edit().putString(KEY_SPREADSHEET_NAME, name).apply()
 

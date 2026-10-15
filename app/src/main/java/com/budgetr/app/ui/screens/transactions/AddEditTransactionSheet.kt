@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -39,10 +38,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.budgetr.app.data.model.Debt
 import com.budgetr.app.data.model.SavingsGoal
@@ -50,6 +49,7 @@ import com.budgetr.app.data.model.Transaction
 import com.budgetr.app.data.model.TransactionCategory
 import com.budgetr.app.ui.theme.ExpenseRed
 import com.budgetr.app.ui.theme.IncomeGreen
+import com.budgetr.app.util.QuickAddSuggestions
 import com.budgetr.app.util.SpendTags
 import com.budgetr.app.util.toCurrencyString
 import java.text.SimpleDateFormat
@@ -99,6 +99,7 @@ fun AddEditTransactionSheet(
     spendingPromptThreshold: Double = 20.0,
     knownTags: List<String> = SpendTags.DEFAULTS,
     tagSuggestions: Map<String, String> = emptyMap(),
+    descriptionHistory: List<Transaction> = emptyList(),
     onSave: (Transaction, TransactionLinkAction?) -> Unit,
     onSaveTransfer: (source: Transaction, destination: Transaction) -> Unit,
     onDismiss: () -> Unit,
@@ -107,6 +108,11 @@ fun AddEditTransactionSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val today = SimpleDateFormat("dd/MM/yyyy", Locale.UK).format(Date())
     val isEdit = existingTransaction != null
+    val amountFocus = remember { FocusRequester() }
+
+    LaunchedEffect(sheetState.isVisible, addSaveCount) {
+        if (!isEdit && sheetState.isVisible) amountFocus.requestFocus()
+    }
 
     val initialCategory = existingTransaction?.category ?: presetCategory ?: TransactionCategory.ONE_OFF_COST
     var date by remember {
@@ -269,6 +275,24 @@ fun AddEditTransactionSheet(
                 }
             }
 
+            QuickAddFields(
+                amount = amount,
+                onAmountChange = { amount = it },
+                description = info,
+                onDescriptionChange = { info = it },
+                suggestions = if (isEdit) emptyList() else remember(descriptionHistory, accounts, presetCategory) {
+                    QuickAddSuggestions.from(descriptionHistory, accounts, presetCategory)
+                },
+                onSuggestion = {
+                    info = it.info
+                    category = it.category
+                    selectedAccount = it.account
+                    tag = it.tag
+                    tagTouched = true
+                },
+                amountFocus = amountFocus
+            )
+
             // Date field
             OutlinedTextField(
                 value = date,
@@ -283,25 +307,6 @@ fun AddEditTransactionSheet(
                 supportingText = if (category == TransactionCategory.RECURRING_INCOME) {
                     { Text("Pick the day this income recurs each month (e.g. 9th). Fridays replace weekends.", style = MaterialTheme.typography.labelSmall) }
                 } else null
-            )
-
-            // Description
-            OutlinedTextField(
-                value = info,
-                onValueChange = { info = it },
-                label = { Text("Description") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
-
-            // Amount
-            OutlinedTextField(
-                value = amount,
-                onValueChange = { amount = it },
-                label = { Text("Amount (£)") },
-                modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                singleLine = true
             )
 
             // Category dropdown

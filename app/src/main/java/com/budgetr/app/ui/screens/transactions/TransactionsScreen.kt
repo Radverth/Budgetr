@@ -203,6 +203,7 @@ fun TransactionsScreen(
             spendingPromptThreshold = uiState.spendingPromptThreshold,
             knownTags = uiState.knownTags,
             tagSuggestions = uiState.tagSuggestions,
+            descriptionHistory = uiState.descriptionHistory,
             onSave = viewModel::saveTransaction,
             onSaveTransfer = viewModel::saveTransfer,
             onDismiss = viewModel::dismissSheet
