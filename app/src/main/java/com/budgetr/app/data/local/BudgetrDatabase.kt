@@ -11,6 +11,7 @@ import com.budgetr.app.data.local.dao.DailyTransferDao
 import com.budgetr.app.data.local.dao.DebtDao
 import com.budgetr.app.data.local.dao.EnvelopeDao
 import com.budgetr.app.data.local.dao.GoalCategoryLinkDao
+import com.budgetr.app.data.local.dao.PendingChangeDao
 import com.budgetr.app.data.local.dao.PeriodSummaryDao
 import com.budgetr.app.data.local.dao.RecurringCostReviewDao
 import com.budgetr.app.data.local.dao.SavingsGoalDao
@@ -22,6 +23,7 @@ import com.budgetr.app.data.local.entity.DailyTransferEntity
 import com.budgetr.app.data.local.entity.DebtEntity
 import com.budgetr.app.data.local.entity.EnvelopeEntity
 import com.budgetr.app.data.local.entity.GoalCategoryLinkEntity
+import com.budgetr.app.data.local.entity.PendingChangeEntity
 import com.budgetr.app.data.local.entity.PeriodSummaryEntity
 import com.budgetr.app.data.local.entity.RecurringCostReviewEntity
 import com.budgetr.app.data.local.entity.SavingsGoalEntity
@@ -39,9 +41,10 @@ import com.budgetr.app.data.local.entity.TransactionEntity
         GoalCategoryLinkEntity::class,
         EnvelopeEntity::class,
         PeriodSummaryEntity::class,
-        DailyTransferEntity::class
+        DailyTransferEntity::class,
+        PendingChangeEntity::class
     ],
-    version = 11,
+    version = 12,
     exportSchema = false
 )
 abstract class BudgetrDatabase : RoomDatabase() {
@@ -56,6 +59,7 @@ abstract class BudgetrDatabase : RoomDatabase() {
     abstract fun envelopeDao(): EnvelopeDao
     abstract fun periodSummaryDao(): PeriodSummaryDao
     abstract fun dailyTransferDao(): DailyTransferDao
+    abstract fun pendingChangeDao(): PendingChangeDao
 
     companion object {
         /** Adds the optional spending category to cached transactions. */
@@ -82,6 +86,18 @@ abstract class BudgetrDatabase : RoomDatabase() {
                     "CREATE TABLE IF NOT EXISTS `period_summaries` (`periodStart` TEXT NOT NULL, `periodEnd` TEXT NOT NULL, " +
                         "`income` REAL NOT NULL, `fixedCosts` REAL NOT NULL, `oneOffCosts` REAL NOT NULL, " +
                         "`endBalance` REAL NOT NULL, `tagTotals` TEXT NOT NULL, PRIMARY KEY(`periodStart`))"
+                )
+            }
+        }
+
+        /** Adds the queue of changes waiting to reach the Sheet (offline saving). */
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `pending_changes` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`kind` TEXT NOT NULL, `account` TEXT NOT NULL, `txId` TEXT, `rowIndex` INTEGER NOT NULL, " +
+                        "`date` TEXT NOT NULL, `info` TEXT NOT NULL, `amount` REAL NOT NULL, `category` TEXT NOT NULL, " +
+                        "`activeMonths` TEXT, `tag` TEXT, `failedReason` TEXT, `createdAt` INTEGER NOT NULL)"
                 )
             }
         }

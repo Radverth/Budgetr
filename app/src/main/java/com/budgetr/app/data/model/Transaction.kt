@@ -12,5 +12,7 @@ data class Transaction(
     /** Optional spending category for one-off costs, e.g. "Groceries". Sheet column G. */
     val tag: String? = null,
     /** Hidden ID in Sheet column H, used to find this row even if the Sheet is re-ordered. */
-    val id: String? = null
+    val id: String? = null,
+    /** Saved on the phone but not yet in the Google Sheet. */
+    val pending: Boolean = false
 )

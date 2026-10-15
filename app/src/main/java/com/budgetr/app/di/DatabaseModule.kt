@@ -10,6 +10,7 @@ import com.budgetr.app.data.local.dao.DailyTransferDao
 import com.budgetr.app.data.local.dao.DebtDao
 import com.budgetr.app.data.local.dao.EnvelopeDao
 import com.budgetr.app.data.local.dao.GoalCategoryLinkDao
+import com.budgetr.app.data.local.dao.PendingChangeDao
 import com.budgetr.app.data.local.dao.PeriodSummaryDao
 import com.budgetr.app.data.local.dao.RecurringCostReviewDao
 import com.budgetr.app.data.local.dao.SavingsGoalDao
@@ -31,7 +32,7 @@ object DatabaseModule {
         Room.databaseBuilder(context, BudgetrDatabase::class.java, "budgetr.db")
             // Real migrations keep device-only data (budget caps, reviews) across updates;
             // the destructive fallback only covers versions older than these.
-            .addMigrations(BudgetrDatabase.MIGRATION_6_7, BudgetrDatabase.MIGRATION_7_8, BudgetrDatabase.MIGRATION_8_9, BudgetrDatabase.MIGRATION_9_10, BudgetrDatabase.MIGRATION_10_11)
+            .addMigrations(BudgetrDatabase.MIGRATION_6_7, BudgetrDatabase.MIGRATION_7_8, BudgetrDatabase.MIGRATION_8_9, BudgetrDatabase.MIGRATION_9_10, BudgetrDatabase.MIGRATION_10_11, BudgetrDatabase.MIGRATION_11_12)
             .fallbackToDestructiveMigration()
             .build()
 
@@ -67,4 +68,7 @@ object DatabaseModule {
 
     @Provides
     fun provideDailyTransferDao(db: BudgetrDatabase): DailyTransferDao = db.dailyTransferDao()
+
+    @Provides
+    fun providePendingChangeDao(db: BudgetrDatabase): PendingChangeDao = db.pendingChangeDao()
 }
