@@ -137,7 +137,7 @@ class OfflineSavingTest {
         val budgets = BudgetRepositoryImpl(db.categoryBudgetDao(), db.recurringCostReviewDao(),
             db.goalCategoryLinkDao(), db.envelopeDao(), db.dailyTransferDao())
         val vm = TransactionsViewModel(repository, budgets, prefs,
-            DailyTargetRepository(repository, budgets, prefs, PeriodReviewRepository(db, prefs)), CategoryRuleRepository(db.categoryRuleDao()), RuntimeEnvironment.getApplication(), SavedStateHandle())
+            DailyTargetRepository(repository, budgets, prefs, PeriodReviewRepository(db, prefs), AnnualFundRepository(db.annualFundDao())), CategoryRuleRepository(db.categoryRuleDao()), RuntimeEnvironment.getApplication(), SavedStateHandle())
         val store = ViewModelStore()
         store.put("transactions", vm)
         try {

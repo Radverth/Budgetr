@@ -1,5 +1,6 @@
 package com.budgetr.app.widget
 
+import com.budgetr.app.util.AnnualFundCalculator
 import android.content.Context
 import android.content.Intent
 import androidx.compose.runtime.Composable
@@ -101,6 +102,7 @@ class BudgetrWidget : GlanceAppWidget() {
                     amount = it.amount,
                     category = TransactionCategory.fromString(it.category),
                     account = it.account,
+                    activeMonths = it.activeMonths?.split(",")?.mapNotNull { m -> m.trim().toIntOrNull() }?.ifEmpty { null },
                     tag = it.tag
                 )
             }
@@ -112,7 +114,8 @@ class BudgetrWidget : GlanceAppWidget() {
                     )
                 }
             )
-            SafeToSpendCalculator.calculate(adjustedBalances.sumOf { it.remainingBalance }, daysLeft, reserved)
+            val funds = AnnualFundCalculator.matching(entryPoint.annualFundRepository().getFunds().first(), transactions)
+            SafeToSpendCalculator.calculate(adjustedBalances.sumOf { it.remainingBalance }, daysLeft, reserved + AnnualFundCalculator.reserved(funds))
         } catch (e: Exception) {
             null
         }

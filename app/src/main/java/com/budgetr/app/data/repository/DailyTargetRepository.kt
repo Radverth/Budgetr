@@ -5,6 +5,7 @@ import com.budgetr.app.data.model.Debt
 import com.budgetr.app.data.model.SavingsGoal
 import com.budgetr.app.data.model.Transaction
 import com.budgetr.app.util.DailyTarget
+import com.budgetr.app.util.AnnualFundCalculator
 import com.budgetr.app.util.DailyTargetCalculator
 import com.budgetr.app.util.PayPeriod
 import com.budgetr.app.util.PayPeriodCalculator
@@ -45,7 +46,8 @@ class DailyTargetRepository @Inject constructor(
     private val sheetsRepository: SheetsRepository,
     private val budgetRepository: BudgetRepository,
     private val prefs: PreferencesManager,
-    private val reviews: PeriodReviewRepository
+    private val reviews: PeriodReviewRepository,
+    private val annualFunds: AnnualFundRepository
 ) {
 
     /** Re-emits each minute so the target moves on at midnight even if no data changes. */
@@ -75,9 +77,13 @@ class DailyTargetRepository @Inject constructor(
                 budgetRepository.getEnvelopes()
             ) { transactions, goals, debts, envelopes -> SourceData(transactions, goals, debts, envelopes.map { it.tag.lowercase() }.toSet()) }
 
-            combine(data, budgetRepository.getDailyTransfers(periodStart), ticker, settingsVersion) { source, transfers, now, _ ->
+            combine(data, budgetRepository.getDailyTransfers(periodStart), ticker, settingsVersion, annualFunds.getFunds()) { source, transfers, now, _, funds ->
                 val manual = prefs.getDailyPotOverride()
-                val pot = manual ?: lockedPot(periodStart, source)
+                // Yearly bill funds take their share at payday and give it back in the bill's month.
+                // Processing is once per period, so the fund update this triggers settles straight away.
+                annualFunds.processPeriod(source.transactions, period)
+                val fundAdjustment = AnnualFundCalculator.potAdjustment(AnnualFundCalculator.matching(funds, source.transactions), period)
+                val pot = manual ?: (lockedPot(periodStart, source) + fundAdjustment).coerceAtLeast(0.0)
                 val countBudgeted = prefs.isDailyTargetCountingBudgeted()
                 if (manual != null || prefs.getDailyPotPeriod() == periodStart) {
                     reviews.savePlan(com.budgetr.app.data.model.ReviewPlan(periodStart, pot, countBudgeted = countBudgeted))
@@ -117,14 +123,15 @@ class DailyTargetRepository @Inject constructor(
 
     /** Uses the pot fixed for this period, or works it out and fixes it. Nothing is fixed
      *  while there's no income in the cache yet (e.g. before the first sync), so an empty
-     *  cache can't lock in £0 for the whole period. */
+     *  cache can't lock in £0 for the whole period. It's kept before yearly bill funds and
+     *  may be below £0 (a yearly bill's month), so the money a fund releases isn't lost to
+     *  rounding up to £0 first; the caller keeps the final pot at £0 or more. */
     private fun lockedPot(periodStart: String, source: SourceData): Double {
         if (prefs.getDailyPotPeriod() == periodStart) return prefs.getDailyPotAmount()
         val income = PaydayPlanCalculator.income(source.transactions)
-        val pot = (income - PaydayPlanCalculator.fixedCosts(source.transactions) -
+        val pot = income - PaydayPlanCalculator.fixedCosts(source.transactions) -
             (if (prefs.isPlanIncludeGoals()) PaydayPlanCalculator.goalContributions(source.goals) else 0.0) -
-            (if (prefs.isPlanIncludeDebts()) PaydayPlanCalculator.debtMinimums(source.debts) else 0.0))
-            .coerceAtLeast(0.0)
+            (if (prefs.isPlanIncludeDebts()) PaydayPlanCalculator.debtMinimums(source.debts) else 0.0)
         if (income > 0) prefs.setDailyPot(periodStart, pot)
         return pot
     }

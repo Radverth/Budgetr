@@ -16,10 +16,12 @@ data class PaydayPlanTotals(
     val fixedCosts: Double,
     val goals: Double,
     val debts: Double,
-    val assigned: Double
+    val assigned: Double,
+    /** Net set aside for yearly bills this payday (negative in a bill's month, when its fund pays it). */
+    val annualFunds: Double = 0.0
 ) {
-    /** Money free for spending categories once bills, goals and debts are covered. */
-    val toAssign: Double get() = income - fixedCosts - goals - debts
+    /** Money free for spending categories once bills, goals, debts and yearly bill funds are covered. */
+    val toAssign: Double get() = income - fixedCosts - goals - debts - annualFunds
     /** Positive: still unassigned. Negative: more assigned than there is. */
     val leftToAssign: Double get() = toAssign - assigned
 }
