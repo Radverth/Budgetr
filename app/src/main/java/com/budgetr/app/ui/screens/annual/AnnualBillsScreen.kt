@@ -46,6 +46,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.budgetr.app.ui.theme.IncomeGreen
 import com.budgetr.app.util.AnnualBillStatus
+import com.budgetr.app.util.AnnualFund
 import com.budgetr.app.util.toCurrencyString
 import java.text.DateFormatSymbols
 import java.util.Locale
@@ -170,34 +171,41 @@ private fun AnnualBillCard(status: AnnualBillStatus, showAccount: Boolean, onSet
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                return@Column
+            } else {
+                FundProgress(status, fund, month)
             }
-            LinearProgressIndicator(
-                progress = if (status.amount > 0) (fund.saved / status.amount).toFloat().coerceIn(0f, 1f) else 0f,
-                modifier = Modifier.fillMaxWidth().height(8.dp),
-                color = IncomeGreen,
-                trackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f)
+        }
+    }
+}
+
+@Composable
+private fun FundProgress(status: AnnualBillStatus, fund: AnnualFund, month: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        LinearProgressIndicator(
+            progress = if (status.amount > 0) (fund.saved / status.amount).toFloat().coerceIn(0f, 1f) else 0f,
+            modifier = Modifier.fillMaxWidth().height(8.dp),
+            color = IncomeGreen,
+            trackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f)
+        )
+        Text(
+            text = "${fund.saved.toCurrencyString()} of ${status.amount.toCurrencyString()} saved",
+            style = MaterialTheme.typography.bodyMedium
+        )
+        // An icon and words, so the status never relies on colour alone
+        val (good, text) = when {
+            status.isDuePeriod -> true to "Paid from the fund this month (${fund.lastReleased.toCurrencyString()}). Saving for next year has started."
+            status.onTrack -> true to "On track · ${status.setAsideNow.toCurrencyString()} set aside this payday"
+            else -> false to "Catching up · ${status.setAsideNow.toCurrencyString()} this payday to be ready by $month"
+        }
+        Row(verticalAlignment = Alignment.Top) {
+            Icon(
+                if (good) Icons.Default.CheckCircle else Icons.Default.Schedule,
+                contentDescription = null,
+                tint = if (good) IncomeGreen else MaterialTheme.colorScheme.tertiary,
+                modifier = Modifier.size(18.dp).padding(top = 1.dp)
             )
-            Text(
-                text = "${fund.saved.toCurrencyString()} of ${status.amount.toCurrencyString()} saved",
-                style = MaterialTheme.typography.bodyMedium
-            )
-            // An icon and words, so the status never relies on colour alone
-            val (good, text) = when {
-                status.isDuePeriod -> true to "Paid from the fund this month (${fund.lastReleased.toCurrencyString()}). Saving for next year has started."
-                status.onTrack -> true to "On track · ${status.setAsideNow.toCurrencyString()} set aside this payday"
-                else -> false to "Catching up · ${status.setAsideNow.toCurrencyString()} this payday to be ready by $month"
-            }
-            Row(verticalAlignment = Alignment.Top) {
-                Icon(
-                    if (good) Icons.Default.CheckCircle else Icons.Default.Schedule,
-                    contentDescription = null,
-                    tint = if (good) IncomeGreen else MaterialTheme.colorScheme.tertiary,
-                    modifier = Modifier.size(18.dp).padding(top = 1.dp)
-                )
-                Spacer(Modifier.width(6.dp))
-                Text(text, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
-            }
+            Spacer(Modifier.width(6.dp))
+            Text(text, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
         }
     }
 }
