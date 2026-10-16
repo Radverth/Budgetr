@@ -11,6 +11,7 @@ import com.budgetr.app.data.local.dao.DailyTransferDao
 import com.budgetr.app.data.local.dao.EnvelopeDao
 import com.budgetr.app.data.local.dao.GoalCategoryLinkDao
 import com.budgetr.app.data.local.dao.RecurringCostReviewDao
+import com.budgetr.app.data.local.entity.AnnualFundEntity
 import com.budgetr.app.data.local.entity.BalanceRolloverEntity
 import com.budgetr.app.data.local.entity.BillDueDayEntity
 import com.budgetr.app.data.local.entity.CategoryBudgetEntity
@@ -37,7 +38,7 @@ enum class RestoreResult { RESTORED, NOTHING_TO_RESTORE, FAILED }
 
 /**
  * Saves the data Budgetr keeps only on the phone (budgets, carry-over, borrow / pay forward,
- * subscription reviews, category rules, bill due days, settings) to a hidden tab in the Google Sheet, and restores it.
+ * subscription reviews, category rules, bill due days, annual bill funds, settings) to a hidden tab in the Google Sheet, and restores it.
  */
 @Singleton
 class BackupRepository @Inject constructor(
@@ -121,6 +122,9 @@ class BackupRepository @Inject constructor(
         rollovers = balanceRolloverDao.getAllSync().map { RolloverBackup(it.account, it.rolloverAmount, it.recordedDate) },
         categoryRules = categoryRuleDao.getAllSync().map { CategoryRuleBackup(it.pattern, it.tag) },
         billDueDays = billDueDayDao.getAllSync().map { BillDueDayBackup(it.account, it.infoKey, it.dueDay) },
+        annualFunds = db.annualFundDao().getAllSync().map {
+            AnnualFundBackup(it.account, it.infoKey, it.saved, it.processedPeriod, it.lastSetAside, it.lastReleased)
+        },
         periodReviews = db.periodReviewDao().all(prefs.getSpreadsheetId().orEmpty()),
         settings = SettingsBackup(
             payDay = prefs.getPayDay(),
@@ -173,6 +177,10 @@ class BackupRepository @Inject constructor(
         backup.categoryRules.forEach { categoryRuleDao.upsert(CategoryRuleEntity(pattern = it.pattern, tag = it.tag)) }
         billDueDayDao.deleteAll()
         backup.billDueDays.forEach { billDueDayDao.upsert(BillDueDayEntity(it.account, it.infoKey, it.dueDay)) }
+        db.annualFundDao().deleteAll()
+        backup.annualFunds.forEach {
+            db.annualFundDao().upsert(AnnualFundEntity(it.account, it.infoKey, it.saved, it.processedPeriod, it.lastSetAside, it.lastReleased))
+        }
 
         }
 

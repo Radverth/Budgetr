@@ -7,6 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.budgetr.app.data.local.dao.AccountBalanceDao
+import com.budgetr.app.data.local.dao.AnnualFundDao
 import com.budgetr.app.data.local.dao.BalanceRolloverDao
 import com.budgetr.app.data.local.dao.BillDueDayDao
 import com.budgetr.app.data.local.dao.CategoryBudgetDao
@@ -21,6 +22,7 @@ import com.budgetr.app.data.local.dao.RecurringCostReviewDao
 import com.budgetr.app.data.local.dao.SavingsGoalDao
 import com.budgetr.app.data.local.dao.TransactionDao
 import com.budgetr.app.data.local.entity.AccountBalanceEntity
+import com.budgetr.app.data.local.entity.AnnualFundEntity
 import com.budgetr.app.data.local.entity.BalanceRolloverEntity
 import com.budgetr.app.data.local.entity.BillDueDayEntity
 import com.budgetr.app.data.local.entity.CategoryBudgetEntity
@@ -51,9 +53,10 @@ import com.budgetr.app.data.local.entity.TransactionEntity
         PendingChangeEntity::class,
         CategoryRuleEntity::class,
         BillDueDayEntity::class,
-        PeriodReviewEntity::class
+        PeriodReviewEntity::class,
+        AnnualFundEntity::class
     ],
-    version = 15,
+    version = 16,
     exportSchema = false
 )
 abstract class BudgetrDatabase : RoomDatabase() {
@@ -73,8 +76,19 @@ abstract class BudgetrDatabase : RoomDatabase() {
     abstract fun billDueDayDao(): BillDueDayDao
 
     abstract fun periodReviewDao(): PeriodReviewDao
+    abstract fun annualFundDao(): AnnualFundDao
 
     companion object {
+        /** Adds funds saving up for yearly bills. */
+        val MIGRATION_15_16 = object : Migration(15, 16) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `annual_funds` (`account` TEXT NOT NULL, `infoKey` TEXT NOT NULL, `saved` REAL NOT NULL, " +
+                        "`processedPeriod` TEXT, `lastSetAside` REAL NOT NULL, `lastReleased` REAL NOT NULL, PRIMARY KEY(`account`, `infoKey`))"
+                )
+            }
+        }
+
         val MIGRATION_14_15 = object : Migration(14, 15) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("CREATE TABLE IF NOT EXISTS `period_reviews` (`spreadsheetId` TEXT NOT NULL, `periodStart` TEXT NOT NULL, `planJson` TEXT, `snapshotJson` TEXT, `complete` INTEGER NOT NULL, `receiptJson` TEXT, PRIMARY KEY(`spreadsheetId`, `periodStart`))")
