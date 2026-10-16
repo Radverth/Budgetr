@@ -1,5 +1,7 @@
 package com.budgetr.app.ui.screens.home
 
+import com.budgetr.app.data.repository.AnnualFundRepository
+import com.budgetr.app.util.AnnualFundCalculator
 import com.budgetr.app.data.repository.PeriodReviewRepository
 import com.budgetr.app.data.repository.CashFlowRepository
 import com.budgetr.app.util.ForecastWarning
@@ -138,7 +140,8 @@ class HomeViewModel @Inject constructor(
     private val dailyTargetRepository: DailyTargetRepository,
     private val backupRepository: BackupRepository,
     private val cashFlowRepository: CashFlowRepository,
-    private val periodReviewRepository: PeriodReviewRepository
+    private val periodReviewRepository: PeriodReviewRepository,
+    private val annualFundRepository: AnnualFundRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState(userName = authManager.getUserName()))
@@ -362,7 +365,7 @@ class HomeViewModel @Inject constructor(
 
             val allTransactions = repository.getAllTransactions()
 
-            combine(balancesAndRollovers, allTransactions, budgetRepository.getEnvelopes()) { (balances, rollovers), allTx, envelopes ->
+            combine(balancesAndRollovers, allTransactions, budgetRepository.getEnvelopes(), annualFundRepository.getFunds()) { (balances, rollovers), allTx, envelopes, funds ->
                 val today = Calendar.getInstance().apply {
                     set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
                     set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
@@ -422,7 +425,9 @@ class HomeViewModel @Inject constructor(
                 val period = PayPeriodCalculator.current(prefs.getPayDay(), today)
                 val daysLeft = period.daysUntilPayday(today)
                 // Money still unspent in category budgets is kept for those categories
-                val reserved = EnvelopeCalculator.reserved(envelopes.map { EnvelopeCalculator.status(it, allTx, period, daysLeft) })
+                val reserved = EnvelopeCalculator.reserved(envelopes.map { EnvelopeCalculator.status(it, allTx, period, daysLeft) }) +
+                    // ...and money saved up for yearly bills is kept for them
+                    AnnualFundCalculator.reserved(AnnualFundCalculator.matching(funds, allTx))
                 val safeToSpend = SafeToSpendCalculator.calculate(totalAvailable, daysLeft, reserved)
                 SummaryData(
                     adjustedBalances, totalAvailable, safeToSpend, income, outgoings, fixedCosts, oneOffCosts,

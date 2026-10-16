@@ -19,6 +19,7 @@ data class PhoneBackup(
     val rollovers: List<RolloverBackup> = emptyList(),
     val categoryRules: List<CategoryRuleBackup> = emptyList(),
     val billDueDays: List<BillDueDayBackup> = emptyList(),
+    val annualFunds: List<AnnualFundBackup> = emptyList(),
     val periodReviews: List<com.budgetr.app.data.local.entity.PeriodReviewEntity> = emptyList(),
     val settings: SettingsBackup = SettingsBackup()
 ) {
@@ -26,7 +27,8 @@ data class PhoneBackup(
     val isEmpty: Boolean
         get() = categoryBudgets.isEmpty() && envelopes.isEmpty() && goalLinks.isEmpty() &&
             subscriptionReviews.isEmpty() && dailyTransfers.isEmpty() && rollovers.isEmpty() &&
-            categoryRules.isEmpty() && billDueDays.isEmpty() && periodReviews.isEmpty()
+            categoryRules.isEmpty() && billDueDays.isEmpty() && periodReviews.isEmpty() &&
+            annualFunds.isEmpty()
 
     /** Same contents, ignoring when it was saved, so an unchanged backup isn't written again. */
     fun sameContentAs(other: PhoneBackup?): Boolean = other != null && copy(savedAt = 0) == other.copy(savedAt = 0)
@@ -65,6 +67,16 @@ data class DailyTransferBackup(val periodStart: String, val createdOn: String, v
 
 @JsonClass(generateAdapter = true)
 data class CategoryRuleBackup(val pattern: String, val tag: String)
+
+@JsonClass(generateAdapter = true)
+data class AnnualFundBackup(
+    val account: String,
+    val infoKey: String,
+    val saved: Double,
+    val processedPeriod: String?,
+    val lastSetAside: Double,
+    val lastReleased: Double
+)
 
 @JsonClass(generateAdapter = true)
 data class BillDueDayBackup(val account: String, val infoKey: String, val dueDay: Int)

@@ -18,6 +18,7 @@ class BackupCodecTest {
         rollovers = listOf(RolloverBackup("Monzo", 120.5, "25/09/2026")),
         categoryRules = listOf(CategoryRuleBackup("TESCO", "Groceries")),
         billDueDays = listOf(BillDueDayBackup("Monzo", "rent", 1)),
+        annualFunds = listOf(AnnualFundBackup("Monzo", "car insurance", 160.0, "26/10/2026", 80.0, 0.0)),
         settings = SettingsBackup(payDay = 26, reminderEnabled = true, reminderHour = 20, dailyPotOverride = 600.0, forecastSpendingAccount = "Monzo")
     )
 

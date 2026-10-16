@@ -190,6 +190,12 @@ private fun MoneyInCard(uiState: PaydayPlanUiState, viewModel: PaydayPlanViewMod
                 checked = uiState.includeDebts,
                 onCheckedChange = viewModel::setIncludeDebts
             )
+            if (uiState.annualFunds != 0.0) {
+                AmountRow(
+                    label = if (uiState.annualFunds > 0) "Saving for yearly bills" else "Yearly bill paid from its fund",
+                    amount = -uiState.annualFunds
+                )
+            }
             HorizontalDivider()
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("For spending categories", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)

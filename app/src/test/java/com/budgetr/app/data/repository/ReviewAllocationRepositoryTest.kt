@@ -83,7 +83,7 @@ class ReviewAllocationRepositoryTest {
             }
         } as SheetsRepository
         val budgets = BudgetRepositoryImpl(db.categoryBudgetDao(), db.recurringCostReviewDao(), db.goalCategoryLinkDao(), db.envelopeDao(), db.dailyTransferDao())
-        val daily = DailyTargetRepository(sheets, budgets, prefs, reviews)
+        val daily = DailyTargetRepository(sheets, budgets, prefs, reviews, AnnualFundRepository(db.annualFundDao()))
         backup = BackupRepository(sheets, db.categoryBudgetDao(), db.envelopeDao(), db.goalCategoryLinkDao(), db.recurringCostReviewDao(), db.dailyTransferDao(), db.balanceRolloverDao(), db.categoryRuleDao(), db.billDueDayDao(), daily, prefs, context, db)
         allocations = ReviewAllocationRepository(db, reviews, sheets, prefs, backup)
     }

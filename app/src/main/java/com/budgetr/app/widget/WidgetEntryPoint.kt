@@ -3,6 +3,7 @@ package com.budgetr.app.widget
 import com.budgetr.app.data.local.dao.AccountBalanceDao
 import com.budgetr.app.data.local.dao.BalanceRolloverDao
 import com.budgetr.app.data.local.dao.EnvelopeDao
+import com.budgetr.app.data.repository.AnnualFundRepository
 import com.budgetr.app.data.repository.DailyTargetRepository
 import com.budgetr.app.data.local.dao.TransactionDao
 import com.budgetr.app.util.PreferencesManager
@@ -19,4 +20,5 @@ interface WidgetEntryPoint {
     fun preferencesManager(): PreferencesManager
     fun envelopeDao(): EnvelopeDao
     fun dailyTargetRepository(): DailyTargetRepository
+    fun annualFundRepository(): AnnualFundRepository
 }

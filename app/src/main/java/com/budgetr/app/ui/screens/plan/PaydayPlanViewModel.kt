@@ -3,9 +3,11 @@ package com.budgetr.app.ui.screens.plan
 import com.budgetr.app.util.UserMessages
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.budgetr.app.data.repository.AnnualFundRepository
 import com.budgetr.app.data.repository.BudgetRepository
 import com.budgetr.app.data.repository.SheetsRepository
 import com.budgetr.app.data.repository.DailyTargetRepository
+import com.budgetr.app.util.AnnualFundCalculator
 import com.budgetr.app.util.DailyTargetCalculator
 import com.budgetr.app.util.HistoryCalculator
 import com.budgetr.app.util.PayPeriodCalculator
@@ -36,6 +38,8 @@ data class PaydayPlanUiState(
     val fixedCosts: Double = 0.0,
     val goalContributions: Double = 0.0,
     val debtMinimums: Double = 0.0,
+    /** Net set aside for yearly bills this payday; negative when a fund is paying its bill. */
+    val annualFunds: Double = 0.0,
     val includeGoals: Boolean = true,
     val includeDebts: Boolean = true,
     val lines: List<PlanLineUi> = emptyList(),
@@ -50,7 +54,8 @@ data class PaydayPlanUiState(
             fixedCosts = fixedCosts,
             goals = if (includeGoals) goalContributions else 0.0,
             debts = if (includeDebts) debtMinimums else 0.0,
-            assigned = lines.sumOf { PaydayPlanCalculator.parseAmount(it.amountInput)?.coerceAtLeast(0.0) ?: 0.0 }
+            assigned = lines.sumOf { PaydayPlanCalculator.parseAmount(it.amountInput)?.coerceAtLeast(0.0) ?: 0.0 },
+            annualFunds = annualFunds
         )
 
     /** Tags that could still be added to the plan. */
@@ -64,7 +69,8 @@ class PaydayPlanViewModel @Inject constructor(
     private val budgetRepository: BudgetRepository,
     private val prefs: PreferencesManager,
     private val dailyTargetRepository: DailyTargetRepository,
-    private val reviews: com.budgetr.app.data.repository.PeriodReviewRepository
+    private val reviews: com.budgetr.app.data.repository.PeriodReviewRepository,
+    private val annualFundRepository: AnnualFundRepository
 ) : ViewModel() {
 
     private val period = PayPeriodCalculator.current(prefs.getPayDay())
@@ -79,6 +85,8 @@ class PaydayPlanViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val transactions = sheetsRepository.getAllTransactions().first()
+                annualFundRepository.processPeriod(transactions, period)
+                val funds = AnnualFundCalculator.matching(annualFundRepository.getFunds().first(), transactions)
                 val envelopes = budgetRepository.getEnvelopes().first()
                 val history = HistoryCalculator.latest(sheetsRepository.getPeriodSummaries().first())
                 val insights = HistoryCalculator.tagInsights(history, emptyList())
@@ -100,6 +108,7 @@ class PaydayPlanViewModel @Inject constructor(
                         fixedCosts = PaydayPlanCalculator.fixedCosts(transactions),
                         goalContributions = PaydayPlanCalculator.goalContributions(sheetsRepository.getSavingsGoals().first()),
                         debtMinimums = PaydayPlanCalculator.debtMinimums(sheetsRepository.getDebts().first()),
+                        annualFunds = -AnnualFundCalculator.potAdjustment(funds, period),
                         includeGoals = prefs.isPlanIncludeGoals(),
                         includeDebts = prefs.isPlanIncludeDebts(),
                         lines = lines,
@@ -163,9 +172,10 @@ class PaydayPlanViewModel @Inject constructor(
                 // The plan's money for non-fixed spending becomes this period's daily target pot,
                 // unless an amount was typed in by hand in Settings
                 if (prefs.getDailyPotOverride() == null) {
+                    // Kept before yearly bill funds, which the daily target applies itself
                     prefs.setDailyPot(
                         java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.UK).format(period.start),
-                        state.totals.toAssign.coerceAtLeast(0.0)
+                        state.totals.toAssign.coerceAtLeast(0.0) + state.annualFunds
                     )
                     dailyTargetRepository.notifySettingsChanged()
                 }
