@@ -23,4 +23,5 @@ object NavRoutes {
     const val DAILY_TARGET = "daily_target"
     const val CATEGORY_RULES = "category_rules"
     const val CASH_FLOW = "cash_flow"
+    const val PERIOD_REVIEW = "period_review"
 }

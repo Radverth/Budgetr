@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.FactCheck
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Rule
 import androidx.compose.material.icons.filled.ShowChart
@@ -63,6 +64,7 @@ fun BudgetHubScreen(
     onOpenHistory: () -> Unit,
     onOpenRules: () -> Unit,
     onOpenForecast: () -> Unit,
+    onOpenReview: () -> Unit,
     viewModel: BudgetHubViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -103,6 +105,7 @@ fun BudgetHubScreen(
             onOpenHistory = onOpenHistory,
             onOpenRules = onOpenRules,
             onOpenForecast = onOpenForecast,
+            onOpenReview = onOpenReview,
             onTransfer = { transferKind = it },
             modifier = Modifier.fillMaxSize().padding(padding)
         )
@@ -118,6 +121,7 @@ internal fun BudgetHubContent(
     onOpenHistory: () -> Unit,
     onOpenRules: () -> Unit,
     onOpenForecast: () -> Unit,
+    onOpenReview: () -> Unit = {},
     onTransfer: (TransferKind) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -189,6 +193,18 @@ internal fun BudgetHubContent(
                             else -> "${state.historyPeriods} pay periods saved"
                         },
                         onClick = onOpenHistory
+                    )
+                    HubDivider()
+                    HubRow(
+                        icon = Icons.Default.FactCheck,
+                        title = "Pay period review",
+                        subtitle = when {
+                            state.reviewReady -> "Your last pay period is ready to review"
+                            state.reviewCount > 0 -> "How your last pay period went"
+                            else -> "Your first review appears after payday"
+                        },
+                        subtitleColor = if (state.reviewReady) MaterialTheme.colorScheme.primary else null,
+                        onClick = onOpenReview
                     )
                     HubDivider()
                     HubRow(

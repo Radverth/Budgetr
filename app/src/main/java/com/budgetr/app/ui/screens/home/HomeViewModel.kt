@@ -1,5 +1,6 @@
 package com.budgetr.app.ui.screens.home
 
+import com.budgetr.app.data.repository.PeriodReviewRepository
 import com.budgetr.app.data.repository.CashFlowRepository
 import com.budgetr.app.util.ForecastWarning
 import com.budgetr.app.util.UserMessages
@@ -82,6 +83,8 @@ data class HomeUiState(
     val dismissedAttention: Set<String> = emptySet(),
     /** Accounts forecast to dip below £0 before payday. */
     val cashFlowWarnings: List<ForecastWarning> = emptyList(),
+    /** The latest finished period's review, while it still has no leftover decision. */
+    val periodReview: AttentionItem.PeriodReview? = null,
     val showPeriodSection: Boolean = true,
     val showGoalsSection: Boolean = true,
     val showAccountsSection: Boolean = true,
@@ -134,7 +137,8 @@ class HomeViewModel @Inject constructor(
     private val prefs: PreferencesManager,
     private val dailyTargetRepository: DailyTargetRepository,
     private val backupRepository: BackupRepository,
-    private val cashFlowRepository: CashFlowRepository
+    private val cashFlowRepository: CashFlowRepository,
+    private val periodReviewRepository: PeriodReviewRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState(userName = authManager.getUserName()))
@@ -145,6 +149,13 @@ class HomeViewModel @Inject constructor(
             cashFlowRepository.observe().collect { snapshot ->
                 _uiState.update { it.copy(cashFlowWarnings = snapshot.forecast?.warnings.orEmpty()) }
             }
+        }
+        viewModelScope.launch {
+            combine(periodReviewRepository.observeReviews(), periodReviewRepository.observeReceipts()) { reviews, receipts ->
+                reviews.firstOrNull()?.review
+                    ?.takeIf { it.nextPeriodStart == prefs.getLastPayPeriodStart() && receipts[it.periodStart] == null }
+                    ?.let { AttentionItem.PeriodReview(it.periodStart, it.periodEnd) }
+            }.collect { item -> _uiState.update { it.copy(periodReview = item) } }
         }
         observeData()
         observeGoalsAndDebts()

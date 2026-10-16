@@ -50,6 +50,11 @@ sealed interface AttentionItem {
         override val key = "payday"
     }
 
+    /** A finished pay period's review that has no leftover decision yet. */
+    data class PeriodReview(val periodStart: String, val periodEnd: String) : AttentionItem {
+        override val key = "periodreview:$periodStart"
+    }
+
     data class CashFlowWarning(val warning: ForecastWarning) : AttentionItem {
         // Keyed by date too, so a new dip later in the period shows again
         override val key = "cashflow:${warning.account}:${warning.date.time}"
@@ -68,6 +73,10 @@ sealed interface AttentionItem {
     }
 }
 
+private fun reviewDate(text: String): String = runCatching {
+    SimpleDateFormat("d MMM", Locale.UK).format(SimpleDateFormat("dd/MM/yyyy", Locale.UK).parse(text)!!)
+}.getOrDefault(text)
+
 /** Everything that wants a decision, in one list, most urgent first. Dismissed keys are left out. */
 internal fun attentionItems(
     paydayPlanPending: Boolean,
@@ -76,8 +85,10 @@ internal fun attentionItems(
     suggestions: List<GoalSuggestionUiItem>,
     reviews: List<RecurringReviewUiItem>,
     dismissed: Set<String>,
-    cashFlowWarnings: List<ForecastWarning> = emptyList()
+    cashFlowWarnings: List<ForecastWarning> = emptyList(),
+    periodReview: AttentionItem.PeriodReview? = null
 ): List<AttentionItem> = buildList {
+    periodReview?.let { add(it) }
     if (paydayPlanPending) add(AttentionItem.PaydayPlan)
     cashFlowWarnings.forEach { add(AttentionItem.CashFlowWarning(it)) }
     alerts.sortedByDescending { it.isOver }.forEach { add(AttentionItem.BudgetAlert(it, resetDays)) }
@@ -94,7 +105,8 @@ internal fun NeedsAttentionCard(
     onRemindLater: (RecurringReviewUiItem) -> Unit,
     onDismiss: (AttentionItem) -> Unit,
     modifier: Modifier = Modifier,
-    onOpenForecast: () -> Unit = {}
+    onOpenForecast: () -> Unit = {},
+    onOpenReview: () -> Unit = {}
 ) {
     Card(
         modifier = modifier,
@@ -116,6 +128,14 @@ internal fun NeedsAttentionCard(
                         detail = "Cover bills, goals and debts, then give the rest a job.",
                         actionLabel = "Plan now",
                         onAction = onPlanPayday,
+                        onDismiss = { onDismiss(item) }
+                    )
+                    is AttentionItem.PeriodReview -> AttentionRow(
+                        emoji = "📋",
+                        title = "Your pay period review is ready",
+                        detail = "See how ${reviewDate(item.periodStart)} to ${reviewDate(item.periodEnd)} went, and choose where any leftover goes.",
+                        actionLabel = "See review",
+                        onAction = onOpenReview,
                         onDismiss = { onDismiss(item) }
                     )
                     is AttentionItem.CashFlowWarning -> AttentionRow(

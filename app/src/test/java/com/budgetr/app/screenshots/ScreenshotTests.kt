@@ -1,5 +1,11 @@
 package com.budgetr.app.screenshots
 
+import com.budgetr.app.data.model.PeriodReview
+import com.budgetr.app.data.model.ReviewCategory
+import com.budgetr.app.data.model.ReviewReceipt
+import com.budgetr.app.ui.screens.review.PeriodReviewContent
+import com.budgetr.app.ui.screens.review.PeriodReviewUiState
+import com.budgetr.app.ui.screens.review.ReviewChoice
 import com.budgetr.app.data.repository.BillRow
 import com.budgetr.app.ui.screens.forecast.CashFlowContent
 import com.budgetr.app.ui.screens.forecast.CashFlowUiState
@@ -424,6 +430,47 @@ abstract class ScreenshotTests(private val prefix: String) {
     @Test
     fun cashFlowOk() = screenShot("21_cash_flow_ok") {
         CashFlowContent(state = cashFlowState(monzo = 420.0), onSpendingAccount = {}, onEditBill = {})
+    }
+
+    private fun review(planned: Double?, spending: Double, endPence: Long) = PeriodReview(
+        periodStart = "25/09/2026", periodEnd = "25/10/2026", nextPeriodStart = "26/10/2026",
+        spending = spending, fixedCosts = 1180.0, planned = planned,
+        daysUnderTarget = planned?.let { 19 }, totalDays = planned?.let { 31 },
+        categories = if (planned == null) listOf(ReviewCategory("Groceries", 168.2, null), ReviewCategory("Eating out", 72.0, null)) else listOf(
+            ReviewCategory("Groceries", 168.2, 200.0),
+            ReviewCategory("Christmas presents for the whole family", 95.0, 100.0),
+            ReviewCategory("Eating out", 84.5, 60.0),
+            ReviewCategory("Transport", 31.0, null)
+        ),
+        endBalancePence = endPence, reservedCarryPence = 0
+    )
+
+    private fun reviewState(review: PeriodReview, receipt: ReviewReceipt? = null, available: Long = 4500) = PeriodReviewUiState(
+        isLoading = false, reviews = listOf(review), selectedStart = review.periodStart, receipt = receipt,
+        availablePence = available, goals = listOf("Holiday in Portugal next summer", "Emergency fund"), categories = listOf("Groceries", "Eating out")
+    )
+
+    @Test
+    fun periodReviewReady() = screenShot("22_period_review") {
+        PeriodReviewContent(reviewState(review(465.0, 412.35, 5765)), onSelect = {}, onConfirm = { _, _ -> }, onRetry = {})
+    }
+
+    @Test
+    fun periodReviewOverspentNoPlan() = screenShot("23_period_review_no_plan") {
+        PeriodReviewContent(reviewState(review(null, 512.0, -4120)), onSelect = {}, onConfirm = { _, _ -> }, onRetry = {})
+    }
+
+    @Test
+    fun periodReviewDone() = screenShot("24_period_review_done") {
+        PeriodReviewContent(
+            reviewState(review(465.0, 498.0, 5765), receipt = ReviewReceipt("op", ReviewReceipt.KIND_GOAL, "Holiday in Portugal next summer", 2500, complete = true), available = 0),
+            onSelect = {}, onConfirm = { _, _ -> }, onRetry = {}
+        )
+    }
+
+    @Test
+    fun periodReviewChoice() = shot("25_review_choice") {
+        ReviewChoice(4500, listOf("Holiday in Portugal next summer", "Emergency fund"), listOf("Groceries"), saving = false) { _, _ -> }
     }
 
     /** Dialogs open in their own window, which never reports idle under Robolectric 4.12
