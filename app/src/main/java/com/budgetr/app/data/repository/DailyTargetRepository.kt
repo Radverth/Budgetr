@@ -131,7 +131,7 @@ class DailyTargetRepository @Inject constructor(
         val income = PaydayPlanCalculator.income(source.transactions)
         val pot = income - PaydayPlanCalculator.fixedCosts(source.transactions) -
             (if (prefs.isPlanIncludeGoals()) PaydayPlanCalculator.goalContributions(source.goals) else 0.0) -
-            (if (prefs.isPlanIncludeDebts()) PaydayPlanCalculator.debtMinimums(source.debts) else 0.0)
+            (if (prefs.isPlanIncludeDebts()) PaydayPlanCalculator.debtPayments(source.debts, prefs.getDebtExtra()) else 0.0)
         if (income > 0) prefs.setDailyPot(periodStart, pot)
         return pot
     }

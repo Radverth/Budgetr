@@ -184,8 +184,9 @@ private fun MoneyInCard(uiState: PaydayPlanUiState, viewModel: PaydayPlanViewMod
                 onCheckedChange = viewModel::setIncludeGoals
             )
             ToggleAmountRow(
-                label = "Debt minimum payments",
-                hint = "Turn off if they're already fixed costs",
+                label = if (uiState.debtExtra > 0) "Debt payments" else "Debt minimum payments",
+                hint = if (uiState.debtExtra > 0) "Minimums plus ${uiState.debtExtra.toCurrencyString()} extra from the payoff planner"
+                    else "Turn off if they're already fixed costs",
                 amount = uiState.debtMinimums,
                 checked = uiState.includeDebts,
                 onCheckedChange = viewModel::setIncludeDebts

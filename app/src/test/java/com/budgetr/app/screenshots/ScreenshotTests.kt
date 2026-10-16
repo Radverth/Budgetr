@@ -1,5 +1,10 @@
 package com.budgetr.app.screenshots
 
+import com.budgetr.app.data.model.Debt
+import com.budgetr.app.ui.screens.debts.DebtPlannerContent
+import com.budgetr.app.ui.screens.debts.DebtPlannerUiState
+import com.budgetr.app.util.DebtPlanner
+import com.budgetr.app.util.PayoffStrategy
 import com.budgetr.app.ui.screens.annual.AnnualBillsContent
 import com.budgetr.app.ui.screens.annual.AnnualBillsUiState
 import com.budgetr.app.util.AnnualFund
@@ -506,6 +511,36 @@ abstract class ScreenshotTests(private val prefix: String) {
     @Test
     fun annualBillsEmpty() = screenShot("27_annual_bills_empty") {
         AnnualBillsContent(state = AnnualBillsUiState(isLoading = false), onSetSaving = { _, _ -> })
+    }
+
+    private fun plannerState(debts: List<Debt>, extra: Double, strategy: PayoffStrategy = PayoffStrategy.AVALANCHE) = DebtPlannerUiState(
+        isLoading = false, debts = debts, strategy = strategy, extra = extra, sliderMax = 300.0,
+        plan = DebtPlanner.plan(debts, extra, strategy),
+        otherPlan = DebtPlanner.plan(debts, extra, if (strategy == PayoffStrategy.AVALANCHE) PayoffStrategy.SNOWBALL else PayoffStrategy.AVALANCHE),
+        minimumsOnly = DebtPlanner.minimumsOnly(debts)
+    )
+
+    @Test
+    fun debtPlanner() = screenShot("28_debt_planner") {
+        DebtPlannerContent(
+            state = plannerState(
+                listOf(
+                    Debt("Halifax Clarity credit card", 2400.0, 23.9, 72.0),
+                    Debt("Car finance", 4100.0, 7.9, 189.0),
+                    Debt("Overdraft", 350.0, 39.9, 20.0)
+                ),
+                extra = 100.0
+            ),
+            onStrategy = {}, onExtra = {}, onExtraDone = {}
+        )
+    }
+
+    @Test
+    fun debtPlannerStuck() = screenShot("29_debt_planner_stuck") {
+        DebtPlannerContent(
+            state = plannerState(listOf(Debt("Store card", 5000.0, 30.0, 100.0)), extra = 0.0, strategy = PayoffStrategy.SNOWBALL),
+            onStrategy = {}, onExtra = {}, onExtraDone = {}
+        )
     }
 
     /** Dialogs open in their own window, which never reports idle under Robolectric 4.12

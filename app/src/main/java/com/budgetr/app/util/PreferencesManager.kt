@@ -98,6 +98,12 @@ class PreferencesManager @Inject constructor(
     fun isPlanIncludeDebts(): Boolean = prefs.getBoolean(KEY_PLAN_INCLUDE_DEBTS, true)
     fun setPlanIncludeDebts(include: Boolean) = prefs.edit().putBoolean(KEY_PLAN_INCLUDE_DEBTS, include).apply()
 
+    /** Debt payoff planner: the strategy name and the extra paid each month on top of minimums. */
+    fun getDebtStrategy(): String? = prefs.getString("debt_strategy", null)
+    fun setDebtStrategy(name: String) = prefs.edit().putString("debt_strategy", name).apply()
+    fun getDebtExtra(): Double = prefs.getString("debt_extra", null)?.toDoubleOrNull() ?: 0.0
+    fun setDebtExtra(amount: Double) = prefs.edit().putString("debt_extra", amount.toString()).apply()
+
     /** Money for non-fixed spending this pay period, typed in by hand. Null means work it out. */
     fun getDailyPotOverride(): Double? = prefs.getString(KEY_DAILY_POT_OVERRIDE, null)?.toDoubleOrNull()
     fun setDailyPotOverride(amount: Double?) = prefs.edit().putString(KEY_DAILY_POT_OVERRIDE, amount?.toString()).apply()

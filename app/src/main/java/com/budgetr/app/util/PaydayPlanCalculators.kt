@@ -58,6 +58,10 @@ object PaydayPlanCalculator {
 
     fun debtMinimums(debts: List<Debt>): Double = debts.filter { it.balance > 0 }.sumOf { it.minPayment }
 
+    /** Minimums plus the payoff planner's [extra], while anything is still owed. */
+    fun debtPayments(debts: List<Debt>, extra: Double): Double =
+        debtMinimums(debts) + if (debts.any { it.balance > 0 }) extra.coerceAtLeast(0.0) else 0.0
+
     /** Existing budgets keep their limits. Categories with history but no budget are added
      *  at their suggested limit, so the plan starts close to how money is really spent. */
     fun initialLines(envelopes: List<Envelope>, insights: List<TagInsight>): List<PlanLine> {
