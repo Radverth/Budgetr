@@ -310,7 +310,7 @@ private fun EventRow(event: CalendarEvent, showDate: Boolean) {
         Text(
             text = (if (event.amount > 0) "+" else "") + event.amount.toCurrencyString(),
             style = MaterialTheme.typography.bodyMedium,
-            color = if (event.amount > 0) IncomeGreen else MaterialTheme.colorScheme.onSurface
+            fontWeight = if (event.amount > 0) FontWeight.SemiBold else FontWeight.Normal
         )
     }
 }
