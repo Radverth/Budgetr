@@ -146,7 +146,8 @@ class BackupRepository @Inject constructor(
             homeShowAccounts = prefs.isHomeShowingAccounts(),
             forecastSpendingAccount = prefs.getForecastSpendingAccount(),
             debtStrategy = prefs.getDebtStrategy(),
-            debtExtra = prefs.getDebtExtra()
+            debtExtra = prefs.getDebtExtra(),
+            billReminders = prefs.isBillRemindersEnabled()
         )
     ) }
 
@@ -205,6 +206,7 @@ class BackupRepository @Inject constructor(
         s.forecastSpendingAccount?.let { prefs.setForecastSpendingAccount(it) }
         s.debtStrategy?.let { prefs.setDebtStrategy(it) }
         s.debtExtra?.let { prefs.setDebtExtra(it) }
+        s.billReminders?.let { prefs.setBillRemindersEnabled(it) }
         if (s.reminderHour != null && s.reminderMinute != null) prefs.setReminderTime(s.reminderHour, s.reminderMinute)
         s.reminderEnabled?.let { enabled ->
             prefs.setReminderEnabled(enabled)
