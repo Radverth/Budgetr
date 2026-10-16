@@ -39,6 +39,7 @@ import com.budgetr.app.ui.screens.daily.DailyTargetScreen
 import com.budgetr.app.ui.screens.home.HomeScreen
 import com.budgetr.app.ui.screens.insights.InsightsScreen
 import com.budgetr.app.ui.screens.plan.PaydayPlanScreen
+import com.budgetr.app.ui.screens.review.PeriodReviewScreen
 import com.budgetr.app.ui.screens.rules.CategoryRulesScreen
 import com.budgetr.app.ui.screens.settings.SettingsScreen
 import com.budgetr.app.ui.screens.transactions.TransactionsScreen
@@ -151,6 +152,11 @@ fun MainScreen(onSignOut: () -> Unit) {
                         navController.navigate(NavRoutes.CASH_FLOW) {
                             launchSingleTop = true
                         }
+                    },
+                    onNavigateToReview = {
+                        navController.navigate(NavRoutes.PERIOD_REVIEW) {
+                            launchSingleTop = true
+                        }
                     }
                 )
             }
@@ -161,8 +167,12 @@ fun MainScreen(onSignOut: () -> Unit) {
                     onOpenPaydayPlan = { navController.navigate(NavRoutes.PAYDAY_PLAN) { launchSingleTop = true } },
                     onOpenHistory = { navController.navigate(NavRoutes.INSIGHTS) { launchSingleTop = true } },
                     onOpenRules = { navController.navigate(NavRoutes.CATEGORY_RULES) { launchSingleTop = true } },
-                    onOpenForecast = { navController.navigate(NavRoutes.CASH_FLOW) { launchSingleTop = true } }
+                    onOpenForecast = { navController.navigate(NavRoutes.CASH_FLOW) { launchSingleTop = true } },
+                    onOpenReview = { navController.navigate(NavRoutes.PERIOD_REVIEW) { launchSingleTop = true } }
                 )
+            }
+            composable(NavRoutes.PERIOD_REVIEW) {
+                PeriodReviewScreen(onNavigateBack = { navController.popBackStack() })
             }
             composable(NavRoutes.CASH_FLOW) {
                 CashFlowScreen(onNavigateBack = { navController.popBackStack() })

@@ -44,7 +44,8 @@ data class DailyTargetState(
 class DailyTargetRepository @Inject constructor(
     private val sheetsRepository: SheetsRepository,
     private val budgetRepository: BudgetRepository,
-    private val prefs: PreferencesManager
+    private val prefs: PreferencesManager,
+    private val reviews: PeriodReviewRepository
 ) {
 
     /** Re-emits each minute so the target moves on at midnight even if no data changes. */
@@ -78,6 +79,9 @@ class DailyTargetRepository @Inject constructor(
                 val manual = prefs.getDailyPotOverride()
                 val pot = manual ?: lockedPot(periodStart, source)
                 val countBudgeted = prefs.isDailyTargetCountingBudgeted()
+                if (manual != null || prefs.getDailyPotPeriod() == periodStart) {
+                    reviews.savePlan(com.budgetr.app.data.model.ReviewPlan(periodStart, pot, countBudgeted = countBudgeted))
+                }
                 val target = DailyTargetCalculator.calculate(
                     period = period,
                     pot = pot,

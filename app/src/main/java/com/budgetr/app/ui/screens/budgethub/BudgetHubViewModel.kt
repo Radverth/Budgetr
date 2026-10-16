@@ -7,6 +7,7 @@ import com.budgetr.app.data.repository.CashFlowRepository
 import com.budgetr.app.data.repository.CategoryRuleRepository
 import com.budgetr.app.data.repository.DailyTargetRepository
 import com.budgetr.app.data.repository.DailyTargetState
+import com.budgetr.app.data.repository.PeriodReviewRepository
 import com.budgetr.app.data.repository.SheetsRepository
 import com.budgetr.app.util.EnvelopeCalculator
 import com.budgetr.app.util.ForecastWarning
@@ -33,6 +34,9 @@ data class BudgetHubUiState(
     /** The first account forecast to dip below £0 before payday, if any. */
     val forecastWarning: ForecastWarning? = null,
     val forecastReady: Boolean = false,
+    val reviewCount: Int = 0,
+    /** The latest review has no leftover decision yet. */
+    val reviewReady: Boolean = false,
     val message: String? = null
 )
 
@@ -43,6 +47,7 @@ class BudgetHubViewModel @Inject constructor(
     private val sheetsRepository: SheetsRepository,
     private val categoryRuleRepository: CategoryRuleRepository,
     private val cashFlowRepository: CashFlowRepository,
+    private val periodReviewRepository: PeriodReviewRepository,
     private val prefs: PreferencesManager
 ) : ViewModel() {
 
@@ -68,10 +73,16 @@ class BudgetHubViewModel @Inject constructor(
                     historyPeriods = history.size,
                     paydayPlanPending = prefs.isPaydayPlanPending()
                 )
-            }.collect { state -> _uiState.update { state.copy(message = it.message, ruleCount = it.ruleCount, forecastWarning = it.forecastWarning, forecastReady = it.forecastReady) } }
+            }.collect { state -> _uiState.update { state.copy(message = it.message, ruleCount = it.ruleCount, forecastWarning = it.forecastWarning, forecastReady = it.forecastReady, reviewCount = it.reviewCount, reviewReady = it.reviewReady) } }
         }
         viewModelScope.launch {
             categoryRuleRepository.getRules().collect { rules -> _uiState.update { it.copy(ruleCount = rules.size) } }
+        }
+        viewModelScope.launch {
+            combine(periodReviewRepository.observeReviews(), periodReviewRepository.observeReceipts()) { reviews, receipts ->
+                val latest = reviews.firstOrNull()?.review
+                reviews.size to (latest != null && latest.nextPeriodStart == prefs.getLastPayPeriodStart() && receipts[latest.periodStart] == null)
+            }.collect { (count, ready) -> _uiState.update { it.copy(reviewCount = count, reviewReady = ready) } }
         }
         viewModelScope.launch {
             cashFlowRepository.observe().collect { snapshot ->

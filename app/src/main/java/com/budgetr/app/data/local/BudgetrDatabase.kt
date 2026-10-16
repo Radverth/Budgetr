@@ -1,5 +1,7 @@
 package com.budgetr.app.data.local
 
+import com.budgetr.app.data.local.dao.PeriodReviewDao
+import com.budgetr.app.data.local.entity.PeriodReviewEntity
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
@@ -48,9 +50,10 @@ import com.budgetr.app.data.local.entity.TransactionEntity
         DailyTransferEntity::class,
         PendingChangeEntity::class,
         CategoryRuleEntity::class,
-        BillDueDayEntity::class
+        BillDueDayEntity::class,
+        PeriodReviewEntity::class
     ],
-    version = 14,
+    version = 15,
     exportSchema = false
 )
 abstract class BudgetrDatabase : RoomDatabase() {
@@ -69,7 +72,15 @@ abstract class BudgetrDatabase : RoomDatabase() {
     abstract fun categoryRuleDao(): CategoryRuleDao
     abstract fun billDueDayDao(): BillDueDayDao
 
+    abstract fun periodReviewDao(): PeriodReviewDao
+
     companion object {
+        val MIGRATION_14_15 = object : Migration(14, 15) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `period_reviews` (`spreadsheetId` TEXT NOT NULL, `periodStart` TEXT NOT NULL, `planJson` TEXT, `snapshotJson` TEXT, `complete` INTEGER NOT NULL, `receiptJson` TEXT, PRIMARY KEY(`spreadsheetId`, `periodStart`))")
+            }
+        }
+
         /** Adds the optional spending category to cached transactions. */
         val MIGRATION_6_7 = object : Migration(6, 7) {
             override fun migrate(db: SupportSQLiteDatabase) {

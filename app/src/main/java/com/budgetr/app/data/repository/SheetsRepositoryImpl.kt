@@ -1,5 +1,6 @@
 package com.budgetr.app.data.repository
 
+import kotlin.math.roundToLong
 import android.content.Context
 import java.io.IOException
 import com.budgetr.app.data.local.dao.PendingChangeDao
@@ -88,7 +89,8 @@ class SheetsRepositoryImpl @Inject constructor(
     private val periodSummaryDao: PeriodSummaryDao,
     private val pendingChangeDao: PendingChangeDao,
     @ApplicationContext private val context: Context,
-    private val prefs: PreferencesManager
+    private val prefs: PreferencesManager,
+    private val reviews: PeriodReviewRepository
 ) : SheetsRepository {
 
     // Cache of sheet title -> numeric sheetId (gid) from the Sheets API
@@ -267,7 +269,7 @@ class SheetsRepositoryImpl @Inject constructor(
     /** Saves the change on the phone and returns straight away, so saving never waits on a
      *  slow connection. Sending happens in the background; offline, the background job takes
      *  over once there's a connection. */
-    private suspend fun enqueue(kind: PendingKind, transaction: Transaction) {
+    private suspend fun enqueue(kind: PendingKind, transaction: Transaction) = reviews.operationMutex.withLock {
         val spreadsheetId = checkNotNull(prefs.getSpreadsheetId()) { "Connect a spreadsheet before saving changes." }
         require(kind == PendingKind.ADD || !transaction.id.isNullOrBlank()) {
             "Pull down to refresh this transaction before editing or deleting it."
@@ -275,6 +277,7 @@ class SheetsRepositoryImpl @Inject constructor(
         pendingChangeDao.insert(transaction.toPendingEntity(kind, spreadsheetId))
         PendingSyncWorker.schedule(context)
         syncScope.launch { runCatching { syncPendingChanges() } }
+        Unit
     }
 
     override fun getPendingChanges(): Flow<List<PendingChange>> =
@@ -429,7 +432,9 @@ class SheetsRepositoryImpl @Inject constructor(
         )
     }
 
-    override suspend fun deleteOneOffTransactions(account: String) {
+    override suspend fun deleteOneOffTransactions(account: String) = deleteOneOffTransactions(account, null)
+
+    private suspend fun deleteOneOffTransactions(account: String, period: PayPeriod?) {
         val spreadsheetId = prefs.getSpreadsheetId() ?: return
         val sheetId = resolveSheetIdByName(account) ?: 0
 
@@ -437,7 +442,7 @@ class SheetsRepositoryImpl @Inject constructor(
         // Then delete ONE_OFF_COST rows highest first, so earlier deletes don't shift later ones.
         refreshTransactions(account)
         val oneOffEntities = transactionDao.getTransactionsByAccountSync(account)
-            .filter { it.category == TransactionCategory.ONE_OFF_COST.name }
+            .filter { it.category == TransactionCategory.ONE_OFF_COST.name && com.budgetr.app.util.isDatedInPeriod(it.toTransaction(), period) }
             .sortedByDescending { it.rowIndex }
 
         if (oneOffEntities.isEmpty()) return
@@ -614,7 +619,11 @@ class SheetsRepositoryImpl @Inject constructor(
         refreshAccountBalances()
     }
 
-    override suspend fun checkAndProcessNewPayPeriod(): Boolean {
+    override suspend fun checkAndProcessNewPayPeriod(): Boolean = reviews.operationMutex.withLock {
+        syncMutex.withLock { processNewPayPeriod() }
+    }
+
+    private suspend fun processNewPayPeriod(): Boolean {
         val payDay = prefs.getPayDay()
         val currentPeriodStart = resolveCurrentPayPeriodStart(payDay)
         val lastProcessed = prefs.getLastPayPeriodStart()
@@ -628,32 +637,32 @@ class SheetsRepositoryImpl @Inject constructor(
             return false
         }
 
-        // Snapshot current balances as rollover BEFORE clearing one-off costs,
-        // so the carried-over amount reflects the true end-of-period balance.
-        val balances = accountBalanceDao.getAllSync()
-        // Summarise the ending period now, before carryover re-dates recurring income into
-        // the new one; it's written to the History tab further down.
-        val endingPayPeriod = endingPeriod(lastProcessed, currentPeriodStart)
-        val endingSummary = endingPayPeriod?.let { period ->
-            HistoryCalculator.summarise(
-                transactions = transactionDao.getAllSync().map { it.toTransaction() },
-                period = period,
-                endBalance = balances.sumOf { it.remainingBalance }
-            )
+        val spreadsheetId = requireNotNull(prefs.getSpreadsheetId())
+        check(pendingChangeDao.getAllSync().none { it.spreadsheetId == spreadsheetId }) {
+            "Sync your saved transactions before starting the new period"
         }
-        val today = SimpleDateFormat("dd/MM/yyyy", Locale.UK).format(java.util.Date())
-        balances.forEach { entity ->
-            balanceRolloverDao.insertOrReplace(
-                BalanceRolloverEntity(
-                    account = entity.account,
-                    rolloverAmount = entity.remainingBalance,
-                    recordedDate = today
-                )
-            )
+        refreshAccountBalances()
+        refreshAllTransactions()
+        val endingPayPeriod = requireNotNull(endingPeriod(lastProcessed, currentPeriodStart))
+        val transactions = transactionDao.getAllSync().map { it.toTransaction() }
+        val oldCarry = balanceRolloverDao.getAllSync().associate { it.account to it.rolloverAmount }
+        val fmt = SimpleDateFormat("dd/MM/yyyy", Locale.UK)
+        val newPeriodAmounts = transactions.filter { tx ->
+            runCatching { fmt.parse(tx.date) }.getOrNull()?.let { !it.before(endingPayPeriod.nextPayday) } == true
+        }.groupBy { it.account }.mapValues { (_, txs) -> txs.sumOf { it.amount } }
+        val balances = accountBalanceDao.getAllSync().associate {
+            it.account to it.remainingBalance + (oldCarry[it.account] ?: 0.0) - (newPeriodAmounts[it.account] ?: 0.0)
         }
-
-        val spreadsheetId = prefs.getSpreadsheetId()
-        val accounts = balances.map { it.account }
+        val snapshot = reviews.captureBeforeRollover(endingPayPeriod, transactions, balances)
+        val endingSummary = PeriodSummary(
+            snapshot.review.periodStart, snapshot.review.periodEnd, snapshot.income,
+            snapshot.review.fixedCosts, snapshot.review.spending, snapshot.review.endBalancePence / 100.0,
+            snapshot.review.categories.filter { it.spent != 0.0 }.map { com.budgetr.app.util.TagSpend(it.tag.takeUnless { tag -> tag == "Untagged" }, it.spent) }
+        )
+        snapshot.balances.forEach { (account, amount) ->
+            balanceRolloverDao.insertOrReplace(BalanceRolloverEntity(account, amount, currentPeriodStart))
+        }
+        val accounts = snapshot.balances.keys
 
         // Carry over FIXED_COST and TRANSFER (update date to new pay date),
         // and RECURRING_INCOME (update date to the same day-of-month in the current period).
@@ -695,14 +704,10 @@ class SheetsRepositoryImpl @Inject constructor(
         // carriedForPeriod makes this safe to repeat if the deletion below fails and retries.
         // Only spending dated in the ending period counts; a cost already added for the new
         // period (e.g. from the widget before the app was opened) mustn't eat into the carry.
-        val endingTransactions = transactionDao.getAllSync().map { it.toTransaction() }
         envelopeDao.getAllSync().forEach { entity ->
-            if (entity.carriedForPeriod == currentPeriodStart) return@forEach
-            val envelope = Envelope(entity.tag, entity.limitAmount, entity.rollover, entity.carriedOver)
-            val spent = EnvelopeCalculator.spent(endingTransactions, entity.tag, endingPayPeriod)
-            envelopeDao.upsert(
-                entity.copy(carriedOver = EnvelopeCalculator.nextCarry(envelope, spent), carriedForPeriod = currentPeriodStart)
-            )
+            if (entity.carriedForPeriod != currentPeriodStart) {
+                envelopeDao.upsert(entity.copy(carriedOver = snapshot.carry[entity.tag] ?: 0.0, carriedForPeriod = currentPeriodStart))
+            }
         }
 
         // Save a summary of the ending period to the History tab, since its one-off costs are
@@ -711,9 +716,9 @@ class SheetsRepositoryImpl @Inject constructor(
             endingSummary?.let { recordPeriodSummary(it) }
         }
 
-        // Delete all one-off costs for the new pay period. Only reached if every account's
-        // carryover above succeeded (or there was no spreadsheet to carry over).
-        accounts.forEach { account -> deleteOneOffTransactions(account) }
+        // Delete only ending-period costs after every account has carried over successfully.
+        accounts.forEach { account -> deleteOneOffTransactions(account, endingPayPeriod) }
+        reviews.completeRollover(lastProcessed)
         prefs.setLastPayPeriodStart(currentPeriodStart)
         return true
     }
@@ -817,6 +822,23 @@ class SheetsRepositoryImpl @Inject constructor(
             "$SAVINGS_GOALS_SHEET!A${goal.rowIndex}:D${goal.rowIndex}",
             body = ValueRange(values = row)
         )
+        refreshSavingsGoals()
+    }
+
+    override suspend fun contributeReviewGoal(name: String, expectedPence: Long, desiredPence: Long) {
+        val spreadsheetId = checkNotNull(prefs.getSpreadsheetId()) { "Choose a spreadsheet first" }
+        val rows = api.getValues(spreadsheetId, "$SAVINGS_GOALS_SHEET!A:D").values ?: emptyList()
+        val index = rows.indexOfFirst { it.getOrNull(0)?.trim().equals(name.trim(), ignoreCase = false) }
+        check(index >= 1) { "The goal \"$name\" isn't in your Google Sheet any more." }
+        val current = (rows[index].getOrElse(2) { "0" }.parseCurrency() * 100).roundToLong()
+        if (current != desiredPence) {
+            check(current == expectedPence) { "\"$name\" changed in your Google Sheet since you chose this. Check it there, then try again." }
+            api.updateValues(
+                spreadsheetId,
+                "$SAVINGS_GOALS_SHEET!C${index + 1}",
+                body = ValueRange(values = listOf(listOf((desiredPence / 100.0).toString())))
+            )
+        }
         refreshSavingsGoals()
     }
 

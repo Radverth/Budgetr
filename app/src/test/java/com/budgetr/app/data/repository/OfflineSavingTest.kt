@@ -60,7 +60,7 @@ class OfflineSavingTest {
         db = Room.inMemoryDatabaseBuilder(context, BudgetrDatabase::class.java).allowMainThreadQueries().build()
         repository = SheetsRepositoryImpl(offlineApi(GoogleSheetsApi::class.java), offlineApi(GoogleDriveApi::class.java),
             db.transactionDao(), db.accountBalanceDao(), db.balanceRolloverDao(), db.savingsGoalDao(),
-            db.debtDao(), db.envelopeDao(), db.periodSummaryDao(), db.pendingChangeDao(), context, prefs)
+            db.debtDao(), db.envelopeDao(), db.periodSummaryDao(), db.pendingChangeDao(), context, prefs, PeriodReviewRepository(db, prefs))
     }
 
     // Only the network boundary is fake; preferences, queue, repository and Room are real.
@@ -137,7 +137,7 @@ class OfflineSavingTest {
         val budgets = BudgetRepositoryImpl(db.categoryBudgetDao(), db.recurringCostReviewDao(),
             db.goalCategoryLinkDao(), db.envelopeDao(), db.dailyTransferDao())
         val vm = TransactionsViewModel(repository, budgets, prefs,
-            DailyTargetRepository(repository, budgets, prefs), CategoryRuleRepository(db.categoryRuleDao()), RuntimeEnvironment.getApplication(), SavedStateHandle())
+            DailyTargetRepository(repository, budgets, prefs, PeriodReviewRepository(db, prefs)), CategoryRuleRepository(db.categoryRuleDao()), RuntimeEnvironment.getApplication(), SavedStateHandle())
         val store = ViewModelStore()
         store.put("transactions", vm)
         try {

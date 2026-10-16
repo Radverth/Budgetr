@@ -19,13 +19,14 @@ data class PhoneBackup(
     val rollovers: List<RolloverBackup> = emptyList(),
     val categoryRules: List<CategoryRuleBackup> = emptyList(),
     val billDueDays: List<BillDueDayBackup> = emptyList(),
+    val periodReviews: List<com.budgetr.app.data.local.entity.PeriodReviewEntity> = emptyList(),
     val settings: SettingsBackup = SettingsBackup()
 ) {
     /** True when there's nothing worth restoring. */
     val isEmpty: Boolean
         get() = categoryBudgets.isEmpty() && envelopes.isEmpty() && goalLinks.isEmpty() &&
             subscriptionReviews.isEmpty() && dailyTransfers.isEmpty() && rollovers.isEmpty() &&
-            categoryRules.isEmpty() && billDueDays.isEmpty()
+            categoryRules.isEmpty() && billDueDays.isEmpty() && periodReviews.isEmpty()
 
     /** Same contents, ignoring when it was saved, so an unchanged backup isn't written again. */
     fun sameContentAs(other: PhoneBackup?): Boolean = other != null && copy(savedAt = 0) == other.copy(savedAt = 0)
