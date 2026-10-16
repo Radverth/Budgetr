@@ -2,6 +2,7 @@ package com.budgetr.app.ui.screens.budgethub
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.budgetr.app.data.repository.AnnualFundRepository
 import com.budgetr.app.data.repository.BudgetRepository
 import com.budgetr.app.data.repository.CashFlowRepository
 import com.budgetr.app.data.repository.CategoryRuleRepository
@@ -9,7 +10,9 @@ import com.budgetr.app.data.repository.DailyTargetRepository
 import com.budgetr.app.data.repository.DailyTargetState
 import com.budgetr.app.data.repository.PeriodReviewRepository
 import com.budgetr.app.data.repository.SheetsRepository
+import com.budgetr.app.util.AnnualFundCalculator
 import com.budgetr.app.util.EnvelopeCalculator
+import com.budgetr.app.util.PayPeriodCalculator
 import com.budgetr.app.util.ForecastWarning
 import com.budgetr.app.util.PreferencesManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -37,6 +40,10 @@ data class BudgetHubUiState(
     val reviewCount: Int = 0,
     /** The latest review has no leftover decision yet. */
     val reviewReady: Boolean = false,
+    /** Yearly bills in the Sheet, how many are being saved for, and this payday's set-aside. */
+    val annualBills: Int = 0,
+    val annualSaving: Int = 0,
+    val annualSetAside: Double = 0.0,
     val message: String? = null
 )
 
@@ -48,6 +55,7 @@ class BudgetHubViewModel @Inject constructor(
     private val categoryRuleRepository: CategoryRuleRepository,
     private val cashFlowRepository: CashFlowRepository,
     private val periodReviewRepository: PeriodReviewRepository,
+    private val annualFundRepository: AnnualFundRepository,
     private val prefs: PreferencesManager
 ) : ViewModel() {
 
@@ -73,7 +81,7 @@ class BudgetHubViewModel @Inject constructor(
                     historyPeriods = history.size,
                     paydayPlanPending = prefs.isPaydayPlanPending()
                 )
-            }.collect { state -> _uiState.update { state.copy(message = it.message, ruleCount = it.ruleCount, forecastWarning = it.forecastWarning, forecastReady = it.forecastReady, reviewCount = it.reviewCount, reviewReady = it.reviewReady) } }
+            }.collect { state -> _uiState.update { state.copy(message = it.message, ruleCount = it.ruleCount, forecastWarning = it.forecastWarning, forecastReady = it.forecastReady, reviewCount = it.reviewCount, reviewReady = it.reviewReady, annualBills = it.annualBills, annualSaving = it.annualSaving, annualSetAside = it.annualSetAside) } }
         }
         viewModelScope.launch {
             categoryRuleRepository.getRules().collect { rules -> _uiState.update { it.copy(ruleCount = rules.size) } }
@@ -83,6 +91,19 @@ class BudgetHubViewModel @Inject constructor(
                 val latest = reviews.firstOrNull()?.review
                 reviews.size to (latest != null && latest.nextPeriodStart == prefs.getLastPayPeriodStart() && receipts[latest.periodStart] == null)
             }.collect { (count, ready) -> _uiState.update { it.copy(reviewCount = count, reviewReady = ready) } }
+        }
+        viewModelScope.launch {
+            combine(sheetsRepository.getAllTransactions(), annualFundRepository.getFunds()) { transactions, funds ->
+                AnnualFundCalculator.statuses(transactions, funds, PayPeriodCalculator.current(prefs.getPayDay()))
+            }.collect { bills ->
+                _uiState.update {
+                    it.copy(
+                        annualBills = bills.size,
+                        annualSaving = bills.count { b -> b.saving },
+                        annualSetAside = bills.filter { b -> b.saving }.sumOf { b -> b.setAsideNow }
+                    )
+                }
+            }
         }
         viewModelScope.launch {
             cashFlowRepository.observe().collect { snapshot ->

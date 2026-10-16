@@ -1,5 +1,9 @@
 package com.budgetr.app.screenshots
 
+import com.budgetr.app.ui.screens.annual.AnnualBillsContent
+import com.budgetr.app.ui.screens.annual.AnnualBillsUiState
+import com.budgetr.app.util.AnnualFund
+import com.budgetr.app.util.AnnualFundCalculator
 import com.budgetr.app.data.model.PeriodReview
 import com.budgetr.app.data.model.ReviewCategory
 import com.budgetr.app.data.model.ReviewReceipt
@@ -284,7 +288,10 @@ abstract class ScreenshotTests(private val prefix: String) {
                             historyPeriods = 4,
                             ruleCount = 3,
                             forecastWarning = ForecastWarning("Monzo", day("23/10/2026"), shortfall = 41.5, moveAmount = 45.0, fromAccount = "Halifax"),
-                            forecastReady = true
+                            forecastReady = true,
+                            annualBills = 3,
+                            annualSaving = 2,
+                            annualSetAside = 62.43
                         ),
                         onOpenBudgets = {}, onOpenDailyTarget = {}, onOpenPaydayPlan = {}, onOpenHistory = {}, onOpenRules = {},
                         onOpenForecast = {}, onTransfer = {}
@@ -471,6 +478,34 @@ abstract class ScreenshotTests(private val prefix: String) {
     @Test
     fun periodReviewChoice() = shot("25_review_choice") {
         ReviewChoice(4500, listOf("Holiday in Portugal next summer", "Emergency fund"), listOf("Groceries"), saving = false) { _, _ -> }
+    }
+
+    private fun yearly(info: String, amount: Double, month: Int) =
+        Transaction(2, "25/09/2026", info, -amount, TransactionCategory.FIXED_COST, "Monzo", activeMonths = listOf(month))
+
+    @Test
+    fun annualBills() = screenShot("26_annual_bills") {
+        val bills = listOf(
+            yearly("Car insurance", 480.0, 3),
+            yearly("MOT and service", 54.85, 11),
+            yearly("Home and contents insurance with accidental damage cover", 312.0, 9),
+            yearly("TV licence", 174.5, 4)
+        )
+        val funds = listOf(
+            AnnualFund("Monzo", "car insurance", saved = 280.0, processedPeriod = "25/09/2026", lastSetAside = 40.0),
+            AnnualFund("Monzo", "mot and service", saved = 32.43, processedPeriod = "25/09/2026", lastSetAside = 22.43),
+            AnnualFund("Monzo", "home and contents insurance with accidental damage cover", saved = 26.0,
+                processedPeriod = "25/09/2026", lastSetAside = 26.0, lastReleased = 312.0)
+        )
+        AnnualBillsContent(
+            state = AnnualBillsUiState(isLoading = false, bills = AnnualFundCalculator.statuses(bills, funds, period)),
+            onSetSaving = { _, _ -> }
+        )
+    }
+
+    @Test
+    fun annualBillsEmpty() = screenShot("27_annual_bills_empty") {
+        AnnualBillsContent(state = AnnualBillsUiState(isLoading = false), onSetSaving = { _, _ -> })
     }
 
     /** Dialogs open in their own window, which never reports idle under Robolectric 4.12

@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.FactCheck
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Rule
+import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material.icons.filled.Today
 import androidx.compose.material3.Card
@@ -65,6 +66,7 @@ fun BudgetHubScreen(
     onOpenRules: () -> Unit,
     onOpenForecast: () -> Unit,
     onOpenReview: () -> Unit,
+    onOpenAnnualBills: () -> Unit,
     viewModel: BudgetHubViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -106,6 +108,7 @@ fun BudgetHubScreen(
             onOpenRules = onOpenRules,
             onOpenForecast = onOpenForecast,
             onOpenReview = onOpenReview,
+            onOpenAnnualBills = onOpenAnnualBills,
             onTransfer = { transferKind = it },
             modifier = Modifier.fillMaxSize().padding(padding)
         )
@@ -122,6 +125,7 @@ internal fun BudgetHubContent(
     onOpenRules: () -> Unit,
     onOpenForecast: () -> Unit,
     onOpenReview: () -> Unit = {},
+    onOpenAnnualBills: () -> Unit = {},
     onTransfer: (TransferKind) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -155,6 +159,16 @@ internal fun BudgetHubContent(
                         onClick = onOpenBudgets
                     )
                     HubDivider()
+                    HubRow(
+                        icon = Icons.Default.Savings,
+                        title = "Annual bills",
+                        subtitle = when {
+                            state.annualSaving > 0 -> "${state.annualSaving} saving up · ${state.annualSetAside.toCurrencyString()} this payday"
+                            state.annualBills > 0 -> "Save a little each payday for ${if (state.annualBills == 1) "1 yearly bill" else "${state.annualBills} yearly bills"}"
+                            else -> "Save up for yearly bills like car insurance"
+                        },
+                        onClick = onOpenAnnualBills
+                    )                    HubDivider()
                     HubRow(
                         icon = Icons.Default.Today,
                         title = "Daily spend target",

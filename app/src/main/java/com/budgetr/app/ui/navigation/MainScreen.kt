@@ -30,6 +30,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.budgetr.app.ui.screens.annual.AnnualBillsScreen
 import com.budgetr.app.ui.screens.balances.AccountBalancesScreen
 import com.budgetr.app.ui.screens.budgethub.BudgetHubScreen
 import com.budgetr.app.ui.screens.budgets.BudgetsScreen
@@ -168,8 +169,12 @@ fun MainScreen(onSignOut: () -> Unit) {
                     onOpenHistory = { navController.navigate(NavRoutes.INSIGHTS) { launchSingleTop = true } },
                     onOpenRules = { navController.navigate(NavRoutes.CATEGORY_RULES) { launchSingleTop = true } },
                     onOpenForecast = { navController.navigate(NavRoutes.CASH_FLOW) { launchSingleTop = true } },
-                    onOpenReview = { navController.navigate(NavRoutes.PERIOD_REVIEW) { launchSingleTop = true } }
+                    onOpenReview = { navController.navigate(NavRoutes.PERIOD_REVIEW) { launchSingleTop = true } },
+                    onOpenAnnualBills = { navController.navigate(NavRoutes.ANNUAL_BILLS) { launchSingleTop = true } }
                 )
+            }
+            composable(NavRoutes.ANNUAL_BILLS) {
+                AnnualBillsScreen(onNavigateBack = { navController.popBackStack() })
             }
             composable(NavRoutes.PERIOD_REVIEW) {
                 PeriodReviewScreen(onNavigateBack = { navController.popBackStack() })

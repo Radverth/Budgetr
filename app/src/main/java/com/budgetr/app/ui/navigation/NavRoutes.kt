@@ -24,4 +24,5 @@ object NavRoutes {
     const val CATEGORY_RULES = "category_rules"
     const val CASH_FLOW = "cash_flow"
     const val PERIOD_REVIEW = "period_review"
+    const val ANNUAL_BILLS = "annual_bills"
 }
