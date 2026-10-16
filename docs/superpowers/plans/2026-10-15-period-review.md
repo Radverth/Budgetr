@@ -131,4 +131,4 @@
 
 ## Execution status
 
-Planning only. No app code, schema or on-screen behavior changed yet. Implementation awaits the planning skill's required plan review and execution-method choice.
+Tasks 1–2 implemented by Codex; tasks 3–4 by Claude on 2026-10-16 (ReviewAllocationRepository, contributeReviewGoal, PeriodReviewScreen/ViewModel, Home and Budget entry points). CI run 38861217978 passed, including ReviewAllocationRepositoryTest and ReviewChoiceTest.
