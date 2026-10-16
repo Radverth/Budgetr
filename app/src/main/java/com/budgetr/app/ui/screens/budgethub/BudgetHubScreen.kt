@@ -168,7 +168,8 @@ internal fun BudgetHubContent(
                             else -> "Save up for yearly bills like car insurance"
                         },
                         onClick = onOpenAnnualBills
-                    )                    HubDivider()
+                    )
+                    HubDivider()
                     HubRow(
                         icon = Icons.Default.Today,
                         title = "Daily spend target",
