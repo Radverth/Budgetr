@@ -187,7 +187,8 @@ internal fun BudgetHubContent(
                         title = "Bills calendar",
                         subtitle = state.nextBill ?: "Bills, income and daily spending by date",
                         onClick = onOpenCalendar
-                    )                    HubDivider()
+                    )
+                    HubDivider()
                     HubRow(
                         icon = Icons.Default.ShowChart,
                         title = "Cash-flow forecast",
