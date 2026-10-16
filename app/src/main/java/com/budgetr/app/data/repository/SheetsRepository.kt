@@ -65,6 +65,12 @@ interface SheetsRepository {
     suspend fun addSavingsGoal(goal: SavingsGoal)
     suspend fun updateSavingsGoal(goal: SavingsGoal)
     suspend fun deleteSavingsGoal(name: String)
+    /**
+     * Sets goal [name]'s saved amount to [desiredPence], found by name in the Sheet right now.
+     * Succeeds without writing if it's already [desiredPence] (an earlier try got through), and
+     * refuses if it's anything other than [expectedPence], so a contribution is never applied twice.
+     */
+    suspend fun contributeReviewGoal(name: String, expectedPence: Long, desiredPence: Long)
 
     // --- Debts ---
     fun getDebts(): Flow<List<Debt>>

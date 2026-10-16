@@ -30,6 +30,7 @@ class PeriodReviewRepository @Inject constructor(private val db: BudgetrDatabase
     private val moshi = Moshi.Builder().build()
     private val planAdapter = moshi.adapter(ReviewPlan::class.java)
     private val snapshotAdapter = moshi.adapter(ReviewSnapshot::class.java)
+    private val receiptAdapter = moshi.adapter(ReviewReceipt::class.java)
     private fun sheet() = requireNotNull(prefs.getSpreadsheetId()) { "Choose a spreadsheet first" }
 
     suspend fun savePlan(plan: ReviewPlan) = db.withTransaction {
@@ -67,7 +68,21 @@ class PeriodReviewRepository @Inject constructor(private val db: BudgetrDatabase
         row.snapshotJson?.let { snapshotAdapter.fromJson(it)?.copy(complete = row.complete) }
     }
 
-    fun observeReviews(): Flow<List<ReviewSnapshot>> = dao.observe(sheet()).map { rows ->
+    /** The leftover decision for the period starting [start], finished or still in progress. */
+    suspend fun receipt(start: String): ReviewReceipt? =
+        dao.get(sheet(), start)?.receiptJson?.let { receiptAdapter.fromJson(it) }
+
+    /** Callers wrap this in the same Room transaction as the money change it records. */
+    suspend fun saveReceipt(start: String, receipt: ReviewReceipt) {
+        val row = dao.get(sheet(), start) ?: error("Review snapshot missing")
+        dao.put(row.copy(receiptJson = receiptAdapter.toJson(receipt)))
+    }
+
+    fun observeReceipts(): Flow<Map<String, ReviewReceipt>> = dao.observe(prefs.getSpreadsheetId().orEmpty()).map { rows ->
+        rows.mapNotNull { row -> row.receiptJson?.let { json -> receiptAdapter.fromJson(json)?.let { row.periodStart to it } } }.toMap()
+    }
+
+    fun observeReviews(): Flow<List<ReviewSnapshot>> = dao.observe(prefs.getSpreadsheetId().orEmpty()).map { rows ->
         rows.filter { it.spreadsheetId == prefs.getSpreadsheetId() && it.complete }.mapNotNull { row ->
             row.snapshotJson?.let { snapshotAdapter.fromJson(it)?.copy(complete = true) }
         }.sortedByDescending { java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.UK).parse(it.review.periodStart)?.time ?: 0 }

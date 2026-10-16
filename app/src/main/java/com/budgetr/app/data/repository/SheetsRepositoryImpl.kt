@@ -1,5 +1,6 @@
 package com.budgetr.app.data.repository
 
+import kotlin.math.roundToLong
 import android.content.Context
 import java.io.IOException
 import com.budgetr.app.data.local.dao.PendingChangeDao
@@ -821,6 +822,23 @@ class SheetsRepositoryImpl @Inject constructor(
             "$SAVINGS_GOALS_SHEET!A${goal.rowIndex}:D${goal.rowIndex}",
             body = ValueRange(values = row)
         )
+        refreshSavingsGoals()
+    }
+
+    override suspend fun contributeReviewGoal(name: String, expectedPence: Long, desiredPence: Long) {
+        val spreadsheetId = checkNotNull(prefs.getSpreadsheetId()) { "Choose a spreadsheet first" }
+        val rows = api.getValues(spreadsheetId, "$SAVINGS_GOALS_SHEET!A:D").values ?: emptyList()
+        val index = rows.indexOfFirst { it.getOrNull(0)?.trim().equals(name.trim(), ignoreCase = false) }
+        check(index >= 1) { "The goal \"$name\" isn't in your Google Sheet any more." }
+        val current = (rows[index].getOrElse(2) { "0" }.parseCurrency() * 100).roundToLong()
+        if (current != desiredPence) {
+            check(current == expectedPence) { "\"$name\" changed in your Google Sheet since you chose this. Check it there, then try again." }
+            api.updateValues(
+                spreadsheetId,
+                "$SAVINGS_GOALS_SHEET!C${index + 1}",
+                body = ValueRange(values = listOf(listOf((desiredPence / 100.0).toString())))
+            )
+        }
         refreshSavingsGoals()
     }
 
