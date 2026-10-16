@@ -28,6 +28,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -157,7 +158,10 @@ private fun ResultCard(state: DebtPlannerUiState, plan: PayoffPlan) {
                 Spacer(Modifier.width(8.dp))
                 Text("These payments never clear the debt", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
-            Muted("The interest added each month is more than you pay. Add more extra each month below.")
+            Muted(
+                "The interest added each month is more than you pay." +
+                    (state.extraNeeded?.let { " At least ${it.toCurrencyString()} extra a month would clear it." } ?: " Add more extra each month below.")
+            )
         } else {
             DebtFreeLines(state, plan, months)
         }
@@ -230,8 +234,13 @@ private fun ExtraCard(state: DebtPlannerUiState, onExtra: (Double) -> Unit, onEx
             onValueChange = { onExtra(it.toDouble()) },
             onValueChangeFinished = onExtraDone,
             valueRange = 0f..state.sliderMax.toFloat(),
+            colors = SliderDefaults.colors(inactiveTrackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f)),
             modifier = Modifier.semantics { contentDescription = "Extra each month, ${state.extra.toCurrencyString()}" }
         )
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Muted("£0")
+            Muted(state.sliderMax.toCurrencyString())
+        }
         Muted("On top of ${state.totalMinimums.toCurrencyString()} in minimums. It's included in your payday plan's debt payments from the next time you save the plan.")
     }
 }

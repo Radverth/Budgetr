@@ -49,6 +49,8 @@ class DebtPlannerTest {
         assertNull(DebtPlanner.minimumsOnly(listOf(stuck)).months)
         assertNull(DebtPlanner.plan(listOf(stuck), 20.0, PayoffStrategy.SNOWBALL).months)
         assertTrue(DebtPlanner.plan(listOf(stuck), 100.0, PayoffStrategy.SNOWBALL).months != null)
+        // £125 interest against £100 paid: £30 is the first £5 step that shrinks it
+        assertEquals(30.0, DebtPlanner.extraNeeded(listOf(stuck), PayoffStrategy.SNOWBALL)!!, 0.001)
     }
 
     @Test

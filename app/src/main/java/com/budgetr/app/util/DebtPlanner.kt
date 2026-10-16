@@ -33,6 +33,10 @@ object DebtPlanner {
     fun plan(debts: List<Debt>, extraPerMonth: Double, strategy: PayoffStrategy): PayoffPlan =
         simulate(debts, extraPerMonth.coerceAtLeast(0.0), strategy, rollover = true)
 
+    /** The smallest extra (in £5 steps, up to [limit]) that clears everything, or null if none does. */
+    fun extraNeeded(debts: List<Debt>, strategy: PayoffStrategy, limit: Double = 5000.0): Double? =
+        generateSequence(0.0) { it + 5.0 }.takeWhile { it <= limit }.firstOrNull { plan(debts, it, strategy).months != null }
+
     /** Each debt paying only its own minimum, for comparison. */
     fun minimumsOnly(debts: List<Debt>): PayoffPlan = simulate(debts, 0.0, PayoffStrategy.AVALANCHE, rollover = false)
 

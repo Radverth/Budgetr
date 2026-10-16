@@ -26,7 +26,9 @@ data class DebtPlannerUiState(
     val plan: PayoffPlan? = null,
     /** The same extra with the other strategy, to compare. */
     val otherPlan: PayoffPlan? = null,
-    val minimumsOnly: PayoffPlan? = null
+    val minimumsOnly: PayoffPlan? = null,
+    /** When the plan never clears the debt: the least extra that would. */
+    val extraNeeded: Double? = null
 ) {
     val totalOwed: Double get() = debts.sumOf { it.balance.coerceAtLeast(0.0) }
     val totalMinimums: Double get() = debts.filter { it.balance > 0 }.sumOf { it.minPayment }
@@ -69,10 +71,12 @@ class DebtPlannerViewModel @Inject constructor(
     fun saveExtra() = prefs.setDebtExtra(_uiState.value.extra)
 
     private fun recalc(state: DebtPlannerUiState): DebtPlannerUiState {
-        if (state.debts.isEmpty()) return state.copy(plan = null, otherPlan = null, minimumsOnly = null)
+        if (state.debts.isEmpty()) return state.copy(plan = null, otherPlan = null, minimumsOnly = null, extraNeeded = null)
         val other = if (state.strategy == PayoffStrategy.AVALANCHE) PayoffStrategy.SNOWBALL else PayoffStrategy.AVALANCHE
+        val plan = DebtPlanner.plan(state.debts, state.extra, state.strategy)
         return state.copy(
-            plan = DebtPlanner.plan(state.debts, state.extra, state.strategy),
+            plan = plan,
+            extraNeeded = if (plan.months == null) DebtPlanner.extraNeeded(state.debts, state.strategy) else null,
             otherPlan = DebtPlanner.plan(state.debts, state.extra, other),
             minimumsOnly = DebtPlanner.minimumsOnly(state.debts)
         )
