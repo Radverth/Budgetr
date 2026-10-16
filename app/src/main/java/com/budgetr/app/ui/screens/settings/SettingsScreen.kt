@@ -93,6 +93,11 @@ fun SettingsScreen(
     ) { granted ->
         if (granted) viewModel.setReminderEnabled(true)
     }
+    val billPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) viewModel.setBillReminders(true)
+    }
 
     fun requestEnableReminders() {
         val needsPermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
@@ -432,6 +437,18 @@ fun SettingsScreen(
                     indentIcon = true
                 )
             }
+
+            SettingsSwitchRow(
+                title = "Bills due tomorrow",
+                subtitle = "A note at 6pm the evening before a bill with a due day",
+                checked = uiState.billReminders,
+                onCheckedChange = { checked ->
+                    val needsPermission = checked && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                    if (needsPermission) billPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    else viewModel.setBillReminders(checked)
+                }
+            )
 
             SectionLabel("Home Screen")
 

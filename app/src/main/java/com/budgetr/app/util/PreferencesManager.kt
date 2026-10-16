@@ -98,6 +98,10 @@ class PreferencesManager @Inject constructor(
     fun isPlanIncludeDebts(): Boolean = prefs.getBoolean(KEY_PLAN_INCLUDE_DEBTS, true)
     fun setPlanIncludeDebts(include: Boolean) = prefs.edit().putBoolean(KEY_PLAN_INCLUDE_DEBTS, include).apply()
 
+    /** "Bill due tomorrow" notifications each evening. On unless turned off. */
+    fun isBillRemindersEnabled(): Boolean = prefs.getBoolean("bill_reminders", true)
+    fun setBillRemindersEnabled(enabled: Boolean) = prefs.edit().putBoolean("bill_reminders", enabled).apply()
+
     /** Debt payoff planner: the strategy name and the extra paid each month on top of minimums. */
     fun getDebtStrategy(): String? = prefs.getString("debt_strategy", null)
     fun setDebtStrategy(name: String) = prefs.edit().putString("debt_strategy", name).apply()

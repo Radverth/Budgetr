@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.FactCheck
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Rule
@@ -67,6 +68,7 @@ fun BudgetHubScreen(
     onOpenForecast: () -> Unit,
     onOpenReview: () -> Unit,
     onOpenAnnualBills: () -> Unit,
+    onOpenCalendar: () -> Unit,
     viewModel: BudgetHubViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -109,6 +111,7 @@ fun BudgetHubScreen(
             onOpenForecast = onOpenForecast,
             onOpenReview = onOpenReview,
             onOpenAnnualBills = onOpenAnnualBills,
+            onOpenCalendar = onOpenCalendar,
             onTransfer = { transferKind = it },
             modifier = Modifier.fillMaxSize().padding(padding)
         )
@@ -126,6 +129,7 @@ internal fun BudgetHubContent(
     onOpenForecast: () -> Unit,
     onOpenReview: () -> Unit = {},
     onOpenAnnualBills: () -> Unit = {},
+    onOpenCalendar: () -> Unit = {},
     onTransfer: (TransferKind) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -178,6 +182,12 @@ internal fun BudgetHubContent(
                         onClick = onOpenDailyTarget
                     )
                     HubDivider()
+                    HubRow(
+                        icon = Icons.Default.Event,
+                        title = "Bills calendar",
+                        subtitle = state.nextBill ?: "Bills, income and daily spending by date",
+                        onClick = onOpenCalendar
+                    )                    HubDivider()
                     HubRow(
                         icon = Icons.Default.ShowChart,
                         title = "Cash-flow forecast",
