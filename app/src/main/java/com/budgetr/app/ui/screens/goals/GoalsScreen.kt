@@ -1,5 +1,7 @@
 package com.budgetr.app.ui.screens.goals
 
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -64,7 +66,7 @@ import com.budgetr.app.util.toCurrencyString
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun GoalsScreen(viewModel: GoalsViewModel = hiltViewModel()) {
+fun GoalsScreen(onOpenDebtPlanner: () -> Unit = {}, viewModel: GoalsViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -162,6 +164,13 @@ fun GoalsScreen(viewModel: GoalsViewModel = hiltViewModel()) {
             if (uiState.debts.isEmpty()) {
                 item { EmptyHint("No debts tracked.", "Add a debt", viewModel::showAddDebtDialog) }
             } else {
+                item {
+                    OutlinedButton(onClick = onOpenDebtPlanner, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.Timeline, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Plan paying them off")
+                    }
+                }
                 items(uiState.debts, key = { "debt-${it.name}" }) { debt ->
                     DebtCard(
                         debt = debt,

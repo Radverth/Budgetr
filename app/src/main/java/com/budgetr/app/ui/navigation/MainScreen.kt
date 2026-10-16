@@ -30,6 +30,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.budgetr.app.ui.screens.debts.DebtPlannerScreen
 import com.budgetr.app.ui.screens.annual.AnnualBillsScreen
 import com.budgetr.app.ui.screens.balances.AccountBalancesScreen
 import com.budgetr.app.ui.screens.budgethub.BudgetHubScreen
@@ -228,7 +229,10 @@ fun MainScreen(onSignOut: () -> Unit) {
                 )
             }
             composable(NavRoutes.GOALS) {
-                GoalsScreen()
+                GoalsScreen(onOpenDebtPlanner = { navController.navigate(NavRoutes.DEBT_PLANNER) { launchSingleTop = true } })
+            }
+            composable(NavRoutes.DEBT_PLANNER) {
+                DebtPlannerScreen(onNavigateBack = { navController.popBackStack() })
             }
             composable(NavRoutes.SETTINGS) {
                 SettingsScreen(onSignOut = onSignOut, onNavigateBack = { navController.popBackStack() })

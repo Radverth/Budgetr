@@ -38,6 +38,8 @@ data class PaydayPlanUiState(
     val fixedCosts: Double = 0.0,
     val goalContributions: Double = 0.0,
     val debtMinimums: Double = 0.0,
+    /** Extra on top of minimums chosen in the debt payoff planner (included in [debtMinimums]). */
+    val debtExtra: Double = 0.0,
     /** Net set aside for yearly bills this payday; negative when a fund is paying its bill. */
     val annualFunds: Double = 0.0,
     val includeGoals: Boolean = true,
@@ -107,7 +109,8 @@ class PaydayPlanViewModel @Inject constructor(
                         incomeInput = formatAmount(PaydayPlanCalculator.income(transactions)),
                         fixedCosts = PaydayPlanCalculator.fixedCosts(transactions),
                         goalContributions = PaydayPlanCalculator.goalContributions(sheetsRepository.getSavingsGoals().first()),
-                        debtMinimums = PaydayPlanCalculator.debtMinimums(sheetsRepository.getDebts().first()),
+                        debtMinimums = PaydayPlanCalculator.debtPayments(sheetsRepository.getDebts().first(), prefs.getDebtExtra()),
+                        debtExtra = prefs.getDebtExtra(),
                         annualFunds = -AnnualFundCalculator.potAdjustment(funds, period),
                         includeGoals = prefs.isPlanIncludeGoals(),
                         includeDebts = prefs.isPlanIncludeDebts(),
