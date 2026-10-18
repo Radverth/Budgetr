@@ -37,3 +37,5 @@ jobs:
           name: screenshots
           path: app/build/outputs/roborazzi/
           if-no-files-found: warn
+          # Screenshots are for checking a change, not keeping; stop them piling up
+          retention-days: 7
