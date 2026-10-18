@@ -116,7 +116,7 @@ class BackupRepository @Inject constructor(
         envelopes = envelopeDao.getAllSync().map { EnvelopeBackup(it.tag, it.limitAmount, it.rollover, it.carriedOver, it.carriedForPeriod) },
         goalLinks = goalCategoryLinkDao.getAllSync().map { GoalLinkBackup(it.goalName, it.category) },
         subscriptionReviews = recurringCostReviewDao.getAllSync().map {
-            ReviewBackup(it.account, it.info, it.firstSeenDate, it.lastAmount, it.dismissedUntil)
+            ReviewBackup(it.account, it.info, it.firstSeenDate, it.lastAmount, it.dismissedUntil, it.previousAmount, it.changedAt)
         },
         dailyTransfers = dailyTransferDao.getAllSync().map { DailyTransferBackup(it.periodStart, it.createdOn, it.amount, it.targetDay) },
         rollovers = balanceRolloverDao.getAllSync().map { RolloverBackup(it.account, it.rolloverAmount, it.recordedDate) },
@@ -171,7 +171,7 @@ class BackupRepository @Inject constructor(
         backup.goalLinks.forEach { goalCategoryLinkDao.upsert(GoalCategoryLinkEntity(it.goalName, it.category)) }
         recurringCostReviewDao.deleteAll()
         backup.subscriptionReviews.forEach {
-            recurringCostReviewDao.upsert(RecurringCostReviewEntity(it.account, it.info, it.firstSeenDate, it.lastAmount, it.dismissedUntil))
+            recurringCostReviewDao.upsert(RecurringCostReviewEntity(it.account, it.info, it.firstSeenDate, it.lastAmount, it.dismissedUntil, it.previousAmount, it.changedAt))
         }
         dailyTransferDao.deleteAll()
         backup.dailyTransfers.forEach { dailyTransferDao.insert(DailyTransferEntity(0, it.periodStart, it.createdOn, it.amount, it.targetDay)) }

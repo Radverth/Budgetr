@@ -59,7 +59,9 @@ data class ReviewBackup(
     val info: String,
     val firstSeenDate: Long,
     val lastAmount: Double,
-    val dismissedUntil: Long?
+    val dismissedUntil: Long?,
+    val previousAmount: Double? = null,
+    val changedAt: Long? = null
 )
 
 @JsonClass(generateAdapter = true)

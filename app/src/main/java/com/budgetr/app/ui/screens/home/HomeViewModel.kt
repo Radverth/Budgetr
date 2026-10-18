@@ -1,5 +1,8 @@
 package com.budgetr.app.ui.screens.home
 
+import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
+import com.budgetr.app.util.PriceChangeNotifier
 import com.budgetr.app.data.repository.AnnualFundRepository
 import com.budgetr.app.util.AnnualFundCalculator
 import com.budgetr.app.data.repository.PeriodReviewRepository
@@ -87,6 +90,8 @@ data class HomeUiState(
     val cashFlowWarnings: List<ForecastWarning> = emptyList(),
     /** The latest finished period's review, while it still has no leftover decision. */
     val periodReview: AttentionItem.PeriodReview? = null,
+    /** Bills whose amount changed in the last 30 days. */
+    val priceChanges: List<AttentionItem.PriceChange> = emptyList(),
     val showPeriodSection: Boolean = true,
     val showGoalsSection: Boolean = true,
     val showAccountsSection: Boolean = true,
@@ -141,7 +146,8 @@ class HomeViewModel @Inject constructor(
     private val backupRepository: BackupRepository,
     private val cashFlowRepository: CashFlowRepository,
     private val periodReviewRepository: PeriodReviewRepository,
-    private val annualFundRepository: AnnualFundRepository
+    private val annualFundRepository: AnnualFundRepository,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState(userName = authManager.getUserName()))
@@ -159,6 +165,17 @@ class HomeViewModel @Inject constructor(
                     ?.takeIf { it.nextPeriodStart == prefs.getLastPayPeriodStart() && receipts[it.periodStart] == null }
                     ?.let { AttentionItem.PeriodReview(it.periodStart, it.periodEnd) }
             }.collect { item -> _uiState.update { it.copy(periodReview = item) } }
+        }
+        viewModelScope.launch {
+            budgetRepository.getRecurringCostReviews().collect { reviews ->
+                val since = System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000
+                val changes = reviews.mapNotNull { r ->
+                    val at = r.changedAt ?: return@mapNotNull null
+                    val from = r.previousAmount ?: return@mapNotNull null
+                    if (at < since) null else AttentionItem.PriceChange(r.account, r.info.trim(), kotlin.math.abs(from), kotlin.math.abs(r.lastAmount), at)
+                }
+                _uiState.update { it.copy(priceChanges = changes) }
+            }
         }
         observeData()
         observeGoalsAndDebts()
@@ -300,7 +317,7 @@ class HomeViewModel @Inject constructor(
             it.category == TransactionCategory.FIXED_COST &&
                 (it.activeMonths == null || it.activeMonths.contains(currentMonth))
         }
-        budgetRepository.syncRecurringCostTracking(activeFixedCosts)
+        PriceChangeNotifier.notify(context, budgetRepository.syncRecurringCostTracking(activeFixedCosts))
     }
 
     /** Home is always the first screen shown, so the pay-period rollover check — which used to

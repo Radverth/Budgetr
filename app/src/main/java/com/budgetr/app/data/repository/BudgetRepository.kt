@@ -18,8 +18,9 @@ interface BudgetRepository {
 
     fun getRecurringCostReviews(): Flow<List<RecurringCostReview>>
     /** Upserts a tracker row per active fixed cost (preserving firstSeenDate/dismissedUntil for
-     *  ones already known) and drops rows for fixed costs that are no longer active. */
-    suspend fun syncRecurringCostTracking(activeFixedCosts: List<Transaction>)
+     *  ones already known) and drops rows for fixed costs that are no longer active. Returns
+     *  the ones whose amount just changed, with the old amount recorded. */
+    suspend fun syncRecurringCostTracking(activeFixedCosts: List<Transaction>): List<RecurringCostReview>
     suspend fun dismissRecurringCostReview(account: String, info: String, forDays: Int)
 
     fun getGoalCategoryLinks(): Flow<List<GoalCategoryLink>>

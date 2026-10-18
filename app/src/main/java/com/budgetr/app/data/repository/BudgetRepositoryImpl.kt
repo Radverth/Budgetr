@@ -1,5 +1,7 @@
 package com.budgetr.app.data.repository
 
+import com.budgetr.app.util.SubscriptionTracker
+import java.util.Date
 import com.budgetr.app.data.local.dao.CategoryBudgetDao
 import com.budgetr.app.data.local.dao.DailyTransferDao
 import com.budgetr.app.data.local.dao.EnvelopeDao
@@ -45,26 +47,31 @@ class BudgetRepositoryImpl @Inject constructor(
     override fun getRecurringCostReviews(): Flow<List<RecurringCostReview>> =
         recurringCostReviewDao.getAll().map { entities -> entities.map { it.toModel() } }
 
-    override suspend fun syncRecurringCostTracking(activeFixedCosts: List<Transaction>) {
+    override suspend fun syncRecurringCostTracking(activeFixedCosts: List<Transaction>): List<RecurringCostReview> {
+        val changed = mutableListOf<RecurringCostReview>()
         val existing = recurringCostReviewDao.getAllSync().associateBy { it.account to it.info }
         val activeKeys = activeFixedCosts.map { it.account to it.info }.toSet()
 
         activeFixedCosts.forEach { tx ->
             val current = existing[tx.account to tx.info]
-            recurringCostReviewDao.upsert(
-                RecurringCostReviewEntity(
-                    account = tx.account,
-                    info = tx.info,
-                    firstSeenDate = current?.firstSeenDate ?: System.currentTimeMillis(),
-                    lastAmount = tx.amount,
-                    dismissedUntil = current?.dismissedUntil
-                )
+            val change = SubscriptionTracker.detect(current?.lastAmount, tx.amount, Date())
+            val entity = RecurringCostReviewEntity(
+                account = tx.account,
+                info = tx.info,
+                firstSeenDate = current?.firstSeenDate ?: System.currentTimeMillis(),
+                lastAmount = tx.amount,
+                dismissedUntil = current?.dismissedUntil,
+                previousAmount = if (change != null) current?.lastAmount else current?.previousAmount,
+                changedAt = if (change != null) change.on.time else current?.changedAt
             )
+            recurringCostReviewDao.upsert(entity)
+            if (change != null) changed += entity.toModel()
         }
 
         existing.keys.filter { it !in activeKeys }.forEach { (account, info) ->
             recurringCostReviewDao.delete(account, info)
         }
+        return changed
     }
 
     override suspend fun dismissRecurringCostReview(account: String, info: String, forDays: Int) {
@@ -152,5 +159,7 @@ private fun RecurringCostReviewEntity.toModel() = RecurringCostReview(
     info = info,
     firstSeenDate = firstSeenDate,
     lastAmount = lastAmount,
-    dismissedUntil = dismissedUntil
+    dismissedUntil = dismissedUntil,
+    previousAmount = previousAmount,
+    changedAt = changedAt
 )

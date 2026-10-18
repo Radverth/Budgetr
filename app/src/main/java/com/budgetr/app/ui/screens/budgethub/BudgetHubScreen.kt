@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.FactCheck
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Rule
 import androidx.compose.material.icons.filled.Savings
+import androidx.compose.material.icons.filled.Subscriptions
 import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material.icons.filled.Today
 import androidx.compose.material3.Card
@@ -69,6 +70,7 @@ fun BudgetHubScreen(
     onOpenReview: () -> Unit,
     onOpenAnnualBills: () -> Unit,
     onOpenCalendar: () -> Unit,
+    onOpenSubscriptions: () -> Unit,
     viewModel: BudgetHubViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -112,6 +114,7 @@ fun BudgetHubScreen(
             onOpenReview = onOpenReview,
             onOpenAnnualBills = onOpenAnnualBills,
             onOpenCalendar = onOpenCalendar,
+            onOpenSubscriptions = onOpenSubscriptions,
             onTransfer = { transferKind = it },
             modifier = Modifier.fillMaxSize().padding(padding)
         )
@@ -130,6 +133,7 @@ internal fun BudgetHubContent(
     onOpenReview: () -> Unit = {},
     onOpenAnnualBills: () -> Unit = {},
     onOpenCalendar: () -> Unit = {},
+    onOpenSubscriptions: () -> Unit = {},
     onTransfer: (TransferKind) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -187,6 +191,18 @@ internal fun BudgetHubContent(
                         title = "Bills calendar",
                         subtitle = state.nextBill ?: "Bills, income and daily spending by date",
                         onClick = onOpenCalendar
+                    )
+                    HubDivider()
+                    HubRow(
+                        icon = Icons.Default.Subscriptions,
+                        title = "Subscriptions",
+                        subtitle = when {
+                            state.priceChanges > 0 -> if (state.priceChanges == 1) "1 price change" else "${state.priceChanges} price changes"
+                            state.subscriptionsMonthly > 0 -> "${state.subscriptionsMonthly.toCurrencyString()} a month in bills and subscriptions"
+                            else -> "Every bill, its next charge and price changes"
+                        },
+                        subtitleColor = if (state.priceChanges > 0) MaterialTheme.colorScheme.primary else null,
+                        onClick = onOpenSubscriptions
                     )
                     HubDivider()
                     HubRow(

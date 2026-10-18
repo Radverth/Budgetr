@@ -27,4 +27,5 @@ object NavRoutes {
     const val ANNUAL_BILLS = "annual_bills"
     const val DEBT_PLANNER = "debt_planner"
     const val BILLS_CALENDAR = "bills_calendar"
+    const val SUBSCRIPTIONS = "subscriptions"
 }

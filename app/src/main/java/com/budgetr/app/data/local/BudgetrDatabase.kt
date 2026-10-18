@@ -56,7 +56,7 @@ import com.budgetr.app.data.local.entity.TransactionEntity
         PeriodReviewEntity::class,
         AnnualFundEntity::class
     ],
-    version = 16,
+    version = 17,
     exportSchema = false
 )
 abstract class BudgetrDatabase : RoomDatabase() {
@@ -79,6 +79,14 @@ abstract class BudgetrDatabase : RoomDatabase() {
     abstract fun annualFundDao(): AnnualFundDao
 
     companion object {
+        /** Remembers a subscription's previous price when it changes. */
+        val MIGRATION_16_17 = object : Migration(16, 17) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE recurring_cost_reviews ADD COLUMN previousAmount REAL")
+                db.execSQL("ALTER TABLE recurring_cost_reviews ADD COLUMN changedAt INTEGER")
+            }
+        }
+
         /** Adds funds saving up for yearly bills. */
         val MIGRATION_15_16 = object : Migration(15, 16) {
             override fun migrate(db: SupportSQLiteDatabase) {

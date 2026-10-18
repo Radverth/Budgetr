@@ -55,6 +55,11 @@ sealed interface AttentionItem {
         override val key = "periodreview:$periodStart"
     }
 
+    /** A bill whose amount changed recently. */
+    data class PriceChange(val account: String, val info: String, val from: Double, val to: Double, val changedAt: Long) : AttentionItem {
+        override val key = "price:$account:$info:$changedAt"
+    }
+
     data class CashFlowWarning(val warning: ForecastWarning) : AttentionItem {
         // Keyed by date too, so a new dip later in the period shows again
         override val key = "cashflow:${warning.account}:${warning.date.time}"
@@ -86,11 +91,13 @@ internal fun attentionItems(
     reviews: List<RecurringReviewUiItem>,
     dismissed: Set<String>,
     cashFlowWarnings: List<ForecastWarning> = emptyList(),
-    periodReview: AttentionItem.PeriodReview? = null
+    periodReview: AttentionItem.PeriodReview? = null,
+    priceChanges: List<AttentionItem.PriceChange> = emptyList()
 ): List<AttentionItem> = buildList {
     periodReview?.let { add(it) }
     if (paydayPlanPending) add(AttentionItem.PaydayPlan)
     cashFlowWarnings.forEach { add(AttentionItem.CashFlowWarning(it)) }
+    addAll(priceChanges)
     alerts.sortedByDescending { it.isOver }.forEach { add(AttentionItem.BudgetAlert(it, resetDays)) }
     suggestions.forEach { add(AttentionItem.GoalSuggestion(it)) }
     reviews.forEach { add(AttentionItem.SubscriptionReview(it)) }
@@ -106,7 +113,8 @@ internal fun NeedsAttentionCard(
     onDismiss: (AttentionItem) -> Unit,
     modifier: Modifier = Modifier,
     onOpenForecast: () -> Unit = {},
-    onOpenReview: () -> Unit = {}
+    onOpenReview: () -> Unit = {},
+    onOpenSubscriptions: () -> Unit = {}
 ) {
     Card(
         modifier = modifier,
@@ -136,6 +144,14 @@ internal fun NeedsAttentionCard(
                         detail = "See how ${reviewDate(item.periodStart)} to ${reviewDate(item.periodEnd)} went, and choose where any leftover goes.",
                         actionLabel = "See review",
                         onAction = onOpenReview,
+                        onDismiss = { onDismiss(item) }
+                    )
+                    is AttentionItem.PriceChange -> AttentionRow(
+                        emoji = if (item.to > item.from) "📈" else "📉",
+                        title = "${item.info} went ${if (item.to > item.from) "up" else "down"} to ${item.to.toCurrencyString()}",
+                        detail = "It was ${item.from.toCurrencyString()} · ${item.account}",
+                        actionLabel = "Subscriptions",
+                        onAction = onOpenSubscriptions,
                         onDismiss = { onDismiss(item) }
                     )
                     is AttentionItem.CashFlowWarning -> AttentionRow(

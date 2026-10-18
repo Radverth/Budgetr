@@ -1,5 +1,9 @@
 package com.budgetr.app.screenshots
 
+import com.budgetr.app.ui.screens.subscriptions.SubscriptionsContent
+import com.budgetr.app.ui.screens.subscriptions.SubscriptionsUiState
+import com.budgetr.app.util.PriceChange
+import com.budgetr.app.util.SubscriptionTracker
 import com.budgetr.app.util.IrregularIncome
 import com.budgetr.app.ui.screens.calendar.BillsCalendarContent
 import com.budgetr.app.ui.screens.calendar.BillsCalendarUiState
@@ -246,7 +250,8 @@ abstract class ScreenshotTests(private val prefix: String) {
         AttentionItem.CashFlowWarning(ForecastWarning("Monzo", day("23/10/2026"), shortfall = 41.5, moveAmount = 45.0, fromAccount = "Halifax")),
         AttentionItem.BudgetAlert(BudgetAlertUiItem("Eating out", 72.0, 60.0, isOver = true), resetDays = 12),
         AttentionItem.GoalSuggestion(GoalSuggestionUiItem("Holiday", TransactionCategory.ONE_OFF_COST, 42.0)),
-        AttentionItem.SubscriptionReview(RecurringReviewUiItem("Monzo", "Netflix", 10.99, ageDays = 210))
+        AttentionItem.SubscriptionReview(RecurringReviewUiItem("Monzo", "Netflix", 10.99, ageDays = 210)),
+        AttentionItem.PriceChange("Monzo", "Spotify Premium Family", 17.99, 19.99, 1L)
     )
 
     @Composable
@@ -596,6 +601,27 @@ abstract class ScreenshotTests(private val prefix: String) {
     fun dailyIrregular() = shot("32_daily_irregular") {
         DailyTargetCard(state = irregularState(listOf("25/09/2026" to 650.0, "08/10/2026" to 980.0)), onOpen = {}, onTransfer = {}, modifier = Modifier.fillMaxWidth())
         DailyTargetCard(state = irregularState(listOf("25/09/2026" to 650.0)), onOpen = {}, onTransfer = {}, modifier = Modifier.fillMaxWidth())
+    }
+
+    @Test
+    fun subscriptions() = screenShot("33_subscriptions") {
+        val bills = listOf(
+            Transaction(2, "25/09/2026", "Rent", -850.0, TransactionCategory.FIXED_COST, "Monzo"),
+            Transaction(3, "25/09/2026", "Netflix", -12.99, TransactionCategory.FIXED_COST, "Monzo"),
+            Transaction(4, "25/09/2026", "Spotify Premium Family", -19.99, TransactionCategory.FIXED_COST, "Monzo"),
+            Transaction(5, "25/09/2026", "Car insurance", -480.0, TransactionCategory.FIXED_COST, "Halifax", activeMonths = listOf(3)),
+            Transaction(6, "25/09/2026", "Gas and electric", -120.0, TransactionCategory.FIXED_COST, "Halifax", activeMonths = listOf(10, 11, 12, 1, 2, 3))
+        )
+        val dueDays = mapOf(
+            CashFlowCalculator.billKey("Monzo", "Netflix") to 15,
+            CashFlowCalculator.billKey("Monzo", "Spotify Premium Family") to 18,
+            CashFlowCalculator.billKey("Halifax", "Car insurance") to 5,
+            CashFlowCalculator.billKey("Halifax", "Gas and electric") to 1
+        )
+        val changes = mapOf(CashFlowCalculator.billKey("Monzo", "Spotify Premium Family") to PriceChange(17.99, 19.99, day("03/10/2026")))
+        SubscriptionsContent(
+            SubscriptionsUiState(isLoading = false, subscriptions = SubscriptionTracker.list(bills, dueDays, 26, changes, day("14/10/2026")), showAccount = true)
+        )
     }
 
     /** Dialogs open in their own window, which never reports idle under Robolectric 4.12
