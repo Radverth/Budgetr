@@ -98,6 +98,10 @@ class PreferencesManager @Inject constructor(
     fun isPlanIncludeDebts(): Boolean = prefs.getBoolean(KEY_PLAN_INCLUDE_DEBTS, true)
     fun setPlanIncludeDebts(include: Boolean) = prefs.edit().putBoolean(KEY_PLAN_INCLUDE_DEBTS, include).apply()
 
+    /** "My income varies": the daily target uses only money that has arrived this pay period. */
+    fun isIncomeIrregular(): Boolean = prefs.getBoolean("income_irregular", false)
+    fun setIncomeIrregular(irregular: Boolean) = prefs.edit().putBoolean("income_irregular", irregular).apply()
+
     /** "Bill due tomorrow" notifications each evening. On unless turned off. */
     fun isBillRemindersEnabled(): Boolean = prefs.getBoolean("bill_reminders", true)
     fun setBillRemindersEnabled(enabled: Boolean) = prefs.edit().putBoolean("bill_reminders", enabled).apply()

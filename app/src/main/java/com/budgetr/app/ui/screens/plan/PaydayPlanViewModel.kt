@@ -10,6 +10,7 @@ import com.budgetr.app.data.repository.DailyTargetRepository
 import com.budgetr.app.util.AnnualFundCalculator
 import com.budgetr.app.util.DailyTargetCalculator
 import com.budgetr.app.util.HistoryCalculator
+import com.budgetr.app.util.IrregularIncome
 import com.budgetr.app.util.PayPeriodCalculator
 import com.budgetr.app.util.PaydayPlanCalculator
 import com.budgetr.app.util.PaydayPlanTotals
@@ -35,6 +36,7 @@ data class PlanLineUi(
 data class PaydayPlanUiState(
     val isLoading: Boolean = true,
     val incomeInput: String = "",
+    val incomeIrregular: Boolean = false,
     val fixedCosts: Double = 0.0,
     val goalContributions: Double = 0.0,
     val debtMinimums: Double = 0.0,
@@ -106,7 +108,12 @@ class PaydayPlanViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        incomeInput = formatAmount(PaydayPlanCalculator.income(transactions)),
+                        // When income varies, start from what has actually arrived this period
+                        incomeInput = formatAmount(
+                            if (prefs.isIncomeIrregular()) IrregularIncome.plan(period, transactions, 0.0, java.util.Date()).received
+                            else PaydayPlanCalculator.income(transactions)
+                        ),
+                        incomeIrregular = prefs.isIncomeIrregular(),
                         fixedCosts = PaydayPlanCalculator.fixedCosts(transactions),
                         goalContributions = PaydayPlanCalculator.goalContributions(sheetsRepository.getSavingsGoals().first()),
                         debtMinimums = PaydayPlanCalculator.debtPayments(sheetsRepository.getDebts().first(), prefs.getDebtExtra()),

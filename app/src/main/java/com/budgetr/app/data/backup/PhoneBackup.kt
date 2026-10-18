@@ -107,7 +107,8 @@ data class SettingsBackup(
     val forecastSpendingAccount: String? = null,
     val debtStrategy: String? = null,
     val debtExtra: Double? = null,
-    val billReminders: Boolean? = null
+    val billReminders: Boolean? = null,
+    val incomeIrregular: Boolean? = null
 )
 
 /** Turns a backup into one line of JSON for a Sheet cell, and back. */

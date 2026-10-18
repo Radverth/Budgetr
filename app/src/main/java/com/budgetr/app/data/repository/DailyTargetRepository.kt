@@ -7,6 +7,8 @@ import com.budgetr.app.data.model.Transaction
 import com.budgetr.app.util.DailyTarget
 import com.budgetr.app.util.AnnualFundCalculator
 import com.budgetr.app.util.DailyTargetCalculator
+import com.budgetr.app.util.IrregularIncome
+import com.budgetr.app.util.IrregularPlan
 import com.budgetr.app.util.PayPeriod
 import com.budgetr.app.util.PayPeriodCalculator
 import com.budgetr.app.util.PaydayPlanCalculator
@@ -34,7 +36,9 @@ data class DailyTargetState(
     val periodStart: String,
     val pot: Double,
     val potIsManual: Boolean,
-    val transfers: List<DailyTransfer>
+    val transfers: List<DailyTransfer>,
+    /** Set in "My income varies" mode: the pot is only money that has arrived. */
+    val irregular: IrregularPlan? = null
 )
 
 /** Builds the daily spend target from the Sheet cache and the on-device transfers, and fixes
@@ -83,9 +87,13 @@ class DailyTargetRepository @Inject constructor(
                 // Processing is once per period, so the fund update this triggers settles straight away.
                 annualFunds.processPeriod(source.transactions, period)
                 val fundAdjustment = AnnualFundCalculator.potAdjustment(AnnualFundCalculator.matching(funds, source.transactions), period)
-                val pot = manual ?: (lockedPot(periodStart, source) + fundAdjustment).coerceAtLeast(0.0)
+                // When income varies, only money that has arrived counts, and the pot grows as it does
+                val irregular = if (manual == null && prefs.isIncomeIrregular()) {
+                    IrregularIncome.plan(period, source.transactions, commitments(source) - fundAdjustment, now)
+                } else null
+                val pot = manual ?: irregular?.available ?: (lockedPot(periodStart, source) + fundAdjustment).coerceAtLeast(0.0)
                 val countBudgeted = prefs.isDailyTargetCountingBudgeted()
-                if (manual != null || prefs.getDailyPotPeriod() == periodStart) {
+                if (manual != null || irregular != null || prefs.getDailyPotPeriod() == periodStart) {
                     reviews.savePlan(com.budgetr.app.data.model.ReviewPlan(periodStart, pot, countBudgeted = countBudgeted))
                 }
                 val target = DailyTargetCalculator.calculate(
@@ -93,9 +101,10 @@ class DailyTargetRepository @Inject constructor(
                     pot = pot,
                     transactions = source.transactions,
                     transfers = transfers,
-                    today = now
+                    today = now,
+                    allocations = irregular?.allocations
                 ) { tx -> countBudgeted || tx.tag?.lowercase() !in source.budgetedTags }
-                DailyTargetState(target, period, periodStart, pot, manual != null, transfers)
+                DailyTargetState(target, period, periodStart, pot, manual != null, transfers, irregular)
             }
         }
     }
@@ -129,12 +138,16 @@ class DailyTargetRepository @Inject constructor(
     private fun lockedPot(periodStart: String, source: SourceData): Double {
         if (prefs.getDailyPotPeriod() == periodStart) return prefs.getDailyPotAmount()
         val income = PaydayPlanCalculator.income(source.transactions)
-        val pot = income - PaydayPlanCalculator.fixedCosts(source.transactions) -
-            (if (prefs.isPlanIncludeGoals()) PaydayPlanCalculator.goalContributions(source.goals) else 0.0) -
-            (if (prefs.isPlanIncludeDebts()) PaydayPlanCalculator.debtPayments(source.debts, prefs.getDebtExtra()) else 0.0)
+        val pot = income - commitments(source)
         if (income > 0) prefs.setDailyPot(periodStart, pot)
         return pot
     }
+
+    /** Bills, plus goal and debt payments when the plan includes them. */
+    private fun commitments(source: SourceData): Double =
+        PaydayPlanCalculator.fixedCosts(source.transactions) +
+            (if (prefs.isPlanIncludeGoals()) PaydayPlanCalculator.goalContributions(source.goals) else 0.0) +
+            (if (prefs.isPlanIncludeDebts()) PaydayPlanCalculator.debtPayments(source.debts, prefs.getDebtExtra()) else 0.0)
 
     private fun format(date: Date) = SimpleDateFormat("dd/MM/yyyy", Locale.UK).format(date)
 
