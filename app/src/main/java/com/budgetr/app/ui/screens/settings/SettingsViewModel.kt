@@ -36,6 +36,7 @@ data class SettingsUiState(
     val showPayDayPicker: Boolean = false,
     val reminderEnabled: Boolean = false,
     val billReminders: Boolean = true,
+    val incomeIrregular: Boolean = false,
     val reminderHour: Int = 20,
     val reminderMinute: Int = 0,
     val showTimePicker: Boolean = false,
@@ -78,6 +79,7 @@ class SettingsViewModel @Inject constructor(
             payDay = prefs.getPayDay(),
             reminderEnabled = prefs.isReminderEnabled(),
             billReminders = prefs.isBillRemindersEnabled(),
+            incomeIrregular = prefs.isIncomeIrregular(),
             reminderHour = prefs.getReminderHour(),
             reminderMinute = prefs.getReminderMinute(),
             spendingPromptEnabled = prefs.isSpendingPromptEnabled(),
@@ -267,6 +269,12 @@ class SettingsViewModel @Inject constructor(
             ReminderScheduler.cancel(context)
         }
         _uiState.update { it.copy(reminderEnabled = enabled) }
+    }
+
+    fun setIncomeIrregular(irregular: Boolean) {
+        prefs.setIncomeIrregular(irregular)
+        dailyTargetRepository.notifySettingsChanged()
+        _uiState.update { it.copy(incomeIrregular = irregular) }
     }
 
     /** Call only after POST_NOTIFICATIONS has been granted, like [setReminderEnabled]. */

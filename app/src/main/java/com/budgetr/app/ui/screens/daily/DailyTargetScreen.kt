@@ -107,10 +107,14 @@ fun DailyTargetScreen(onNavigateBack: () -> Unit, viewModel: DailyTargetViewMode
             }
             item {
                 Text(
-                    text = "${state.pot.toCurrencyString()} for non-fixed spending this pay period " +
+                    text = state.irregular?.let { irregular ->
+                        "${irregular.received.toCurrencyString()} has arrived this pay period. After ${irregular.commitments.toCurrencyString()} " +
+                            "for bills and payments, ${irregular.available.toCurrencyString()} is for spending, each payment shared across " +
+                            "the days left from when it arrived. Whatever a day doesn't spend rolls into the next."
+                    } ?: ("${state.pot.toCurrencyString()} for non-fixed spending this pay period " +
                         (if (state.potIsManual) "(set by you in Settings)" else "(worked out on payday)") +
                         ", split into ${target.days.size} days of ${target.base.toCurrencyString()}. " +
-                        "Whatever a day doesn't spend rolls into the next.",
+                        "Whatever a day doesn't spend rolls into the next."),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                     modifier = Modifier.padding(vertical = 4.dp)

@@ -398,6 +398,12 @@ fun SettingsScreen(
                 subtitle = "Day ${uiState.payDay} of each month (weekend → previous Friday)",
                 onClick = viewModel::showPayDayPicker
             )
+            SettingsSwitchRow(
+                title = "My income varies",
+                subtitle = "The daily target uses only money that's arrived this pay period, after bills",
+                checked = uiState.incomeIrregular,
+                onCheckedChange = viewModel::setIncomeIrregular
+            )
 
             SectionLabel("Notifications")
 

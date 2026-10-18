@@ -170,7 +170,7 @@ private fun MoneyInCard(uiState: PaydayPlanUiState, viewModel: PaydayPlanViewMod
             OutlinedTextField(
                 value = uiState.incomeInput,
                 onValueChange = viewModel::setIncome,
-                label = { Text("Income this pay period (£)") },
+                label = { Text(if (uiState.incomeIrregular) "Received so far this pay period (£)" else "Income this pay period (£)") },
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 singleLine = true

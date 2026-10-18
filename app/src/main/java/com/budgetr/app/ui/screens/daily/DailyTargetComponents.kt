@@ -89,14 +89,18 @@ fun DailyTargetCard(
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
             )
             Text(
-                text = "Base ${target.base.toCurrencyString()} a day · " +
+                text = (state.irregular?.let { "From ${it.received.toCurrencyString()} received so far · " }
+                    ?: "Base ${target.base.toCurrencyString()} a day · ") +
                     if (target.daysLeft == 1) "payday tomorrow" else "${target.daysLeft} days to payday",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
             )
             if (state.pot <= 0 && !state.potIsManual) {
                 Text(
-                    text = "No income found for this pay period yet. Set your spending money in Settings.",
+                    text = state.irregular?.let {
+                        if (it.received > 0) "Bills and payments (${it.commitments.toCurrencyString()}) come first. Spending money starts once more arrives."
+                        else "No income has arrived this pay period yet. Add it as Income when it does."
+                    } ?: "No income found for this pay period yet. Set your spending money in Settings.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.tertiary
                 )

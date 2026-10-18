@@ -1,5 +1,6 @@
 package com.budgetr.app.screenshots
 
+import com.budgetr.app.util.IrregularIncome
 import com.budgetr.app.ui.screens.calendar.BillsCalendarContent
 import com.budgetr.app.ui.screens.calendar.BillsCalendarUiState
 import com.budgetr.app.util.BillsCalendar
@@ -581,6 +582,20 @@ abstract class ScreenshotTests(private val prefix: String) {
     @Test
     fun billsCalendarPayday() = screenShot("31_bills_calendar_payday") {
         BillsCalendarContent(state = calendarState("26/10/2026"), onMonth = {}, onSelect = {})
+    }
+
+    private fun irregularState(income: List<Pair<String, Double>>): DailyTargetState {
+        val transactions = income.map { (date, amount) -> Transaction(2, date, "Client", amount, TransactionCategory.INCOME, "Monzo") } +
+            listOf(spend("10/10/2026", 12.0), spend("14/10/2026", 4.2))
+        val plan = IrregularIncome.plan(period, transactions, commitments = 1200.0, today = day("14/10/2026"))
+        val target = DailyTargetCalculator.calculate(period, plan.available, transactions, emptyList(), day("14/10/2026"), allocations = plan.allocations)
+        return DailyTargetState(target, period, "25/09/2026", plan.available, potIsManual = false, transfers = emptyList(), irregular = plan)
+    }
+
+    @Test
+    fun dailyIrregular() = shot("32_daily_irregular") {
+        DailyTargetCard(state = irregularState(listOf("25/09/2026" to 650.0, "08/10/2026" to 980.0)), onOpen = {}, onTransfer = {}, modifier = Modifier.fillMaxWidth())
+        DailyTargetCard(state = irregularState(listOf("25/09/2026" to 650.0)), onOpen = {}, onTransfer = {}, modifier = Modifier.fillMaxWidth())
     }
 
     /** Dialogs open in their own window, which never reports idle under Robolectric 4.12
