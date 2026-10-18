@@ -1,5 +1,6 @@
 package com.budgetr.app.widget
 
+import com.budgetr.app.util.DailyTargetWording
 import com.budgetr.app.util.AnnualFundCalculator
 import android.content.Context
 import android.content.Intent
@@ -124,9 +125,10 @@ class BudgetrWidget : GlanceAppWidget() {
         val dailyLine = try {
             if (entryPoint.preferencesManager().isDailyTargetOnHome()) {
                 val target = entryPoint.dailyTargetRepository().observe().first().target
-                val tomorrow = target.tomorrowIfNoMoreSpent?.let { " · tomorrow ${formatCurrency(it)}" } ?: ""
-                val text = if (target.isOverToday) "${formatCurrency(-target.leftToday)} over today$tomorrow"
-                else "${formatCurrency(target.leftToday)} left today$tomorrow"
+                val tomorrow = target.tomorrowIfNoMoreSpent?.let {
+                    if (it >= 0) " · tomorrow ${formatCurrency(it)}" else " · tomorrow ${formatCurrency(-it)} behind"
+                } ?: ""
+                val text = DailyTargetWording.headline(target.leftToday, target.today.target) + tomorrow
                 text to target.isOverToday
             } else null
         } catch (e: Exception) {

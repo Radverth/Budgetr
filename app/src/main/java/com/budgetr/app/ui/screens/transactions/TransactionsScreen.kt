@@ -99,6 +99,7 @@ import com.budgetr.app.ui.theme.ExpenseRed
 import com.budgetr.app.ui.theme.FixedCostOrange
 import com.budgetr.app.ui.theme.IncomeGreen
 import com.budgetr.app.ui.theme.TransferGrey
+import com.budgetr.app.util.DailyTargetWording
 import com.budgetr.app.util.toCurrencyString
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -546,7 +547,7 @@ internal fun DayHeader(date: String, totals: DayTotals?) {
         if (totals != null && (totals.spent > 0 || totals.target > 0)) {
             val over = totals.spent > totals.target + 0.005
             Text(
-                text = "${totals.spent.toCurrencyString()} of ${totals.target.toCurrencyString()}",
+                text = DailyTargetWording.spentOf(totals.spent, totals.target),
                 style = MaterialTheme.typography.labelMedium,
                 color = if (over) ExpenseRed else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
             )

@@ -197,7 +197,8 @@ internal fun DayRow(day: DailyTargetDay, base: Double, isToday: Boolean, isFutur
                 )
             }
             val details = buildList {
-                if (!isFuture) add("Spent ${day.spent.toCurrencyString()} of ${day.target.toCurrencyString()}")
+                // A day that started behind says so in the "from earlier days" line rather than as a negative target
+                if (!isFuture) add(if (day.target >= 0) "Spent ${day.spent.toCurrencyString()} of ${day.target.toCurrencyString()}" else "Spent ${day.spent.toCurrencyString()}")
                 if (abs(day.carriedIn) >= 0.005) {
                     add((if (day.carriedIn > 0) "+" else "−") + "${abs(day.carriedIn).toCurrencyString()} from earlier days")
                 }
