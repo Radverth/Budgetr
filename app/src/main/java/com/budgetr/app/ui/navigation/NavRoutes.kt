@@ -26,4 +26,5 @@ object NavRoutes {
     const val PERIOD_REVIEW = "period_review"
     const val ANNUAL_BILLS = "annual_bills"
     const val DEBT_PLANNER = "debt_planner"
+    const val BILLS_CALENDAR = "bills_calendar"
 }

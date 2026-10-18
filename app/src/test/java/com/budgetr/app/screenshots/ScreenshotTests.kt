@@ -1,5 +1,9 @@
 package com.budgetr.app.screenshots
 
+import com.budgetr.app.ui.screens.calendar.BillsCalendarContent
+import com.budgetr.app.ui.screens.calendar.BillsCalendarUiState
+import com.budgetr.app.util.BillsCalendar
+import com.budgetr.app.util.DaySpendOn
 import com.budgetr.app.data.model.Debt
 import com.budgetr.app.ui.screens.debts.DebtPlannerContent
 import com.budgetr.app.ui.screens.debts.DebtPlannerUiState
@@ -296,7 +300,8 @@ abstract class ScreenshotTests(private val prefix: String) {
                             forecastReady = true,
                             annualBills = 3,
                             annualSaving = 2,
-                            annualSetAside = 62.43
+                            annualSetAside = 62.43,
+                            nextBill = "Next: Council tax on Tue 20 Oct"
                         ),
                         onOpenBudgets = {}, onOpenDailyTarget = {}, onOpenPaydayPlan = {}, onOpenHistory = {}, onOpenRules = {},
                         onOpenForecast = {}, onTransfer = {}
@@ -541,6 +546,41 @@ abstract class ScreenshotTests(private val prefix: String) {
             state = plannerState(listOf(Debt("Store card", 5000.0, 30.0, 100.0)), extra = 0.0, strategy = PayoffStrategy.SNOWBALL),
             onStrategy = {}, onExtra = {}, onExtraDone = {}
         )
+    }
+
+    private fun calendarState(selected: String): BillsCalendarUiState {
+        val bills = listOf(
+            Transaction(2, "26/10/2026", "Rent", -850.0, TransactionCategory.FIXED_COST, "Monzo"),
+            Transaction(3, "26/10/2026", "Council tax", -142.5, TransactionCategory.FIXED_COST, "Monzo"),
+            Transaction(4, "26/10/2026", "Gym membership at the leisure centre", -30.0, TransactionCategory.FIXED_COST, "Monzo"),
+            Transaction(5, "26/10/2026", "Phone", -15.0, TransactionCategory.FIXED_COST, "Monzo"),
+            Transaction(6, "26/10/2026", "Salary", 2150.0, TransactionCategory.SALARY, "Monzo"),
+            Transaction(7, "24/09/2026", "Lodger", 300.0, TransactionCategory.RECURRING_INCOME, "Monzo")
+        )
+        val dueDays = mapOf(
+            CashFlowCalculator.billKey("Monzo", "Council tax") to 20,
+            CashFlowCalculator.billKey("Monzo", "Gym membership at the leisure centre") to 1,
+            CashFlowCalculator.billKey("Monzo", "Phone") to 20
+        )
+        val events = BillsCalendar.events(2026, java.util.Calendar.OCTOBER, bills, dueDays, 26)
+        val spend = dailyState(spentToday = 4.2).target.days.map { DaySpendOn(it.date, it.spent, it.target) }
+        val today = day("14/10/2026")
+        return BillsCalendarUiState(
+            isLoading = false, year = 2026, month0 = java.util.Calendar.OCTOBER,
+            days = BillsCalendar.grid(2026, java.util.Calendar.OCTOBER, events, spend, today),
+            selected = day(selected),
+            comingUp = events.filter { !it.date.before(today) && it.date.before(day("21/10/2026")) }
+        )
+    }
+
+    @Test
+    fun billsCalendar() = screenShot("30_bills_calendar") {
+        BillsCalendarContent(state = calendarState("20/10/2026"), onMonth = {}, onSelect = {})
+    }
+
+    @Test
+    fun billsCalendarPayday() = screenShot("31_bills_calendar_payday") {
+        BillsCalendarContent(state = calendarState("26/10/2026"), onMonth = {}, onSelect = {})
     }
 
     /** Dialogs open in their own window, which never reports idle under Robolectric 4.12

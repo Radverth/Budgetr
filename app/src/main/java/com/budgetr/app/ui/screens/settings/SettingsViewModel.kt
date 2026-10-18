@@ -35,6 +35,7 @@ data class SettingsUiState(
     val payDay: Int = 26,
     val showPayDayPicker: Boolean = false,
     val reminderEnabled: Boolean = false,
+    val billReminders: Boolean = true,
     val reminderHour: Int = 20,
     val reminderMinute: Int = 0,
     val showTimePicker: Boolean = false,
@@ -76,6 +77,7 @@ class SettingsViewModel @Inject constructor(
             userName = authManager.getUserName(),
             payDay = prefs.getPayDay(),
             reminderEnabled = prefs.isReminderEnabled(),
+            billReminders = prefs.isBillRemindersEnabled(),
             reminderHour = prefs.getReminderHour(),
             reminderMinute = prefs.getReminderMinute(),
             spendingPromptEnabled = prefs.isSpendingPromptEnabled(),
@@ -265,6 +267,12 @@ class SettingsViewModel @Inject constructor(
             ReminderScheduler.cancel(context)
         }
         _uiState.update { it.copy(reminderEnabled = enabled) }
+    }
+
+    /** Call only after POST_NOTIFICATIONS has been granted, like [setReminderEnabled]. */
+    fun setBillReminders(enabled: Boolean) {
+        prefs.setBillRemindersEnabled(enabled)
+        _uiState.update { it.copy(billReminders = enabled) }
     }
 
     fun showTimePicker() = _uiState.update { it.copy(showTimePicker = true) }
