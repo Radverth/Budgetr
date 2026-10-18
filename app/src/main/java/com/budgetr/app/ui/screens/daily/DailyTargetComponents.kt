@@ -37,6 +37,7 @@ import com.budgetr.app.data.repository.DailyTargetState
 import com.budgetr.app.ui.theme.ExpenseRed
 import com.budgetr.app.ui.theme.IncomeGreen
 import com.budgetr.app.util.PaydayPlanCalculator
+import com.budgetr.app.util.DailyTargetWording
 import com.budgetr.app.util.toCurrencyString
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -69,8 +70,7 @@ fun DailyTargetCard(
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
             )
             Text(
-                text = if (target.isOverToday) "${(-target.leftToday).toCurrencyString()} over today"
-                else "${target.leftToday.toCurrencyString()} left today",
+                text = DailyTargetWording.headline(target.leftToday, today.target),
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
                 color = if (target.isOverToday) ExpenseRed else IncomeGreen,
@@ -78,13 +78,12 @@ fun DailyTargetCard(
                 overflow = TextOverflow.Ellipsis
             )
             Text(
-                text = "${today.spent.toCurrencyString()} spent of ${today.target.toCurrencyString()} today",
+                text = DailyTargetWording.spentToday(today.spent, today.target),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
             )
             Text(
-                text = target.tomorrowIfNoMoreSpent?.let { "Tomorrow: ${it.toCurrencyString()} if you stop now" }
-                    ?: "Last day before payday",
+                text = DailyTargetWording.tomorrow(target.tomorrowIfNoMoreSpent),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
             )
