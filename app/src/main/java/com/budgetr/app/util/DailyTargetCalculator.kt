@@ -59,11 +59,14 @@ object DailyTargetCalculator {
         transactions: List<Transaction>,
         transfers: List<DailyTransfer>,
         today: Date = Date(),
+        /** Each day's own share, when it isn't an equal split of [pot] (irregular income). */
+        allocations: DoubleArray? = null,
         countsAsSpending: (Transaction) -> Boolean = { true }
     ): DailyTarget {
         val dayCount = dayIndex(period, period.nextPayday).coerceAtLeast(1)
-        val base = pot / dayCount
-        val allocation = DoubleArray(dayCount) { base }
+        val todayIndex = dayIndex(period, today).coerceIn(0, dayCount - 1)
+        val allocation = allocations?.takeIf { it.size == dayCount }?.copyOf() ?: DoubleArray(dayCount) { pot / dayCount }
+        val base = allocations?.getOrNull(todayIndex) ?: (pot / dayCount)
 
         transfers.forEach { transfer -> applyTransfer(allocation, period, transfer) }
 
@@ -84,7 +87,6 @@ object DailyTargetCalculator {
             running -= spent[i]
             day
         }
-        val todayIndex = dayIndex(period, today).coerceIn(0, dayCount - 1)
         return DailyTarget(base, days, todayIndex)
     }
 
