@@ -30,6 +30,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.budgetr.app.ui.screens.subscriptions.SubscriptionsScreen
 import com.budgetr.app.ui.screens.calendar.BillsCalendarScreen
 import com.budgetr.app.ui.screens.debts.DebtPlannerScreen
 import com.budgetr.app.ui.screens.annual.AnnualBillsScreen
@@ -160,6 +161,11 @@ fun MainScreen(onSignOut: () -> Unit) {
                         navController.navigate(NavRoutes.PERIOD_REVIEW) {
                             launchSingleTop = true
                         }
+                    },
+                    onNavigateToSubscriptions = {
+                        navController.navigate(NavRoutes.SUBSCRIPTIONS) {
+                            launchSingleTop = true
+                        }
                     }
                 )
             }
@@ -173,8 +179,12 @@ fun MainScreen(onSignOut: () -> Unit) {
                     onOpenForecast = { navController.navigate(NavRoutes.CASH_FLOW) { launchSingleTop = true } },
                     onOpenReview = { navController.navigate(NavRoutes.PERIOD_REVIEW) { launchSingleTop = true } },
                     onOpenAnnualBills = { navController.navigate(NavRoutes.ANNUAL_BILLS) { launchSingleTop = true } },
-                    onOpenCalendar = { navController.navigate(NavRoutes.BILLS_CALENDAR) { launchSingleTop = true } }
+                    onOpenCalendar = { navController.navigate(NavRoutes.BILLS_CALENDAR) { launchSingleTop = true } },
+                    onOpenSubscriptions = { navController.navigate(NavRoutes.SUBSCRIPTIONS) { launchSingleTop = true } }
                 )
+            }
+            composable(NavRoutes.SUBSCRIPTIONS) {
+                SubscriptionsScreen(onNavigateBack = { navController.popBackStack() })
             }
             composable(NavRoutes.BILLS_CALENDAR) {
                 BillsCalendarScreen(onNavigateBack = { navController.popBackStack() })

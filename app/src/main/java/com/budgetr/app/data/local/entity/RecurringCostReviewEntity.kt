@@ -13,5 +13,8 @@ data class RecurringCostReviewEntity(
     val firstSeenDate: Long,
     val lastAmount: Double,
     /** Epoch millis; review nudge is suppressed until after this date. Null means never dismissed. */
-    val dismissedUntil: Long? = null
+    val dismissedUntil: Long? = null,
+    /** The amount before the last price change, and when it changed (epoch millis). */
+    val previousAmount: Double? = null,
+    val changedAt: Long? = null
 )

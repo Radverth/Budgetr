@@ -86,6 +86,7 @@ fun HomeScreen(
     onNavigateToSettings: () -> Unit,
     onNavigateToForecast: () -> Unit = {},
     onNavigateToReview: () -> Unit = {},
+    onNavigateToSubscriptions: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -210,7 +211,8 @@ fun HomeScreen(
                         reviews = uiState.recurringReviews,
                         dismissed = uiState.dismissedAttention,
                         cashFlowWarnings = uiState.cashFlowWarnings,
-                        periodReview = uiState.periodReview
+                        periodReview = uiState.periodReview,
+                        priceChanges = uiState.priceChanges
                     )
                     if (attention.isNotEmpty()) {
                         item {
@@ -223,7 +225,8 @@ fun HomeScreen(
                                 onDismiss = viewModel::dismissAttention,
                                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                                 onOpenForecast = onNavigateToForecast,
-                                onOpenReview = onNavigateToReview
+                                onOpenReview = onNavigateToReview,
+                                onOpenSubscriptions = onNavigateToSubscriptions
                             )
                         }
                     }

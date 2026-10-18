@@ -16,6 +16,7 @@ import com.budgetr.app.util.BillsCalendar
 import com.budgetr.app.util.CalendarEventKind
 import com.budgetr.app.util.EnvelopeCalculator
 import com.budgetr.app.util.PayPeriodCalculator
+import com.budgetr.app.util.SubscriptionTracker
 import com.budgetr.app.util.ForecastWarning
 import com.budgetr.app.util.PreferencesManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -52,6 +53,9 @@ data class BudgetHubUiState(
     val annualSetAside: Double = 0.0,
     /** e.g. "Next: Council tax on Tue 20 Oct". */
     val nextBill: String? = null,
+    val subscriptionsMonthly: Double = 0.0,
+    /** Bills whose price changed in the last 30 days. */
+    val priceChanges: Int = 0,
     val message: String? = null
 )
 
@@ -90,7 +94,7 @@ class BudgetHubViewModel @Inject constructor(
                     historyPeriods = history.size,
                     paydayPlanPending = prefs.isPaydayPlanPending()
                 )
-            }.collect { state -> _uiState.update { state.copy(message = it.message, ruleCount = it.ruleCount, forecastWarning = it.forecastWarning, forecastReady = it.forecastReady, reviewCount = it.reviewCount, reviewReady = it.reviewReady, annualBills = it.annualBills, annualSaving = it.annualSaving, annualSetAside = it.annualSetAside, nextBill = it.nextBill) } }
+            }.collect { state -> _uiState.update { state.copy(message = it.message, ruleCount = it.ruleCount, forecastWarning = it.forecastWarning, forecastReady = it.forecastReady, reviewCount = it.reviewCount, reviewReady = it.reviewReady, annualBills = it.annualBills, annualSaving = it.annualSaving, annualSetAside = it.annualSetAside, nextBill = it.nextBill, subscriptionsMonthly = it.subscriptionsMonthly, priceChanges = it.priceChanges) } }
         }
         viewModelScope.launch {
             categoryRuleRepository.getRules().collect { rules -> _uiState.update { it.copy(ruleCount = rules.size) } }
@@ -124,6 +128,13 @@ class BudgetHubViewModel @Inject constructor(
                     .firstOrNull { it.kind == CalendarEventKind.BILL && it.date.after(today) }
                     ?.let { "Next: ${it.label} on ${SimpleDateFormat("EEE d MMM", Locale.UK).format(it.date)}" }
             }.collect { text -> _uiState.update { it.copy(nextBill = text) } }
+        }
+        viewModelScope.launch {
+            combine(sheetsRepository.getAllTransactions(), budgetRepository.getRecurringCostReviews()) { transactions, reviews ->
+                val since = System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000
+                SubscriptionTracker.list(transactions, emptyMap(), prefs.getPayDay(), emptyMap(), Date()).sumOf { it.monthly } to
+                    reviews.count { (it.changedAt ?: 0L) >= since && it.previousAmount != null }
+            }.collect { (monthly, changes) -> _uiState.update { it.copy(subscriptionsMonthly = monthly, priceChanges = changes) } }
         }
         viewModelScope.launch {
             cashFlowRepository.observe().collect { snapshot ->
